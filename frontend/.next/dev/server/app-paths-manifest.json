@@ -1,0 +1,4 @@
+{
+  "/(painel)/alpinistas/page": "app/(painel)/alpinistas/page.js",
+  "/(painel)/page": "app/(painel)/page.js"
+}
