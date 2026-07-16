@@ -1,0 +1,8 @@
+# Pastas que não queremos no GitHub
+escalada_sia/
+hands-on-exam/
+testes_sia2.0/
+
+# Padrão de exclusão (node_modules, etc)
+node_modules/
+.DS_Store
