@@ -2,9 +2,9 @@ from django.db import models
 
 class Alpinista(models.Model):
     STATUS_CHOICES = [
-        ('Ativo', 'Ativo'),
-        ('Pendente', 'Pendente'),
-        ('Inativo', 'Inativo'),
+        ('ativo', 'ativo'),
+        ('pendente', 'pendente'),
+        ('inativo', 'inativo'),
     ]
 
     nome = models.CharField(max_length = 255)

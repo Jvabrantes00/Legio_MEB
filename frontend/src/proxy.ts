@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
 // Esta função roda toda vez que alguém tenta abrir qualquer página do seu site
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
     // 1. O guarda olha se existe um crachá (Cookie) válido
     const token = request.cookies.get('sia_token')?.value
     const urlAtual = request.nextUrl.pathname
@@ -16,7 +16,7 @@ export function middleware(request: NextRequest) {
     }
 
     // 3. Se a pessoa NÃO tem o crachá e tenta abrir qualquer página de dentro do sistema, é expulsa pro Login
-    if (!token) {
+    if (!token && request.nextUrl.pathname !== '/login') {
         return NextResponse.redirect(new URL('/login', request.url))
     }
 
@@ -27,6 +27,6 @@ export function middleware(request: NextRequest) {
 // Configuração de onde o guarda deve ficar vigiando (ignoramos apenas imagens e arquivos do sistema)
 export const config = {
     matcher: [
-        '/((?!api|_next/static|_next/image|favicon.ico).*)',
+        '/dashboard/:path*', '/alpinista/:path*', '/encontros/:path*'
     ],
-}
+};
