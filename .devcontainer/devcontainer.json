@@ -1,0 +1,45 @@
+{
+  "name": "Meu Projeto Full-Stack",
+  // Usa uma imagem padrão do Node.js pré-configurada pelo GitHub
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:1-20-bullseye",
+
+  // Recursos adicionais que você pode querer instalar (opcional)
+  "features": {
+    "ghcr.io/devcontainers/features/common-utils:2": {}
+  },
+
+  // Encaminha as portas automaticamente para você acessar do seu computador
+  // Ajuste os números das portas de acordo com o que você usa (ex: 3000, 5173, 8080)
+  "forwardPorts": [3000, 5173],
+
+  // Configurações específicas para o comportamento das portas
+  "portsAttributes": {
+    "3000": {
+      "label": "Back-end API",
+      "onAutoForward": "silent" // Não abre uma aba nova no navegador para a API
+    },
+    "5173": {
+      "label": "Front-end App",
+      "onAutoForward": "openPreview" // Abre o front-end automaticamente ao iniciar
+    }
+  },
+
+  // Instala as extensões do VS Code automaticamente dentro do Codespace
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "dbaeumer.vscode-eslint",      // Linter
+        "esbenp.prettier-vscode",      // Formatador de código
+        "bradlc.vscode-tailwindcss",   // Se usar Tailwind CSS
+        "christian-kohler.path-intellisense"
+      ]
+    }
+  },
+
+  // Comando executado logo após a criação do container (opcional)
+  // Pode ser usado para instalar dependências automaticamente se desejar
+  // "postCreateCommand": "npm install",
+
+  // Garante que o usuário padrão do container tenha privilégios administrativos simples
+  "remoteUser": "node"
+}
