@@ -1,4 +1,5 @@
 from rest_framework import viewsets
+from rest_framework.permissions import IsAuthenticated
 from .models import Alpinista, Encontro, Evento, ParticipacaoEncontro, ParticipacaoEvento
 from .serializers import AlpinistaSerializer, EncontroSerializer, EventoSerializer, ParticipacaoEncontroSerializer, ParticipacaoEventoSerializer
 from django.http import JsonResponse
@@ -11,8 +12,9 @@ class AlpinistaViewSet(viewsets.ModelViewSet):
     serializer_class = AlpinistaSerializer #Usa o tradutor para converter os dados do modelo Alpinista em JSON e vice-versa
 
 class EncontroViewSet(viewsets.ModelViewSet):
-    queryset = Encontro.objects.all() 
-    serializer_class = EncontroSerializer 
+    queryset = Encontro.objects.all().order_by('-data_encontro') 
+    serializer_class = EncontroSerializer
+    permission_classes = [IsAuthenticated] #protecao de rota 
 
 class EventoViewSet(viewsets.ModelViewSet):
     queryset = Evento.objects.all() 

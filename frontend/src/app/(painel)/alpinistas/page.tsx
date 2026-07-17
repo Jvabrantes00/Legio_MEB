@@ -93,7 +93,7 @@ export default function AlpinistasPage() {
             const token = getCookie('sia_token');
             if (!token) throw new Error("Token de autenticação não encontrado.");
 
-            const resposta = await fetch("http://localhost:8000/api/alpinistas/", {
+            const resposta = await fetch("https://reimagined-space-eureka-97p4jpg66pwh4qx-8000.app.github.dev/api/alpinistas/", {
                 method: "GET",
                 headers: {
                     "Content-Type": "application/json",
@@ -129,8 +129,8 @@ export default function AlpinistasPage() {
             };
 
             const url = idEdicao 
-                ? `http://localhost:8000/api/alpinistas/${idEdicao}/` 
-                : "http://localhost:8000/api/alpinistas/";
+                ? `https://reimagined-space-eureka-97p4jpg66pwh4qx-8000.app.github.dev/api/alpinistas/${idEdicao}/` 
+                : "https://reimagined-space-eureka-97p4jpg66pwh4qx-8000.app.github.dev/api/alpinistas";
             
             const metodo = idEdicao ? "PUT" : "POST";
 
@@ -161,7 +161,7 @@ export default function AlpinistasPage() {
 
         try {
             const token = getCookie('sia_token');
-            const resposta = await fetch(`http://localhost:8000/api/alpinistas/${alpinistaParaDeletar.id}/`, {
+            const resposta = await fetch(`https://reimagined-space-eureka-97p4jpg66pwh4qx-8000.app.github.dev/api/alpinistas/${alpinistaParaDeletar.id}/`, {
                 method: "DELETE",
                 headers: {
                     "Authorization": `Bearer ${token}` 

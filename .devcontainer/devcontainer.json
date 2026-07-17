@@ -1,45 +1,41 @@
 {
-  "name": "Meu Projeto Full-Stack",
-  // Usa uma imagem padrão do Node.js pré-configurada pelo GitHub
-  "image": "mcr.microsoft.com/devcontainers/javascript-node:1-20-bullseye",
+  "name": "Projeto Django + Next.js",
+  // Imagem base com Python 3
+  "image": "mcr.microsoft.com/devcontainers/python:1-3.11-bullseye",
 
-  // Recursos adicionais que você pode querer instalar (opcional)
+  // Instala o Node.js para rodar o Next.js e o Tailwind
   "features": {
-    "ghcr.io/devcontainers/features/common-utils:2": {}
-  },
-
-  // Encaminha as portas automaticamente para você acessar do seu computador
-  // Ajuste os números das portas de acordo com o que você usa (ex: 3000, 5173, 8080)
-  "forwardPorts": [3000, 5173],
-
-  // Configurações específicas para o comportamento das portas
-  "portsAttributes": {
-    "3000": {
-      "label": "Back-end API",
-      "onAutoForward": "silent" // Não abre uma aba nova no navegador para a API
-    },
-    "5173": {
-      "label": "Front-end App",
-      "onAutoForward": "openPreview" // Abre o front-end automaticamente ao iniciar
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "lts"
     }
   },
 
-  // Instala as extensões do VS Code automaticamente dentro do Codespace
+  // Portas padrão: 8000 (Django) e 3000 (Next.js)
+  "forwardPorts": [8000, 3000],
+
+  "portsAttributes": {
+    "8000": {
+      "label": "Django API",
+      "onAutoForward": "silent"
+    },
+    "3000": {
+      "label": "Next.js App",
+      "onAutoForward": "openPreview"
+    }
+  },
+
+  // Extensões para Python, Django, React e Tailwind
   "customizations": {
     "vscode": {
       "extensions": [
-        "dbaeumer.vscode-eslint",      // Linter
-        "esbenp.prettier-vscode",      // Formatador de código
-        "bradlc.vscode-tailwindcss",   // Se usar Tailwind CSS
-        "christian-kohler.path-intellisense"
+        "ms-python.python",
+        "batisteo.vscode-django",
+        "bradlc.vscode-tailwindcss",
+        "esbenp.prettier-vscode",
+        "dbaeumer.vscode-eslint"
       ]
     }
   },
 
-  // Comando executado logo após a criação do container (opcional)
-  // Pode ser usado para instalar dependências automaticamente se desejar
-  // "postCreateCommand": "npm install",
-
-  // Garante que o usuário padrão do container tenha privilégios administrativos simples
-  "remoteUser": "node"
+  "remoteUser": "vscode"
 }

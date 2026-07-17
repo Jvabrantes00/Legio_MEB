@@ -27,10 +27,18 @@ class Alpinista(models.Model):
         return self.nome
     
 class Encontro(models.Model):
-    nome = models.CharField(max_length=255)
-    dataInicio = models.DateField()
-    dataFim = models.DateField()
-    local = models.CharField(max_length=255)
+    STATUS_CHOICES = [
+        ('em_agendamento', 'Em Agendamento'),
+        ('agendado', 'Agendado'),
+    ]
+
+
+    encontro = models.CharField(max_length=255, help_text = "Ex: Escalada 1 / AVC / Esppa")
+    data_encontro = models.DateField(help_text = "Data do encontro")
+    local = models.CharField(max_length=255, default = "Nova Betânia")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default = 'em_agendamento')
+
+    criado_em = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
         return self.nome
