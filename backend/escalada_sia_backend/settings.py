@@ -11,6 +11,8 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
 from pathlib import Path
+from datetime import timedelta
+
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -127,6 +129,19 @@ CORS_ALLOWED_ORIGINS = [
     "https://reimagined-space-eureka-97p4jpg66pwh4qx-3000.app.github.dev",
 ]
 
+# Permite que o Front-end envie o cabeçalho com o Token
+CORS_ALLOW_HEADERS = [
+    'accept',
+    'accept-encoding',
+    'authorization',
+    'content-type',
+    'dnt',
+    'origin',
+    'user-agent',
+    'x-csrftoken',
+    'x-requested-with',
+]
+
 # Aqui você coloca tanto o Front quanto o Back para liberar formulários
 CSRF_TRUSTED_ORIGINS = [
     "https://reimagined-space-eureka-97p4jpg66pwh4qx-3000.app.github.dev",
@@ -138,3 +153,15 @@ SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
 # Autoriza as URLs do Codespaces a fazerem envios de formulários/dados
 CSRF_TRUSTED_ORIGINS = ['https://*.app.github.dev']
+
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+    )
+}
+
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME': timedelta(days=1),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
+    'AUTH_HEADER_TYPES': ('Bearer',),
+}

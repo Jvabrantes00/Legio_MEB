@@ -12,7 +12,7 @@ class AlpinistaViewSet(viewsets.ModelViewSet):
     serializer_class = AlpinistaSerializer #Usa o tradutor para converter os dados do modelo Alpinista em JSON e vice-versa
 
 class EncontroViewSet(viewsets.ModelViewSet):
-    queryset = Encontro.objects.all().order_by('-data_encontro') 
+    queryset = Encontro.objects.all().order_by('-data_referencia') 
     serializer_class = EncontroSerializer
     permission_classes = [IsAuthenticated] #protecao de rota 
 
