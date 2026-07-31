@@ -1,6 +1,0 @@
-{
-  "version": 3,
-  "sources": [],
-  "sections": [
-    {"offset": {"line": 4, "column": 0}, "map": {"version":3,"sources":["file:///Users/viniprado/Projetos/SIA%202.0/Sem%20Ti%CC%81tulo/Legio_MEB/frontend/src/app/%28painel%29/layout.tsx"],"sourcesContent":["import Sidebar from \"@/components/Sidebar\";\n\nexport default function PainelLayout({ children }: { children: React.ReactNode }) {\n  return (\n    <div className=\"min-h-screen bg-escalada-fundo\">\n      \n      {/* 1. O Menu Fixo */}\n      <Sidebar />\n\n      {/* 2. O Contêiner Global\n          'pl-64' cria um padding interno à esquerda de 256px (tamanho exato da sidebar).\n          'w-full' garante que este bloco ocupe 100% da tela. */}\n      <div className=\"pl-64 w-full min-h-screen flex flex-col\">\n        \n        {/* 3. A Área de Conteúdo \n            Como o padding segurou o espaço da esquerda, o conteúdo aqui dentro\n            agora pode esticar com segurança usando o w-full. */}\n        <main className=\"flex-1 p-8 w-full\">\n          {children}\n        </main>\n        \n      </div>\n\n    </div>\n  );\n}"],"names":["PainelLayout","children","className","Sidebar"],"mappings":";;;;;;;;;;;;AAEe,SAASA,aAAa,EAAEC,QAAQ,EAAiC;IAC9E,qBACE,8OAAC;QAAIC,WAAU;;0BAGb,8OAACC;;;;;0BAKD,8OAAC;gBAAID,WAAU;0BAKb,cAAA,8OAAC;oBAAKA,WAAU;8BACbD;;;;;;;;;;;;;;;;;AAOX"}}]
-}

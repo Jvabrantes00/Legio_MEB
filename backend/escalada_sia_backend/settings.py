@@ -11,6 +11,8 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
 from pathlib import Path
+from datetime import timedelta
+
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -25,7 +27,7 @@ SECRET_KEY = 'django-insecure-c^*g#84$_4kq0*y2@qw&@4-p5-@@8ql%wzst2z-&^j_d$k9yvu
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['*']
 
 
 # Application definition
@@ -44,8 +46,8 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
-    'django.contrib.sessions.middleware.SessionMiddleware',
     'corsheaders.middleware.CorsMiddleware',
+    'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
@@ -120,7 +122,46 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 
+CORS_ALLOW_ALL_ORIGINS = False
+
+# Aqui vai o link do seu FRONT-END (porta 3000)
 CORS_ALLOWED_ORIGINS = [
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
+    "https://reimagined-space-eureka-97p4jpg66pwh4qx-3000.app.github.dev",
 ]
+
+# Permite que o Front-end envie o cabeçalho com o Token
+CORS_ALLOW_HEADERS = [
+    'accept',
+    'accept-encoding',
+    'authorization',
+    'content-type',
+    'dnt',
+    'origin',
+    'user-agent',
+    'x-csrftoken',
+    'x-requested-with',
+]
+
+# Aqui você coloca tanto o Front quanto o Back para liberar formulários
+CSRF_TRUSTED_ORIGINS = [
+    "https://reimagined-space-eureka-97p4jpg66pwh4qx-3000.app.github.dev",
+    "https://reimagined-space-eureka-97p4jpg66pwh4qx-8000.app.github.dev",
+]
+
+# Diz ao Django para confiar nas URLs com "https" geradas pelo GitHub
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+
+# Autoriza as URLs do Codespaces a fazerem envios de formulários/dados
+CSRF_TRUSTED_ORIGINS = ['https://*.app.github.dev']
+
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+    )
+}
+
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME': timedelta(days=1),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
+    'AUTH_HEADER_TYPES': ('Bearer',),
+}
