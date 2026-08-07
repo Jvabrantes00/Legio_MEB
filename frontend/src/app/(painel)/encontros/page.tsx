@@ -61,7 +61,7 @@ export default function Encontros() {
     try {
       // Pega o token de segurança salvo no navegador para provar ao Django que estamos logados
       const token = document.cookie.replace(/(?:(?:^|.*;\s*)sia_token\s*\=\s*([^;]*).*$)|^.*$/, "$1");
-      const resposta = await fetch("https://reimagined-space-eureka-97p4jpg66pwh4qx-8000.app.github.dev/api/encontros/", {
+      const resposta = await fetch("https://wpc8m7lx-8000.brs.devtunnels.ms/api/encontros/", {
         method: "GET",
         headers: {
           "Authorization": `Bearer ${token}`, // Passaporte de entrada
@@ -157,8 +157,8 @@ export default function Encontros() {
       // ⚠️ ATENÇÃO: Substitua o link base!
       // Se tivermos um ID na memória, a URL ganha uma barra e o ID no final (ex: /encontros/5/).
       const url = idEditando 
-        ? `https://reimagined-space-eureka-97p4jpg66pwh4qx-8000.app.github.dev/api/encontros/${idEditando}/`
-        : `https://reimagined-space-eureka-97p4jpg66pwh4qx-8000.app.github.dev/api/encontros/`;
+        ? `https://wpc8m7lx-8000.brs.devtunnels.ms/api/encontros/${idEditando}/`
+        : `https://wpc8m7lx-8000.brs.devtunnels.ms/api/encontros/`;
         
       // Se tivermos um ID, usamos PUT (Atualizar). Se for nulo, usamos POST (Criar).
       const metodo = idEditando ? "PUT" : "POST";
@@ -199,7 +199,7 @@ export default function Encontros() {
       const token = document.cookie.replace(/(?:(?:^|.*;\s*)sia_token\s*\=\s*([^;]*).*$)|^.*$/, "$1");
       
       // ⚠️ ATENÇÃO: Substitua o link! Notem a interpolação ${id} na URL.
-      const resposta = await fetch(`https://reimagined-space-eureka-97p4jpg66pwh4qx-8000.app.github.dev/api/encontros/${id}/`, {
+      const resposta = await fetch(`https://wpc8m7lx-8000.brs.devtunnels.ms/api/encontros/${id}/`, {
         method: "DELETE", // Método HTTP específico para destruir registros
         headers: {
           "Authorization": `Bearer ${token}`,

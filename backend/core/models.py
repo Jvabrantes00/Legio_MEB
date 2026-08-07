@@ -1,4 +1,7 @@
 from django.db import models
+from django.db.models.signals import post_save
+from django.dispatch import receiver
+from django.contrib.auth.models import User
 
 class Alpinista(models.Model):
     STATUS_CHOICES = [
@@ -49,8 +52,16 @@ class Encontro(models.Model):
         ('agendado', 'Agendado'),
     ]
 
+    TIPO_ENCONTRO_CHOICES = [
+        ('Escalada', 'Escalada'),
+        ('AVC', 'AVC'),
+        ('Esppa', 'Esppa'),
+        ('Acampamento', 'Acampamento'),
+    ]
+
 
     encontro = models.CharField(max_length=255, help_text = "Ex: Escalada 1 / AVC / Esppa")
+    tipo = models.CharField(max_length=20, choices=TIPO_ENCONTRO_CHOICES, default = 'Escalada')
     data_referencia= models.DateField(help_text = "O 1º dia do encontro")
     data_exato = models.CharField(max_length=150, help_text = "Ex: 19, 24, 25, 26 de Julho de XXXX")
     local = models.CharField(max_length=255, default = "Nova Betânia")
@@ -66,7 +77,7 @@ class Encontro(models.Model):
     )
 
     def __str__(self):
-        return self.nome
+        return self.encontro
     
 class Evento(models.Model):
     nome = models.CharField(max_length=255)
@@ -87,7 +98,12 @@ class ParticipacaoEncontro(models.Model):
     corGrupo = models.CharField(max_length = 50, null = True, blank = True)
 
     class Meta:
-        unique_together = ('alpinista', 'encontro')
+        constraints = [
+            models.UniqueConstraint(
+                fields=['alpinista', 'encontro'],
+                name='unico_alpinista_por_encontro'
+            )
+        ]
 
     def __str__(self):
         return f"{self.alpinista.nome} - {self.funcao.nome} no {self.encontro.encontro}"
@@ -99,3 +115,35 @@ class ParticipacaoEvento(models.Model):
     def __str__(self):
         return f"{self.alpinista.nome} - {self.evento.nome}"
 
+
+@receiver(post_save, sender=ParticipacaoEncontro)
+def alpinista_ativo_automatico(sender, instance, created, **kwargs):
+    if created:
+        alpinista = instance.alpinista
+        if alpinista.status != 'Ativo':
+            alpinista.status = 'Ativo'
+            alpinista.save()
+            print(f"Sistema: Status de {alpinista.nome} atualizado para Ativo!")
+
+
+class LogSistema(models.Model):
+    ACOES = [
+        ('CREATE', 'Criação'),
+        ('UPDATE', 'Atualização'),
+        ('DELETE', 'Exclusão'),
+        ('LOGIN', 'Acesso'),
+    ]
+
+    usuario = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
+
+    acao = models.CharField(max_length=20, choices=ACOES)
+    modulo= models.CharField(max_length=50, help_text="Ex: Alpinistas, Encontros, Fichas")
+    descricao = models.TextField(help_text="Ex: Atualizou o status do alpinista")
+    criado_em = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-criado_em']
+
+        def __str__(self):
+            nome_usuario = self.usuario.username if self.usuario else "Sistema"
+            return f"[{ self.criado_em.strftime('%d/%m/%Y %H:%M')}] { nome_usuario }: {self.descricao}"

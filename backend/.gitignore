@@ -1,1 +1,11 @@
+# Ambientes Virtuais e Cache do Python
 venv/
+env/
+__pycache__/
+*.pyc
+
+# Banco de dados local (se você usou SQLite antes do Postgres)
+db.sqlite3
+
+# Arquivos de mídia (uploads de usuários, fotos)
+media/

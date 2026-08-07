@@ -24,7 +24,7 @@ export default function Login() {
         }
 
         try {
-            const resposta = await fetch('https://reimagined-space-eureka-97p4jpg66pwh4qx-8000.app.github.dev/api/token/', {
+            const resposta = await fetch('https://wpc8m7lx-8000.brs.devtunnels.ms/api/token/', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

@@ -42,6 +42,7 @@ INSTALLED_APPS = [
     'core',
     'rest_framework',
     'corsheaders',
+    'django_filters',
 ]
 
 MIDDLEWARE = [
@@ -82,9 +83,9 @@ DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
         'NAME': 'meb_db',
-        'USER': 'meb_user',
+        'USER': 'meb_user1',
         'PASSWORD': 'meb_senha_1234',
-        'HOST': '127.0.0.1',
+        'HOST': 'localhost',
         'PORT': '5432',
     }
 }
@@ -112,9 +113,9 @@ AUTH_PASSWORD_VALIDATORS = [
 # Internationalization
 # https://docs.djangoproject.com/en/6.0/topics/i18n/
 
-LANGUAGE_CODE = 'en-us'
+LANGUAGE_CODE = 'pt-br'
 
-TIME_ZONE = 'UTC'
+TIME_ZONE = 'America/Sao_Paulo'
 
 USE_I18N = True
 
@@ -126,12 +127,7 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 
-CORS_ALLOW_ALL_ORIGINS = False
-
-# Aqui vai o link do seu FRONT-END (porta 3000)
-CORS_ALLOWED_ORIGINS = [
-    "https://reimagined-space-eureka-97p4jpg66pwh4qx-3000.app.github.dev",
-]
+CORS_ALLOW_ALL_ORIGINS = True
 
 # Permite que o Front-end envie o cabeçalho com o Token
 CORS_ALLOW_HEADERS = [
@@ -148,20 +144,18 @@ CORS_ALLOW_HEADERS = [
 
 # Aqui você coloca tanto o Front quanto o Back para liberar formulários
 CSRF_TRUSTED_ORIGINS = [
-    "https://reimagined-space-eureka-97p4jpg66pwh4qx-3000.app.github.dev",
-    "https://reimagined-space-eureka-97p4jpg66pwh4qx-8000.app.github.dev",
+    "https://wpc8m7lx-8000.brs.devtunnels.ms",
+    "http://localhost:8000",
+    "http://127.0.0.1:8000",
 ]
-
-# Diz ao Django para confiar nas URLs com "https" geradas pelo GitHub
-SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
-
-# Autoriza as URLs do Codespaces a fazerem envios de formulários/dados
-CSRF_TRUSTED_ORIGINS = ['https://*.app.github.dev']
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework_simplejwt.authentication.JWTAuthentication',
-    )
+    ),
+
+    'DEFAULT_PAGINARION_CLASS': 'rest_framework.pagination.PageNumberPagination',
+    'PAGE_SIZE': 10,
 }
 
 SIMPLE_JWT = {

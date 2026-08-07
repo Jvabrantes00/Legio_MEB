@@ -61,7 +61,7 @@ export default function Dashboard() {
             const token = getCookie('sia_token');
             if (!token) throw new Error("Token de autenticação não encontrado.");
 
-            const resposta = await fetch("https://reimagined-space-eureka-97p4jpg66pwh4qx-8000.app.github.dev/api/alpinistas", {
+            const resposta = await fetch("https://wpc8m7lx-8000.brs.devtunnels.ms/api/alpinistas/", {
                 method: "GET",
                 headers: {
                     "Content-Type": "application/json",

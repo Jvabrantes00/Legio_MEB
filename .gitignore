@@ -7,3 +7,8 @@ testes_sia2.0/
 node_modules/
 .DS_Store
 .next/
+.env
+.env.local
+.env.*
+Thumbs.db
+.vscode/

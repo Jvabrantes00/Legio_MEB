@@ -1,0 +1,7 @@
+# O buraco negro do JavaScript (nunca suba essa pasta!)
+node_modules/
+
+# Arquivos de build do Next.js
+.next/
+out/
+build/
