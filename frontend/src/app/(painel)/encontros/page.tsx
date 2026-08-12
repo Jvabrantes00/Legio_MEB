@@ -73,7 +73,7 @@ export default function Encontros() {
         // Se o Django autorizou (Status 200), transformamos o texto em um objeto JavaScript
         const dados = await resposta.json();
         // E salvamos na "memória" da tela, o que faz a tabela ser desenhada com os dados
-        setEncontros(dados);
+        setEncontros(dados.results || []);
       } else {
         // Se deu erro de permissão ou a URL estiver errada, avisamos com o Toast vermelho
         toast.error("Falha ao buscar os encontros do servidor.");

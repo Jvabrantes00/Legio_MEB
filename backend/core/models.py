@@ -24,7 +24,8 @@ class Alpinista(models.Model):
     conheciaEscalada = models.CharField(max_length = 100, null = True, blank = True)
     grupo = models.CharField(max_length = 100, null = True, blank = True)
     status = models.CharField(max_length = 20, choices = STATUS_CHOICES, default = 'Pendente')
-    foto = models.URLField(null = True, blank = True)
+    #foto = models.URLField(null = True, blank = True)
+    foto = models.ImageField(upload_to='fotos/', null=True, blank=True)
 
     def __str__(self):
         return self.nome

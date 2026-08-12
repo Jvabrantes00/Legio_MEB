@@ -47,8 +47,10 @@ export default function Login() {
             // Salvamos o token em um Cookie que vale para todo o site (path=/)
             if (dados.access) {
                 document.cookie = `sia_token=${dados.access}; path=/; max-age=86400`; // Expira em 1 dia
-            } else if (dados.access_token) {
-                document.cookie = `sia_token=${dados.access_token}; path=/; max-age=86400`;
+
+                if(dados.refresh){
+                    document.cookie = `sia_refresh=${dados.refresh}; path=/; max-age=604800`; // Expira em 7 dias
+                }
             }
 
             router.push('/'); 

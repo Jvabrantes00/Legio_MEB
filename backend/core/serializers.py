@@ -6,6 +6,7 @@ class AlpinistaSerializer(serializers.ModelSerializer):
     idade_atual = serializers.SerializerMethodField()
     encontros_realizados = serializers.SerializerMethodField()
     historico_equipes = serializers.SerializerMethodField()
+    historico_eventos = serializers.SerializerMethodField()
 
     class Meta:
         model = Alpinista
@@ -23,16 +24,30 @@ class AlpinistaSerializer(serializers.ModelSerializer):
             {
                 "tipo": p.encontro.tipo,
                 "nome_encontro": p.encontro.encontro,
+                "data": p.encontro.data_referencia.strftime('%d/%m/%Y') if getattr(p.encontro, 'data_referencia', None) else None,
+                "cor_grupo": getattr(p, 'corGrupo', None) 
             } for p in participacoes
         ]
     
     def get_historico_equipes(self, obj):
-        participacoes = obj.participacoes_encontros.filter(funcao__tipo='equipe')
+        participacoes = obj.participacoes_encontros.exclude(funcao__tipo='encontrista')
         return [
             {
                 "nome_encontro": p.encontro.encontro,
                 "equipe": p.funcao.nome,
                 "tipo_encontro": p.encontro.tipo,
+                "data": p.encontro.data_referencia.strftime('%d/%m/%Y') if getattr(p.encontro, 'data_referencia', None) else None,
+                "cor_grupo": getattr(p, 'corGrupo', None) if p.funcao and 'Dirigente' and 'Coordenador dos Dirigentes' in p.funcao.nome.lower() else None
+            } for p in participacoes
+        ]
+
+        
+    def get_historico_eventos(self, obj):
+        participacoes = obj.eventos.filter(alpinista=obj)
+        return [
+            {
+                "nome_evento": p.evento.nome if hasattr(p.evento, 'nome') else "Evento",
+                "data": p.evento.dataEvento.strftime('%d/%m/%Y') if getattr(p.evento, 'dataEvento', None) else None,
             } for p in participacoes
         ]
 

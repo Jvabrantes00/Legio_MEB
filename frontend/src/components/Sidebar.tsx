@@ -17,6 +17,7 @@ export default function Sidebar() {
         { nome: 'Dashboard', rota: '/', icone: LayoutDashboard },
         { nome: 'Alpinistas', rota: '/alpinistas', icone: Users },
         { nome: 'Encontros', rota: '/encontros', icone: Calendar },
+        { nome: 'Eventos', rota: '/eventos', icone: Calendar },
         { nome: 'Configurações', rota: '/configuracoes', icone: Settings },
     ];
 
@@ -25,7 +26,8 @@ export default function Sidebar() {
         // A forma de "deletar" um cookie no JavaScript é reescrevê-lo com uma data de validade no passado.
         // Aqui dizemos que ele expirou em 1970. O navegador destrói ele na mesma hora.
         document.cookie = "sia_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
-        
+        document.cookie = "sia_refresh=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
+
         // Limpamos também o localStorage só por precaução (herança do nosso primeiro teste de login)
         localStorage.removeItem('sia_token');
 
@@ -45,8 +47,9 @@ export default function Sidebar() {
             <nav className="flex-1 px-4 py-6 space-y-2">
                 {menuItems.map((item) => {
                     const Icone = item.icone;
-                    const isAtivo = pathname === item.rota; 
-
+                    const isAtivo = item.rota === '/'
+                        ? pathname === '/'
+                        : pathname.startsWith(item.rota);
                     return (
                         <Link 
                             key={item.rota} 

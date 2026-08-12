@@ -38,6 +38,14 @@ export default function Dashboard() {
     const [carregando, setCarregando] = useState(true);
     const [erro, setErro] = useState("");
 
+
+    // ============================================================================
+    // PAGINAÇÃO
+    // ============================================================================ 
+    
+    const [totalAlpinistas, setTotalAlpinistas] = useState(0);
+
+
     // ============================================================================
     // CICLO DE VIDA (useEffect)
     // ============================================================================
@@ -56,12 +64,13 @@ export default function Dashboard() {
         return null;
     };
 
-    const buscarDadosGerais = async () => {
+    const buscarDadosGerais = async (url: string = "https://wpc8m7lx-8000.brs.devtunnels.ms/api/alpinistas/") => {
         try {
+            setCarregando(true);
             const token = getCookie('sia_token');
             if (!token) throw new Error("Token de autenticação não encontrado.");
 
-            const resposta = await fetch("https://wpc8m7lx-8000.brs.devtunnels.ms/api/alpinistas/", {
+            const resposta = await fetch(url, {
                 method: "GET",
                 headers: {
                     "Content-Type": "application/json",
@@ -72,7 +81,10 @@ export default function Dashboard() {
             if (!resposta.ok) throw new Error("Erro ao carregar os dados do painel.");
 
             const dados = await resposta.json();
-            setAlpinistas(dados);
+
+            setAlpinistas(dados.results || []);
+            setTotalAlpinistas(dados.count || 0);
+            
 
         } catch (error: any) {
             setErro(error.message);
@@ -85,19 +97,9 @@ export default function Dashboard() {
     // LÓGICA DE NEGÓCIO: CÁLCULO DAS MÉTRICAS (AGREGAÇÃO)
     // ============================================================================
     
-    // 1. Total Absoluto
-    const totalAlpinistas = alpinistas.length;
-    
-    // 2. Filtra apenas os ativos no sistema
     const totalAtivos = alpinistas.filter(a => (a.status || "").toLowerCase() === "ativo").length;
+    const totalComRestricao = alpinistas.filter(a => (a.restricaoSaude || "").trim() !== "").length;
     
-    // 3. Conta quantos possuem algo escrito no campo de restrição de saúde
-    const totalComRestricao = alpinistas.filter(a => a.restricaoSaude && a.restricaoSaude.trim() !== "").length;
-    
-    // 4. ÚLTIMAS INSCRIÇÕES PENDENTES (A MÁGICA ACONTECE AQUI)
-    // Passo 1: Filtramos APENAS quem tem status "pendente"
-    // Passo 2: Invertemos a lista (reverse) para o mais novo ficar no topo
-    // Passo 3: Cortamos (slice) para exibir no máximo os 4 primeiros na tela
     const ultimasInscricoesPendentes = alpinistas
         .filter(a => (a.status || "").toLowerCase() === "pendente")
         .reverse()
@@ -116,7 +118,7 @@ export default function Dashboard() {
             
             {/* CABEÇALHO DA PÁGINA */}
             <div>
-                <h1 className="text-3xl font-bold text-escalada-texto">Bem-vindo, Vinicius Prado!</h1>
+                <h1 className="text-3xl font-bold text-escalada-texto">Bem-vindo, Usuário!</h1>
                 <p className="text-gray-500 mt-1">Aqui está o panorama atual do Movimento Escalada.</p>
             </div>
 
