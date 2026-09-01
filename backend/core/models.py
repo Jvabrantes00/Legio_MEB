@@ -7,10 +7,12 @@ class Alpinista(models.Model):
     STATUS_CHOICES = [
         ('ativo', 'ativo'),
         ('pendente', 'pendente'),
+        ('confirmado', 'confirmado'),
         ('inativo', 'inativo'),
     ]
 
-    nome = models.CharField(max_length = 255)
+    cpf = models.CharField(default = False, max_length = 14, unique = True, verbose_name = "CPF")
+    nome = models.CharField(max_length = 255)    
     dataNascimento = models.DateField(null = True, blank = True)
     endereco = models.CharField(max_length = 255, null = True, blank = True)
     email = models.EmailField(unique = True)
@@ -26,6 +28,9 @@ class Alpinista(models.Model):
     status = models.CharField(max_length = 20, choices = STATUS_CHOICES, default = 'Pendente')
     #foto = models.URLField(null = True, blank = True)
     foto = models.ImageField(upload_to='fotos/', null=True, blank=True)
+
+    is_neurodivergente = models.BooleanField(default=False, verbose_name="É neurodivergente?")
+    tipo_neurodivergente = models.CharField(max_length=100, blank=True, null=True, verbose_name="Tipo de Neurodivergencia")
 
     def __str__(self):
         return self.nome
@@ -43,6 +48,12 @@ class FuncaoEncontro(models.Model):
         help_text="Explicacao do que a equipe faz (usado na tela de FAQ)"
     )
 
+    ordem = models.IntegerField(default=99, verbose_name="Ordem de exibição")
+
+    class Meta:
+        ordering = ['ordem']
+
+    
     def __str__(self):
         return f"{self.nome} ({self.get_tipo_display()})"
 
@@ -68,7 +79,7 @@ class Encontro(models.Model):
     local = models.CharField(max_length=255, default = "Nova Betânia")
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default = 'em_agendamento')
 
-    criado_em = models.DateField(auto_now_add=True)
+    criado_em = models.DateTimeField(auto_now_add=True)
 
     participantes = models.ManyToManyField(
         'Alpinista',
@@ -82,7 +93,7 @@ class Encontro(models.Model):
     
 class Evento(models.Model):
     nome = models.CharField(max_length=255)
-    dataEvento = models.DateField()
+    data_evento = models.DateField()
     local = models.CharField(max_length=255)
 
     def __str__(self):
@@ -96,7 +107,9 @@ class ParticipacaoEncontro(models.Model):
 
     funcao = models.ForeignKey(FuncaoEncontro, on_delete=models.PROTECT)
 
-    corGrupo = models.CharField(max_length = 50, null = True, blank = True)
+    cor_grupo = models.CharField(max_length = 50, null = True, blank = True)
+
+    coordenador = models.BooleanField(default=False, verbose_name="É Coordenador?")
 
     class Meta:
         constraints = [

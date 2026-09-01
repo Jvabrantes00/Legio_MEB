@@ -1,6 +1,6 @@
-from rest_framework import viewsets, filters
+from rest_framework import viewsets, filters, status
 from rest_framework.permissions import IsAuthenticated
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import api_view, permission_classes, action
 from rest_framework.response import Response
 
 from .models import (
@@ -20,7 +20,7 @@ from datetime import date
 
 
 class AlpinistaViewSet(viewsets.ModelViewSet):
-    queryset = Alpinista.objects.all() #Busca todos os alpinistas no banco de dados
+    queryset = Alpinista.objects.all().order_by('nome') #Busca todos os alpinistas no banco de dados
     serializer_class = AlpinistaSerializer #Usa o tradutor para converter os dados do modelo Alpinista em JSON e vice-versa
     permission_classes = [IsAuthenticated] #Exige que o usuário esteja autenticado para acessar essa rota
 
@@ -73,7 +73,7 @@ class EncontroViewSet(viewsets.ModelViewSet):
             usuario=self.request.user,
             acao='CREATE',
             modulo='Encontro',
-            descricao=f'Encontro {encontro.nome} criado.'
+            descricao=f'Encontro {encontro.encontro} criado.'
         )
     
     def perform_update(self, serializer):
@@ -82,7 +82,7 @@ class EncontroViewSet(viewsets.ModelViewSet):
             usuario=self.request.user,
             acao='UPDATE',
             modulo='Encontro',
-            descricao=f'Encontro {encontro.nome} atualizado.'
+            descricao=f'Encontro {encontro.encontro} atualizado.'
         )
 
     def perform_destroy(self, instance):
@@ -94,6 +94,74 @@ class EncontroViewSet(viewsets.ModelViewSet):
             modulo='Encontro',
             descricao=f'Encontro {nome_encontro} excluído.'
         )
+
+    @action(detail=True, methods=['post'], url_path='efetivar-encontristas')
+    def efetivar_encontrista (self, request, pk=None):
+        encontro = self.get_object()
+        alpinistas_ids = request.data.get('alpinistas_ids', [])
+
+        if not alpinistas_ids:
+            return Response({"erro": "Nenhum alpinista selecionado."}, status=status.HTTP_400_BAD_REQUEST)
+
+        funcao, created = FuncaoEncontro.objects.get_or_create(
+            tipo='encontrista',
+            defaults={'nome': 'Encontrista'}
+        )
+
+        sucessos = 0
+        for alp_id in alpinistas_ids:
+            try:
+                alpinista = Alpinista.objects.get(id=alp_id)
+
+                ParticipacaoEncontro.objects.get_or_create(
+                    encontro=encontro,
+                    alpinista=alpinista,
+                    funcao=funcao
+                )
+
+                if (alpinista.status or '').lower() == 'pendente':
+                    alpinista.status = 'confirmado'
+                    alpinista.save()
+
+                sucessos += 1
+            except Alpinista.DoesNotExist:
+                continue
+
+        return Response({"mensagem": f"{sucessos} alpinistas efetivados com sucesso."}, status=status.HTTP_200_OK)
+
+
+    @action(detail=True, methods=['post'], url_path='remover-encontristas')
+    def remover_encontristas(self, request, pk=None):
+        encontro = self.get_object()
+        alpinistas_ids = request.data.get('alpinistas_ids', [])
+        
+        if not alpinistas_ids:
+            return Response({"erro": "Nenhum alpinista selecionado."}, status=status.HTTP_400_BAD_REQUEST)
+        
+        sucessos = 0
+        for alp_id in alpinistas_ids:
+            try:
+                alpinista = Alpinista.objects.get(id=alp_id)
+                
+                participacao = ParticipacaoEncontro.objects.filter(
+                    encontro=encontro,
+                    alpinista=alpinista,
+                    funcao__tipo='encontrista'
+                ).first()
+                
+                if participacao:
+                    participacao.delete()
+                    
+                    if (alpinista.status or '').lower() in ['confirmado', 'ativo']:
+                        alpinista.status = 'pendente'
+                        alpinista.save()
+                        
+                    sucessos += 1
+            except Alpinista.DoesNotExist:
+                continue
+
+        return Response({"mensagem": f"{sucessos} encontristas removidos com sucesso!"}, status=status.HTTP_200_OK)
+
 
 class EventoViewSet(viewsets.ModelViewSet):
     queryset = Evento.objects.all() 
@@ -136,14 +204,17 @@ class FuncaoEncontroViewSet(viewsets.ModelViewSet):
     queryset = FuncaoEncontro.objects.all() 
     serializer_class = FuncaoEncontroSerializer 
     permission_classes = [IsAuthenticated] #protecao de rota 
+    pagination_class = None
 
 class ParticipacaoEncontroViewSet(viewsets.ModelViewSet):
-    queryset = ParticipacaoEncontro.objects.all() 
-    serializer_class = ParticipacaoEncontroSerializer 
-    permission_classes = [IsAuthenticated] #protecao de rota 
+    queryset = ParticipacaoEncontro.objects.select_related('alpinista', 'encontro', 'funcao').all()
+    serializer_class = ParticipacaoEncontroSerializer
+    permission_classes = [IsAuthenticated] #protecao de rota
+
+    pagination_class = None
 
     filter_backends = [DjangoFilterBackend]
-    filterset_fields = ['encontro', 'alpinista', 'funcao' ]  # Permite filtrar por encontro, alpinista e função
+    filterset_fields = ['encontro', 'alpinista', 'funcao']  # Permite filtrar por encontro, alpinista e função
 
 class ParticipacaoEventoViewSet(viewsets.ModelViewSet):
     queryset = ParticipacaoEvento.objects.all() 

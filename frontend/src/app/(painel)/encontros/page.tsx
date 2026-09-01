@@ -1,17 +1,10 @@
-// A diretiva "use client" é obrigatória no Next.js (App Router) sempre que formos usar 
-// interatividade no navegador, como botões, formulários e estados (useState).
 "use client";
 
-// Importamos os "Hooks" do React (ferramentas que dão poderes ao nosso componente)
 import { useEffect, useState } from "react";
-// Importamos a biblioteca de notificações elegantes que instalamos
 import toast from "react-hot-toast"; 
+import Link from "next/link";
+import { Settings, Trash2 } from "lucide-react";
 
-// ============================================================================
-// DICIONÁRIO DE STATUS (Padrão de Projeto: Mapa de Valores)
-// ============================================================================
-// O banco de dados prefere guardar dados padronizados, minúsculos e sem espaços (ex: em_agendamento).
-// Porém, o usuário precisa de uma interface amigável. Esse objeto serve como um "tradutor".
 const MAPA_STATUS: Record<string, string> = {
   agendado: "Agendado",
   em_agendamento: "Em agendamento",
@@ -19,31 +12,13 @@ const MAPA_STATUS: Record<string, string> = {
 };
 
 export default function Encontros() {
-  // ============================================================================
-  // 1. ESTADOS DO COMPONENTE (A Memória da Tela)
-  // ============================================================================
-  
-  // 'encontros' guarda a lista que vem do Back-end. Começa como um array vazio [].
+
   const [encontros, setEncontros] = useState([]);
-  
-  // 'carregando' avisa a tela se os dados ainda estão vindo pela internet. Começa como true.
   const [carregando, setCarregando] = useState(true);
-
-  // Se true, os encontros mais recentes ficam no topo. Se false, inverte a ordem.
   const [ordemMaisRecente, setOrdemMaisRecente] = useState(true);
-  
-  // 'isModalOpen' controla se a janela de "Novo Encontro" está visível (true) ou invisível (false).
   const [isModalOpen, setIsModalOpen] = useState(false); 
-  
-  // 'salvando' desabilita o botão de salvar enquanto o servidor processa, evitando cliques duplos.
   const [salvando, setSalvando] = useState(false); 
-
-  // Se for null, o React entende que o usuário quer CRIAR um encontro novo (POST).
-  // Se tiver um número (ex: 5), o React entende que o usuário quer ATUALIZAR (PUT).
-  const [idEditando, setIdEditando] = useState<number | null>(null);
   
-  // 'formData' é um objeto que guarda em tempo real tudo o que o usuário digita no formulário.
-  // Já deixamos valores padrão ('Sede do Movimento' e 'agendado') para facilitar a vida do usuário.
   const [formData, setFormData] = useState({
     encontro: "",
     data_referencia: "", // O dia lógico
@@ -52,14 +27,8 @@ export default function Encontros() {
     status: "em_agendamento"
   });
 
-  // ============================================================================
-  // 2. FUNÇÕES DE COMUNICAÇÃO COM A API (A Leitura de Dados - GET)
-  // ============================================================================
-  
-  // Função assíncrona (async) porque dependemos do tempo de resposta da internet
   async function carregarEncontros() {
     try {
-      // Pega o token de segurança salvo no navegador para provar ao Django que estamos logados
       const token = document.cookie.replace(/(?:(?:^|.*;\s*)sia_token\s*\=\s*([^;]*).*$)|^.*$/, "$1");
       const resposta = await fetch("https://wpc8m7lx-8000.brs.devtunnels.ms/api/encontros/", {
         method: "GET",
@@ -70,50 +39,28 @@ export default function Encontros() {
       });
 
       if (resposta.ok) {
-        // Se o Django autorizou (Status 200), transformamos o texto em um objeto JavaScript
         const dados = await resposta.json();
-        // E salvamos na "memória" da tela, o que faz a tabela ser desenhada com os dados
         setEncontros(dados.results || []);
       } else {
-        // Se deu erro de permissão ou a URL estiver errada, avisamos com o Toast vermelho
         toast.error("Falha ao buscar os encontros do servidor.");
       }
     } catch (error) {
-      // Se a internet cair completamente, cai neste bloco
       toast.error("Erro de conexão com o servidor.");
     } finally {
-      // O 'finally' sempre executa no final, dando certo ou errado. 
-      // Usamos para esconder a mensagem de "Carregando..."
       setCarregando(false);
     }
   }
 
-  // O useEffect com o array vazio [] no final garante que a função carregarEncontros()
-  // seja chamada APENAS UMA VEZ, no exato momento em que o usuário abre esta tela.
   useEffect(() => {
     carregarEncontros();
   }, []);
 
-  // ============================================================================
-  // 3. LÓGICA DE ORDENAÇÃO (No Front-end)
-  // ============================================================================
-  // Usamos o operador spread [...encontros] para criar uma cópia exata da lista original.
-  // Regra de Ouro do React: NUNCA altere o estado original diretamente (mutabilidade).
   const encontrosOrdenados = [...encontros].sort((a, b) => {
-    // Transformamos as datas de texto em "Tempo absoluto" (milissegundos) para a matemática funcionar
     const dataA = new Date(a.data_referencia).getTime();
     const dataB = new Date(b.data_referencia).getTime();
-    
-    // Se ordemMaisRecente for TRUE, a matemática (B - A) coloca as datas maiores (mais no futuro) em cima.
-    // Se for FALSE, (A - B) inverte tudo.
     return ordemMaisRecente ? dataB - dataA : dataA - dataB;
   });
 
-  // ============================================================================
-  // 4. FUNÇÕES DE INTERAÇÃO (Formulário e Criação - POST)
-  // ============================================================================
-  
-  // Atualiza o formData letra por letra enquanto o usuário digita
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setFormData({ ...formData, [name]: value });
@@ -121,50 +68,20 @@ export default function Encontros() {
 
   // Prepara a tela para um NOVO cadastro
   const abrirModalNovo = () => {
-    setIdEditando(null); // Garante que não tem ID (Modo Criação)
-    setFormData({ encontro: "", data_referencia: "", data_exato: "", local: "Sede do Movimento", status: "em_agendamento" });
+    setFormData({ encontro: "", data_referencia: "", data_exato: "", local: "Nova Betânia", status: "em_agendamento" });
     setIsModalOpen(true);
   };
 
-  // Prepara a tela para EDITAR um cadastro existente
-  const abrirModalEditar = (encontro: any) => {
-    setIdEditando(encontro.id); // Salva o ID na memória (Modo Edição)
-    
-    // Puxa os dados antigos do banco e joga nos inputs para o usuário não precisar digitar tudo de novo
-    setFormData({
-      encontro: encontro.encontro,
-      data_referencia: encontro.data_referencia,
-      data_exato: encontro.data_exato,
-      local: encontro.local,
-      status: encontro.status
-    });
-    setIsModalOpen(true);
-  };
-
-  // ============================================================================
-  // 5. SALVAR DADOS (POST ou PUT)
-  // ============================================================================
-  // Esta função é disparada quando o usuário clica no botão "Salvar Encontro" (tipo submit)
   const handleSubmit = async (e: React.FormEvent) => {
-    // O preventDefault bloqueia o comportamento jurássico do HTML de tentar recarregar a página inteira
     e.preventDefault(); 
-    // Muda o botão para o modo "Salvando..."
     setSalvando(true);
 
     try {
       const token = document.cookie.replace(/(?:(?:^|.*;\s*)sia_token\s*\=\s*([^;]*).*$)|^.*$/, "$1");
-
-      // ⚠️ ATENÇÃO: Substitua o link base!
-      // Se tivermos um ID na memória, a URL ganha uma barra e o ID no final (ex: /encontros/5/).
-      const url = idEditando 
-        ? `https://wpc8m7lx-8000.brs.devtunnels.ms/api/encontros/${idEditando}/`
-        : `https://wpc8m7lx-8000.brs.devtunnels.ms/api/encontros/`;
-        
-      // Se tivermos um ID, usamos PUT (Atualizar). Se for nulo, usamos POST (Criar).
-      const metodo = idEditando ? "PUT" : "POST";
+      const url = `https://wpc8m7lx-8000.brs.devtunnels.ms/api/encontros/`;
 
       const resposta = await fetch(url, {
-        method: metodo,
+        method: "POST",
         headers: {
           "Authorization": `Bearer ${token}`,
           "Content-Type": "application/json"
@@ -177,7 +94,7 @@ export default function Encontros() {
         carregarEncontros();   // Atualiza a tabela com os novos dados
         
         // Mensagem dinâmica: avisa se criou ou se atualizou
-        toast.success(idEditando ? "Encontro atualizado!" : "Encontro agendado com sucesso!"); 
+        toast.success("Encontro agendado com sucesso!"); 
       } else {
         toast.error("Não foi possível salvar o encontro.");
       }
@@ -188,11 +105,7 @@ export default function Encontros() {
     }
   };
 
-  // ============================================================================
-  // 6. EXCLUIR DADOS (DELETE)
-  // ============================================================================
   const deletarEncontro = async (id: number) => {
-    // window.confirm é um recurso nativo do navegador para evitar cliques acidentais
     if (!window.confirm("Tem certeza que deseja excluir este encontro definitivamente?")) return;
 
     try {
@@ -200,7 +113,7 @@ export default function Encontros() {
       
       // ⚠️ ATENÇÃO: Substitua o link! Notem a interpolação ${id} na URL.
       const resposta = await fetch(`https://wpc8m7lx-8000.brs.devtunnels.ms/api/encontros/${id}/`, {
-        method: "DELETE", // Método HTTP específico para destruir registros
+        method: "DELETE",
         headers: {
           "Authorization": `Bearer ${token}`,
         }
@@ -217,155 +130,116 @@ export default function Encontros() {
     }
   };
 
-  // ============================================================================
-  // 7. RENDERIZAÇÃO (O Visual da Tela - HTML + Tailwind CSS)
-  // ============================================================================
   return (
-    // 'relative' é necessário aqui para que o modal consiga se sobrepor a esta tela inteira
-    <div className="p-8 relative">
+    <div className="space-y-6 relative">
       
       {/* CABEÇALHO DA PÁGINA */}
-      <div className="flex justify-between items-center mb-8">
+      <div className="flex justify-between items-center bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
         <div>
           <h1 className="text-3xl font-bold text-gray-800">Encontros</h1>
           <p className="text-gray-500 mt-1">Gerencie os encontros do Movimento Escalada</p>
         </div>
-        
-        {/* BOTÃO DE NOVO ENCONTRO:
-            O evento onClick muda o estado 'isModalOpen' para true, o que faz o React
-            renderizar o bloco de código do modal que está lá embaixo. */}
         <button 
-          onClick={() => setIsModalOpen(true)}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-medium transition-colors"
+          onClick={abrirModalNovo}
+          className="bg-escalada-azul hover:bg-blue-800 text-white px-5 py-2.5 rounded-lg font-medium transition-colors shadow-sm"
         >
           + Novo Encontro
         </button>
       </div>
 
-      {/* ÁREA DE CONTEÚDO (Lista ou Loading) 
-          Usamos uma condição ternária (condição ? verdadeiro : falso) */}
       {carregando ? (
-        <p className="text-gray-500">Carregando encontros...</p>
+        <p className="p-10 text-center text-gray-500 font-medium">Carregando encontros...</p>
       ) : (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
           
-          {/* Se o array estiver vazio, mostramos uma mensagem amigável (Empty State) */}
           {encontros.length === 0 ? (
-            <div className="p-8 text-center text-gray-500">
+            <div className="p-10 text-center text-gray-500">
               Nenhum encontro agendado ainda. Clique no botão acima para criar o primeiro!
             </div>
           ) : (
-            
-            /* TABELA DE DADOS */
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-gray-50 border-b border-gray-100">
-                  <th className="p-4 font-semibold text-gray-600">Encontro</th>
-                  
-                  {/* 
-                    Cabeçalho de Data Interativo:
-                    O onClick inverte o booleano 'ordemMaisRecente' (se era true, vira false e vice-versa).
-                    O ícone de setinha (↓ / ↑) muda dinamicamente para indicar o sentido visualmente.
-                  */}
-                  <th 
-                    className="p-4 font-semibold text-gray-600 cursor-pointer hover:bg-gray-200 transition-colors"
-                    onClick={() => setOrdemMaisRecente(!ordemMaisRecente)}
-                    title="Clique para inverter a ordem"
-                  >
-                    Data (Referência) {ordemMaisRecente ? "↓" : "↑"}
-                  </th>
-                  
-                  <th className="p-4 font-semibold text-gray-600">Data do Encontro</th>
-                  <th className="p-4 font-semibold text-gray-600">Status</th>
-                  
-                  <th className="p-4 font-semibold text-gray-600 text-center">Ações</th>
-                </tr>
-              </thead>
-              <tbody>
-                {/* 
-                  Usamos 'encontrosOrdenados' aqui em vez do 'encontros' original. 
-                  Isso faz a tabela reagir imediatamente quando o usuário clica no cabeçalho da data.
-                */}
-                {encontrosOrdenados.map((encontro: any) => (
-                  <tr key={encontro.id} className="border-b border-gray-50 hover:bg-gray-50">
-                    <td className="p-4 font-medium text-gray-800">{encontro.encontro}</td>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-gray-50 border-b border-gray-100 text-sm text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-4 font-medium">Encontro</th>
+ 
+                    <th 
+                      className="px-6 py-4 font-medium cursor-pointer hover:text-escalada-azul transition-colors flex items-center gap-1"
+                      onClick={() => setOrdemMaisRecente(!ordemMaisRecente)}
+                      title="Clique para inverter a ordem"
+                    >
+                      Data (Referência) {ordemMaisRecente ? "↓" : "↑"}
+                    </th>
                     
-                    {/* Renderiza a data no padrão Brasileiro */}
-                    <td className="p-4 text-gray-500 text-sm">
-                      {new Date(encontro.data_referencia).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}
-                    </td>
-                    
-                    <td className="p-4 text-gray-600">{encontro.data_exato}</td>
-                    
-                    <td className="p-4">
-                      {/* O Dicionário em ação: procuramos a chave 'encontro.status'. 
-                          Se ela existir no MAPA_STATUS, exibe a versão bonita. Senão, mostra como veio. */}
-                      <span className="px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-700">
-                        {MAPA_STATUS[encontro.status] || encontro.status}
-                      </span>
-                    </td>
-                    
-                    {/* BOTÕES DE AÇÃO: Editar e Excluir */}
-                    <td className="p-4 flex gap-2 justify-center">
-                      <button 
-                        onClick={() => abrirModalEditar(encontro)}
-                        className="px-3 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-md text-sm transition-colors"
-                      >
-                        Editar
-                      </button>
-                      <button 
-                        onClick={() => deletarEncontro(encontro.id)}
-                        className="px-3 py-1 bg-red-100 hover:bg-red-200 text-red-700 rounded-md text-sm transition-colors"
-                      >
-                        Excluir
-                      </button>
-                    </td>
+                    <th className="px-6 py-4 font-medium">Data do Encontro</th>
+                    <th className="px-6 py-4 font-medium">Status</th>
+                    <th className="px-6 py-4 font-medium text-right">Ações</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+
+                  {encontrosOrdenados.map((encontro: any) => (
+                    <tr key={encontro.id} className="hover:bg-gray-50 transition-colors">
+                      <td className="px-6 py-4 font-medium text-gray-800">{encontro.encontro}</td>
+                      
+                      <td className="px-6 py-4 text-gray-500 text-sm">
+                        {new Date(encontro.data_referencia).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}
+                      </td>
+                      
+                      <td className="px-6 py-4 text-gray-600">{encontro.data_exato}</td>
+                      
+                      <td className="px-6 py-4">
+                        <span className="px-3 py-1 rounded-full text-sm font-medium ${encontro.status === 'agendado' ? 'bg-green-100 text-green-700' : encontro.status === 'em_agendamento' ? 'bg-blue-100 text-blue-700' : 'bg-red-100 text-red-700'}`}" >
+                          {MAPA_STATUS[encontro.status] || encontro.status}
+                        </span>
+                      </td>
+                      
+                      <td className="px-6 py-4 flex gap-3 justify-end items-center">
+                        <Link 
+                          href={`encontros/${encontro.id}`}
+                          className="flex items-center gap-1 px-4 py-2 bg-escalada-azul/10 hover:bg-escalada-azul/20 text-escalada-azul rounded-lg text-sm font-semibold transition-colors"
+                        >
+                          <Settings size={16} /> Gerenciar
+                        </Link>
+
+                        <button 
+                          onClick={() => deletarEncontro(encontro.id)}
+                          className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                          title="Excluir Encontro"
+                        >
+                          < Trash2 size={20} />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
       )}
 
-      {/* ============================================================================
-          8. MODAL DE CADASTRO (A Janela Sobreposta)
-          ============================================================================ */}
       
-      {/* 
-        A sintaxe && no React significa: "Se a variável da esquerda for TRUE, renderize o HTML da direita".
-        Portanto, este HTML inteiro só existe na tela se o botão "+ Novo Encontro" for clicado.
-      */}
       {isModalOpen && (
-        // OVERLAY: O fundo preto semi-transparente que cobre a tela toda (fixed inset-0)
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          
-          {/* CAIXA BRANCA: O modal em si, centralizado pelos comandos do overlay acima */}
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl p-8 w-full max-w-md shadow-2xl">
             <h2 className="text-2xl font-bold mb-6 text-gray-800">Novo Encontro</h2>
-            
-            {/* O evento onSubmit é a forma correta de capturar o clique do botão "Salvar" 
-                ou o "Enter" do teclado dentro do formulário. */}
             <form onSubmit={handleSubmit} className="space-y-4">
-              
-              {/* CAMPO: encontro */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Encontro</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Nome do Encontro</label>
                 <input 
                   type="text" 
-                  name="encontro" // O nome precisa ser EXATAMENTE igual à chave lá no 'formData' do começo
-                  required // HTML5 avisa que o campo é obrigatório
-                  value={formData.encontro} // Faz o campo mostrar o que está salvo na memória
-                  onChange={handleInputChange} // Avisa a memória a cada nova letra digitada
-                  className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                  placeholder="Ex: Encontro de Boas-Vindas"
+                  name="encontro" 
+                  required 
+                  value={formData.encontro}
+                  onChange={handleInputChange} 
+                  className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-escalada-azul/20 focus:border-escalada-azul outline-none"
+                  placeholder="Ex: Encontro XXXXXXX"
                 />
               </div>
 
-              {/* DATAS (Referência Lógica + Frase Visual) */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                
-                {/* 1. O Calendário para o banco ordenar */}
+
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Data de Início
@@ -376,11 +250,10 @@ export default function Encontros() {
                     required
                     value={formData.data_referencia}
                     onChange={handleInputChange}
-                    className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                    className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-escalada-azul/20 focus:border-escalada-azul outline-none transition-all"
                   />
                 </div>
-                
-                {/* 2. O Texto Livre que vai para a tabela */}
+
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Dias do Encontro
@@ -392,12 +265,11 @@ export default function Encontros() {
                     value={formData.data_exato}
                     onChange={handleInputChange}
                     placeholder="Ex: 19, 24, 25 e 26 de Julho"
-                    className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                    className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-escalada-azul/20 focus:border-escalada-azul outline-none transition-all"
                   />
                 </div>
               </div>
 
-              {/* CAMPO: LOCAL */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Local</label>
                 <input 
@@ -406,7 +278,7 @@ export default function Encontros() {
                   required
                   value={formData.local}
                   onChange={handleInputChange}
-                  className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                  className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-escalada-azul/20 focus:border-escalada-azul outline-none transition-all"
                 />
               </div>
 
@@ -417,7 +289,7 @@ export default function Encontros() {
                   name="status"
                   value={formData.status}
                   onChange={handleInputChange}
-                  className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                  className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-escalada-azul/20 focus:border-escalada-azul outline-none transition-all"
                 >
                   <option value="em_agendamento">Em agendamento</option>
                   <option value="agendado">Agendado</option>
@@ -425,22 +297,19 @@ export default function Encontros() {
                 </select>
               </div>
 
-              {/* ÁREA DOS BOTÕES */}
               <div className="flex justify-end gap-3 mt-8">
-                {/* Botão de Cancelar: apenas volta o 'isModalOpen' para false, fechando a janela */}
                 <button 
                   type="button" 
                   onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                  className="px-4 py-2 font-medium text-gray-600 hover:bg-gray-100 rounded-lg transition-colors border border-gray-200"
                 >
                   Cancelar
                 </button>
-                
-                {/* Botão de Salvar: o type="submit" é o que aciona o onSubmit lá em cima na tag <form> */}
+
                 <button 
                   type="submit" 
-                  disabled={salvando} // Se já estiver salvando, o botão fica inativo (cinza)
-                  className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors disabled:opacity-50"
+                  disabled={salvando}
+                  className="px-6 py-2 bg-escalada-azul hover:bg-blue-800 text-white rounded-lg font-medium transition-colors disabled:opacity-50"
                 >
                   {/* Se estiver salvando, muda o texto, senão mostra o texto normal */}
                   {salvando ? "Salvando..." : "Salvar Encontro"}

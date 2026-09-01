@@ -4,9 +4,8 @@
 // IMPORTAÇÕES
 // ============================================================================
 import { useState, useEffect } from "react";
-// Ícones da biblioteca lucide-react. 
-// Filter adicionado para dar um visual legal ao nosso novo dropdown de status.
-import { Plus, Search, MoreHorizontal, X, Pencil, Trash2, Filter, ChevronLeft, ChevronRight, Calendar, Briefcase, Camera, Key, Maximize2, Ticket  } from "lucide-react";
+import { createPortal } from "react-dom";
+import { Plus, Search, MoreHorizontal, X, Pencil, Trash2, Filter, ChevronLeft, ChevronRight, Calendar, Briefcase, Camera, Key, Maximize2, Ticket, ArrowUpDown  } from "lucide-react";
 
 // ============================================================================
 // INTERFACE (CONTRATO DE DADOS)
@@ -48,6 +47,9 @@ interface Alpinista {
     status: string;
     foto?: string;
 
+    is_neurodivergente?: boolean;
+    tipo_neurodivergente?: string;
+
     encontros_realizados?: EncontroRealizado[];
     historico_eventos?: HistoricoEvento[];
     historico_equipes?: HistoricoEquipe[];
@@ -58,6 +60,13 @@ export default function AlpinistasPage() {
     // ============================================================================
     // ESTADOS GERAIS E FILTROS DA LISTA
     // ============================================================================
+
+    const [isMounted, setIsMounted] = useState(false);
+
+    useEffect(() => {
+        setIsMounted(true);
+    }, []);
+
     const [alpinistas, setAlpinistas] = useState<Alpinista[]>([]);
     const [carregando, setCarregando] = useState(true);
     const [erro, setErro] = useState("");
@@ -69,6 +78,7 @@ export default function AlpinistasPage() {
     // FILTROS
     const [busca, setBusca] = useState(""); // Filtro de Texto (Nome, Email, Tel)
     const [filtroStatus, setFiltroStatus] = useState("TODOS"); // NOVO: Filtro Avançado de Status
+    const [filtroOrdem, setFiltroOrdem] = useState("A-Z")
 
     // ============================================================================
     // ESTADO: CONTROLE DO MENU DROPDOWN (TRÊS PONTINHOS)
@@ -87,7 +97,7 @@ export default function AlpinistasPage() {
         nome: '', email: '', telefone: '', dataNascimento: '',
         endereco: '', nomePai: '', telefonePai: '', nomeMae: '',
         telefoneMae: '', restricaoSaude: '', medicacao: '',
-        grupo: '', status: 'ativo'
+        grupo: '', status: 'ativo', is_neurodivergente: false, tipo_neurodivergente: ''
     });
 
     // ============================================================================
@@ -174,8 +184,10 @@ export default function AlpinistasPage() {
     }
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-        const { name, value } = e.target;
-        setFormData(prev => ({ ...prev, [name]: value }));
+        const target = e.target as HTMLInputElement;
+        const { name, value, type, checked } = target;
+        setFormData(prev => ({ ...prev, 
+            [name]: type === 'checkbox' ? checked : value }));
     };
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -191,6 +203,10 @@ export default function AlpinistasPage() {
             const formDataToSend = new FormData();
 
             Object.entries(formData).forEach(([key, value]) => {
+                if (key === 'tipo_neurodivergente' && !formData.is_neurodivergente) {
+                    return;
+                }
+
                 if (value !== '' && value !== null) {
                     formDataToSend.append(key, value as string);
                 }
@@ -271,7 +287,7 @@ export default function AlpinistasPage() {
             nome: '', email: '', telefone: '', dataNascimento: '',
             endereco: '', nomePai: '', telefonePai: '', nomeMae: '',
             telefoneMae: '', restricaoSaude: '', medicacao: '',
-            grupo: '', status: 'ativo'
+            grupo: '', status: 'ativo', is_neurodivergente: false, tipo_neurodivergente: ''
         });
         setIsModalOpen(true);
     };
@@ -284,7 +300,7 @@ export default function AlpinistasPage() {
             nomePai: alpinista.nomePai || '', telefonePai: alpinista.telefonePai || '', 
             nomeMae: alpinista.nomeMae || '', telefoneMae: alpinista.telefoneMae || '', 
             restricaoSaude: alpinista.restricaoSaude || '', medicacao: alpinista.medicacao || '',
-            grupo: alpinista.grupo || '', status: alpinista.status || 'ativo'
+            grupo: alpinista.grupo || '', status: alpinista.status || 'ativo', is_neurodivergente: alpinista.is_neurodivergente || false, tipo_neurodivergente: alpinista.tipo_neurodivergente || ''
         });
         
         setIsFichaOpen(false); 
@@ -303,13 +319,20 @@ export default function AlpinistasPage() {
         setIsDeleteModalOpen(true); 
     };
 
-    // ============================================================================
-    // NOVA LÓGICA DE FILTRO AVANÇADO (FRONT-END)
-    // ============================================================================
-    const alpinistasFiltrados = alpinistas.filter((alpinista) => {
-       return filtroStatus === "TODOS" || (alpinista.status || 'ativo').toLowerCase() === filtroStatus.toLowerCase();
-    });
+    const alpinistasFiltrados = alpinistas
+        .filter((alpinista) => {
+            return filtroStatus === "TODOS" || (alpinista.status || 'ativo').toLowerCase() === filtroStatus.toLowerCase();
+    })
+        .sort((a,b) =>{
+            if (filtroOrdem === "A-Z") {
+                return a.nome.localeCompare(b.nome);
+            } else if (filtroOrdem === "Z=A") {
+                return b.nome.localeCompare(a.nome);
+            }
+            return 0;
+        });
 
+   
     const encontrosSeguros = alpinistaSelecionado?.encontros_realizados || [];
     const equipesSeguras = alpinistaSelecionado?.historico_equipes || [];
     const eventosSeguros = alpinistaSelecionado?.historico_eventos || [];
@@ -374,11 +397,29 @@ export default function AlpinistasPage() {
                     </div>
                 </div>
 
+                <div className="relative w-full md:w-48">
+                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <ArrowUpDown className="h-4 w-4 text-gray-400" />
+                        </div>
+                        <select 
+                            value={filtroOrdem}
+                            onChange={(e) => setFiltroOrdem(e.target.value)}
+                            className="w-full pl-10 pr-4 py-2 bg-white border border-gray-200 rounded-lg text-gray-700 focus:outline-none focus:ring-2 focus:ring-escalada-azul/20 focus:border-escalada-azul transition-all appearance-none cursor-pointer font-medium"
+                        >
+                            <option value="A-Z">Ordem: A - Z</option>
+                            <option value="Z-A">Ordem: Z - A</option>
+                            <option value="PADRAO">Mais Recentes</option>
+                        </select>
+                        <div className="absolute inset-y-0 right-0 flex items-center px-3 pointer-events-none">
+                            <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+                        </div>
+                    </div>
+
             </div>
 
             {/* ÁREA DA TABELA DE DADOS */}
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden relative">
-                {menuAberto !== null && <div className="fixed inset-0 z-10" onClick={() => setMenuAberto(null)}></div>}
+                {menuAberto !== null && <div className="fixed inset-0 z-[9999]" onClick={() => setMenuAberto(null)}></div>}
                 {carregando && <div className="p-10 text-center text-gray-500 font-medium">Carregando dados do banco...</div>}
                 {erro && <div className="p-10 text-center text-red-500 font-medium bg-red-50">{erro}</div>}
 
@@ -511,8 +552,8 @@ export default function AlpinistasPage() {
             {/* ============================================================================ */}
             
             {/* Modal de Formulário (Criar/Editar) */}
-            {isModalOpen && (
-                <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+            {isMounted && isModalOpen && createPortal (
+                <div className="fixed inset-0 bg-black/60 z-[9999] flex items-center justify-center p-4">
                     <div className="bg-white rounded-2xl shadow-xl w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden">
                         <div className="flex justify-between items-center p-6 border-b border-gray-100 bg-white">
                             <h2 className="text-xl font-bold text-gray-800">
@@ -568,12 +609,13 @@ export default function AlpinistasPage() {
                             </button>
                         </div>
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
 
             {/* Modal de Leitura Detalhada (Ficha) */}
-            {isFichaOpen && alpinistaSelecionado && (
-                <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+            {isMounted && isFichaOpen && alpinistaSelecionado && createPortal (
+                <div className="fixed inset-0 bg-black/60 z-[9999] flex items-center justify-center p-4">
                     <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden">
                         <div className="flex justify-between items-start p-6 border-b border-gray-100 bg-escalada-azul text-white relative">
                             <div className="flex items-center gap-4">
@@ -624,7 +666,21 @@ export default function AlpinistasPage() {
                                         <div className="grid grid-cols-1 gap-y-4">
                                             <div><p className="text-xs text-gray-500 mb-1">Restrições de Saúde / Alergias</p><p className="font-medium text-red-600 bg-red-50 p-2 rounded-lg border border-red-100">{alpinistaSelecionado.restricaoSaude || "Nenhuma restrição informada."}</p></div>
                                             <div><p className="text-xs text-gray-500 mb-1">Medicações em Uso</p><p className="font-medium text-gray-900">{alpinistaSelecionado.medicacao || "Nenhuma medicação informada."}</p></div>
-                                            <div><p className="text-xs text-gray-500 mb-1">Grupo Base</p><p className="font-medium text-gray-900">{alpinistaSelecionado.grupo || "Sem grupo definido."}</p></div>
+                                            {alpinistaSelecionado.is_neurodivergente && (
+                                                <div className="bg-indigo-50 border border-indigo-100 p-3 rounded-lg mb-2">
+                                                    <p className="text-xs text-indigo-500 font-bold uppercase tracking-wider mb-1">Neurodivergência</p>
+                                                    <p className="font-medium text-indigo-900">
+                                                        {alpinistaSelecionado.tipo_neurodivergente || "Identificado(a) como neurodivergente."}
+                                                    </p>
+                                                </div>
+                                            )}
+                                            
+                                        </div>
+                                    </div>
+                                    <div className="bg-white p-5 rounded-xl border border-gray-100 shadow-sm">
+                                        <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-4 border-b pb-2">Grupo</h3>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-y-4 gap-x-6">
+                                            <div><p className="text-xs text-gray-500 mb-1">Grupo</p><p className="font-medium text-gray-900">{alpinistaSelecionado.grupo || "Não informado"}</p></div>
                                         </div>
                                     </div>
                                 </div>
@@ -727,12 +783,13 @@ export default function AlpinistasPage() {
                             </div>
                         </div>
                     </div>
-                </div>
+                </div>,
+                document.body
                 
             )}
             
-            {isHistoricoGeralOpen && alpinistaSelecionado && (
-                <div className="fixed inset-0 bg-black/70 z-[70] flex items-center justify-center p-4 backdrop-blur-sm">
+            {isMounted && isHistoricoGeralOpen && alpinistaSelecionado && createPortal (
+                <div className="fixed inset-0 bg-black/70 z-[9999] flex items-center justify-center p-4 backdrop-blur-sm">
                     <div className="bg-gray-50 rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden border border-gray-200">
                         
                         <div className="flex justify-between items-center p-6 bg-white border-b border-gray-200">
@@ -799,7 +856,13 @@ export default function AlpinistasPage() {
                                                 {equipesSeguras.map((equipe, idx) => (
                                                     <tr key={idx} className="hover:bg-red-50">
                                                         <td className="px-6 py-4 font-bold text-escalada-vermelho">{equipe.equipe}</td>
-                                                        <td className="px-6 py-4">Grupo Dirigido</td>
+                                                        <td className="px-6 py-4">
+                                                            {equipe.cor_grupo && equipe.equipe.toLowerCase().includes('dirigente') ? (
+                                                                <span className="px-2 py-1 rounded-md bg-gray-100 text-gray-700 font-semibold text-xs uppercase border border-gray-200">
+                                                                    {equipe.cor_grupo}
+                                                                </span>
+                                                            ) : '-'}
+                                                        </td>
                                                         <td className="px-6 py-4 font-medium text-gray-800">{equipe.nome_encontro}</td>
                                                         <td className="px-6 py-4 text-gray-500 text-right">{equipe.data || '-'}</td>
                                                     </tr>
@@ -833,12 +896,13 @@ export default function AlpinistasPage() {
                             </div>
 
                         </div>
-                    </div>
+                    </div>,
+                    document.body
             )}
 
             {/* Modal de Confirmação de Exclusão (Delete) */}
-            {isDeleteModalOpen && alpinistaParaDeletar && (
-                <div className="fixed inset-0 bg-black/60 z-[60] flex items-center justify-center p-4">
+            {isMounted && isDeleteModalOpen && alpinistaParaDeletar && createPortal (
+                <div className="fixed inset-0 bg-black/60 z-[9999] flex items-center justify-center p-4">
                     <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
                         <div className="p-6 text-center">
                             <div className="w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -852,7 +916,8 @@ export default function AlpinistasPage() {
                             <button onClick={executarDelecao} disabled={deletando} className="flex-1 px-4 py-2.5 bg-red-600 text-white font-medium rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50">{deletando ? "Excluindo..." : "Sim, Excluir"}</button>
                         </div>
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
 
         </div>

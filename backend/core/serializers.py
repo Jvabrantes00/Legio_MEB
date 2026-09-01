@@ -37,7 +37,7 @@ class AlpinistaSerializer(serializers.ModelSerializer):
                 "equipe": p.funcao.nome,
                 "tipo_encontro": p.encontro.tipo,
                 "data": p.encontro.data_referencia.strftime('%d/%m/%Y') if getattr(p.encontro, 'data_referencia', None) else None,
-                "cor_grupo": getattr(p, 'corGrupo', None) if p.funcao and 'Dirigente' and 'Coordenador dos Dirigentes' in p.funcao.nome.lower() else None
+                "cor_grupo": getattr(p, 'corGrupo', None) if p.funcao and 'Dirigente' and "Coordenador dos Dirigentes" in p.funcao.nome.lower() else None
             } for p in participacoes
         ]
 
@@ -111,7 +111,7 @@ class ParticipacaoEncontroSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = ParticipacaoEncontro
-        fields = ['id', 'alpinista', 'alpinista_id', 'encontro', 'encontro_id', 'funcao', 'funcao_id', 'corGrupo']
+        fields = ['id', 'alpinista', 'alpinista_id', 'encontro', 'encontro_id', 'funcao', 'funcao_id', 'cor_grupo', 'coordenador']
     
     def validate(self, data):
         alpinista = data.get('alpinista')
