@@ -25,7 +25,7 @@ class AlpinistaSerializer(serializers.ModelSerializer):
                 "tipo": p.encontro.tipo,
                 "nome_encontro": p.encontro.encontro,
                 "data": p.encontro.data_referencia.strftime('%d/%m/%Y') if getattr(p.encontro, 'data_referencia', None) else None,
-                "cor_grupo": getattr(p, 'corGrupo', None) 
+                "cor_grupo": p.cor_grupo
             } for p in participacoes
         ]
     
@@ -37,7 +37,7 @@ class AlpinistaSerializer(serializers.ModelSerializer):
                 "equipe": p.funcao.nome,
                 "tipo_encontro": p.encontro.tipo,
                 "data": p.encontro.data_referencia.strftime('%d/%m/%Y') if getattr(p.encontro, 'data_referencia', None) else None,
-                "cor_grupo": getattr(p, 'corGrupo', None) if p.funcao and 'Dirigente' and "Coordenador dos Dirigentes" in p.funcao.nome.lower() else None
+                "cor_grupo": p.cor_grupo if p.funcao and 'Dirigente' and "Coordenador dos Dirigentes" in p.funcao.nome.lower() else None
             } for p in participacoes
         ]
 
@@ -47,7 +47,7 @@ class AlpinistaSerializer(serializers.ModelSerializer):
         return [
             {
                 "nome_evento": p.evento.nome if hasattr(p.evento, 'nome') else "Evento",
-                "data": p.evento.dataEvento.strftime('%d/%m/%Y') if getattr(p.evento, 'dataEvento', None) else None,
+                "data": p.evento.data_evento.strftime('%d/%m/%Y') if p.evento.data_evento else None,
             } for p in participacoes
         ]
 
@@ -77,9 +77,9 @@ class EventoSerializer(serializers.ModelSerializer):
     def get_status_evento(self, obj):
         hoje = date.today()
 
-        if obj.dataEvento < hoje:
+        if obj.data_evento < hoje:
             return "Concluído"
-        elif obj.dataEvento == hoje:
+        elif obj.data_evento == hoje:
             return "Hoje"
         else:
             return "Em Breve"

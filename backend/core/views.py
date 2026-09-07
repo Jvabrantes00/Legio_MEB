@@ -86,7 +86,7 @@ class EncontroViewSet(viewsets.ModelViewSet):
         )
 
     def perform_destroy(self, instance):
-        nome_encontro = instance.nome
+        nome_encontro = instance.encontro
         instance.delete()
         LogSistema.objects.create(
             usuario=self.request.user,
@@ -164,13 +164,13 @@ class EncontroViewSet(viewsets.ModelViewSet):
 
 
 class EventoViewSet(viewsets.ModelViewSet):
-    queryset = Evento.objects.all() 
+    queryset = Evento.objects.all().order_by('data_evento', 'id')
     serializer_class = EventoSerializer 
     permission_classes = [IsAuthenticated] #protecao de rota 
 
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     search_fields = [ 'nome', 'local']
-    ordering_fields = ['dataEvento', 'nome']
+    ordering_fields = ['data_evento', 'nome']
 
     def perform_create(self, serializer):
         evento = serializer.save()
