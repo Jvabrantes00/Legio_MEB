@@ -22,7 +22,7 @@ class DashboardRegressionTests(AuthenticatedAPITestCase):
         # Act
         response = self.client.get('/api/dashboard-stats/')
 
-        # Assert: hoje a view consulta Ativo/Pendente/Inativo.
+        # Assert
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(
             response.json()['visaoGeral'],
@@ -36,7 +36,7 @@ class DashboardRegressionTests(AuthenticatedAPITestCase):
         # Act
         response = self.client.get('/api/dashboard-stats/')
 
-        # Assert: hoje a view tenta acessar e.encontros.
+        # Assert
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(
             response.json()['proximosEncontros'][0],
@@ -44,4 +44,35 @@ class DashboardRegressionTests(AuthenticatedAPITestCase):
                 'nome': encontro.encontro,
                 'data': str(encontro.data_referencia),
             },
+        )
+
+    def test_dashboard_sem_encontro_futuro_retorna_lista_vazia(self):
+        make_encontro(data_referencia=date.today() - timedelta(days=1))
+
+        response = self.client.get('/api/dashboard-stats/')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.json()['proximosEncontros'], [])
+
+    def test_dashboard_ordena_varios_encontros_do_mais_proximo(self):
+        mais_distante = make_encontro(
+            data_referencia=date.today() + timedelta(days=20)
+        )
+        mais_proximo = make_encontro(
+            data_referencia=date.today() + timedelta(days=5)
+        )
+        intermediario = make_encontro(
+            data_referencia=date.today() + timedelta(days=10)
+        )
+
+        response = self.client.get('/api/dashboard-stats/')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            [item['nome'] for item in response.json()['proximosEncontros']],
+            [
+                mais_proximo.encontro,
+                intermediario.encontro,
+                mais_distante.encontro,
+            ],
         )

@@ -16,8 +16,8 @@ from .serializers import (
 
 from django.db.models import Count
 from django.db import IntegrityError, transaction
+from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
-from datetime import date
 
 
 class AlpinistaViewSet(viewsets.ModelViewSet):
@@ -245,26 +245,31 @@ def dashboard_stats(request):
     usuario = request.user
 
     coordenacoes = usuario.groups.values_list('name', flat=True)
+    proximos_encontros = Encontro.objects.filter(
+        data_referencia__gte=timezone.localdate()
+    ).order_by('data_referencia', 'id')[:3]
 
     dados_resposta = {
         "usuarioLogado": usuario.username,
         "coordenacoes": list(coordenacoes),
         "totalAlpinistas": Alpinista.objects.count(),
         "proximosEncontros": [
-            {"nome": e.encontros, "data": str(e.data_referencia)}
-            for e in Encontro.objects.filter(data_referencia__gte=date.today()).order_by('data_referencia')[:3]
+            {"nome": encontro.encontro, "data": str(encontro.data_referencia)}
+            for encontro in proximos_encontros
         ]
     }
 
     if 'Diretoria' in coordenacoes:
         dados_resposta['visaoGeral'] = {
-            "ativos": Alpinista.objects.filter(status='Ativo').count(),
-            "pendentes": Alpinista.objects.filter(status='Pendente').count(),
-            "inativos": Alpinista.objects.filter(status='Inativo').count(),
+            "ativos": Alpinista.objects.filter(status=Alpinista.Status.ATIVO).count(),
+            "pendentes": Alpinista.objects.filter(status=Alpinista.Status.PENDENTE).count(),
+            "inativos": Alpinista.objects.filter(status=Alpinista.Status.INATIVO).count(),
         }
     if 'Fichas' in coordenacoes:
         dados_resposta['moduloFichas'] = {
-            "fichasPendentes": Alpinista.objects.filter(status='Pendente').count(),
+            "fichasPendentes": Alpinista.objects.filter(
+                status=Alpinista.Status.PENDENTE
+            ).count(),
             "alertaFichas": "Existem novos alpinistas aguardando triagem"
         }
     if 'MME' in coordenacoes:
