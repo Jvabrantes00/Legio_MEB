@@ -4,12 +4,11 @@ from django.dispatch import receiver
 from django.contrib.auth.models import User
 
 class Alpinista(models.Model):
-    STATUS_CHOICES = [
-        ('ativo', 'ativo'),
-        ('pendente', 'pendente'),
-        ('confirmado', 'confirmado'),
-        ('inativo', 'inativo'),
-    ]
+    class Status(models.TextChoices):
+        ATIVO = 'ativo', 'ativo'
+        PENDENTE = 'pendente', 'pendente'
+        CONFIRMADO = 'confirmado', 'confirmado'
+        INATIVO = 'inativo', 'inativo'
 
     cpf = models.CharField(default = False, max_length = 14, unique = True, verbose_name = "CPF")
     nome = models.CharField(max_length = 255)    
@@ -25,7 +24,7 @@ class Alpinista(models.Model):
     medicacao = models.CharField(max_length = 255, null = True, blank = True)
     conheciaEscalada = models.CharField(max_length = 100, null = True, blank = True)
     grupo = models.CharField(max_length = 100, null = True, blank = True)
-    status = models.CharField(max_length = 20, choices = STATUS_CHOICES, default = 'Pendente')
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDENTE)
     #foto = models.URLField(null = True, blank = True)
     foto = models.ImageField(upload_to='fotos/', null=True, blank=True)
 
@@ -134,10 +133,10 @@ class ParticipacaoEvento(models.Model):
 def alpinista_ativo_automatico(sender, instance, created, **kwargs):
     if created:
         alpinista = instance.alpinista
-        if alpinista.status != 'Ativo':
-            alpinista.status = 'Ativo'
-            alpinista.save()
-            print(f"Sistema: Status de {alpinista.nome} atualizado para Ativo!")
+        if alpinista.status != Alpinista.Status.ATIVO:
+            alpinista.status = Alpinista.Status.ATIVO
+            alpinista.save(update_fields=['status'])
+            print(f"Sistema: Status de {alpinista.nome} atualizado para ativo!")
 
 
 class LogSistema(models.Model):

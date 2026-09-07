@@ -112,6 +112,7 @@ class EncontroViewSet(viewsets.ModelViewSet):
         for alp_id in alpinistas_ids:
             try:
                 alpinista = Alpinista.objects.get(id=alp_id)
+                status_anterior = (alpinista.status or '').lower()
 
                 ParticipacaoEncontro.objects.get_or_create(
                     encontro=encontro,
@@ -119,9 +120,9 @@ class EncontroViewSet(viewsets.ModelViewSet):
                     funcao=funcao
                 )
 
-                if (alpinista.status or '').lower() == 'pendente':
-                    alpinista.status = 'confirmado'
-                    alpinista.save()
+                if status_anterior == Alpinista.Status.PENDENTE:
+                    alpinista.status = Alpinista.Status.CONFIRMADO
+                    alpinista.save(update_fields=['status'])
 
                 sucessos += 1
             except Alpinista.DoesNotExist:
@@ -152,9 +153,12 @@ class EncontroViewSet(viewsets.ModelViewSet):
                 if participacao:
                     participacao.delete()
                     
-                    if (alpinista.status or '').lower() in ['confirmado', 'ativo']:
-                        alpinista.status = 'pendente'
-                        alpinista.save()
+                    if (alpinista.status or '').lower() in {
+                        Alpinista.Status.CONFIRMADO,
+                        Alpinista.Status.ATIVO,
+                    }:
+                        alpinista.status = Alpinista.Status.PENDENTE
+                        alpinista.save(update_fields=['status'])
                         
                     sucessos += 1
             except Alpinista.DoesNotExist:
