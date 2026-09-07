@@ -1,5 +1,4 @@
 from rest_framework import viewsets, filters, status
-from rest_framework.permissions import IsAuthenticated
 from rest_framework.decorators import api_view, permission_classes, action
 from rest_framework.response import Response
 
@@ -13,6 +12,8 @@ from .serializers import (
     FuncaoEncontroSerializer, ParticipacaoEncontroSerializer, ParticipacaoEventoSerializer,
     LogSistemaSerializer
     )
+from .permissions import require_sia_roles
+from .roles import SiaRole
 
 from django.db.models import Count
 from django.db import IntegrityError, transaction
@@ -20,10 +21,14 @@ from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
 
 
+ADMIN_ROLES = (SiaRole.SUPORTE, SiaRole.DIRETORIA)
+FICHAS_FLOW_ROLES = (*ADMIN_ROLES, SiaRole.FICHAS)
+
+
 class AlpinistaViewSet(viewsets.ModelViewSet):
     queryset = Alpinista.objects.all().order_by('nome') #Busca todos os alpinistas no banco de dados
     serializer_class = AlpinistaSerializer #Usa o tradutor para converter os dados do modelo Alpinista em JSON e vice-versa
-    permission_classes = [IsAuthenticated] #Exige que o usuário esteja autenticado para acessar essa rota
+    permission_classes = [require_sia_roles(*FICHAS_FLOW_ROLES)]
 
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ['status']
@@ -61,7 +66,7 @@ class AlpinistaViewSet(viewsets.ModelViewSet):
 class EncontroViewSet(viewsets.ModelViewSet):
     queryset = Encontro.objects.all().order_by('-data_referencia') 
     serializer_class = EncontroSerializer
-    permission_classes = [IsAuthenticated] #protecao de rota 
+    permission_classes = [require_sia_roles(*FICHAS_FLOW_ROLES)]
 
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ['encontro']
@@ -180,7 +185,7 @@ class EncontroViewSet(viewsets.ModelViewSet):
 class EventoViewSet(viewsets.ModelViewSet):
     queryset = Evento.objects.all().order_by('data_evento', 'id')
     serializer_class = EventoSerializer 
-    permission_classes = [IsAuthenticated] #protecao de rota 
+    permission_classes = [require_sia_roles(*ADMIN_ROLES)]
 
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     search_fields = [ 'nome', 'local']
@@ -217,13 +222,13 @@ class EventoViewSet(viewsets.ModelViewSet):
 class FuncaoEncontroViewSet(viewsets.ModelViewSet):
     queryset = FuncaoEncontro.objects.all() 
     serializer_class = FuncaoEncontroSerializer 
-    permission_classes = [IsAuthenticated] #protecao de rota 
+    permission_classes = [require_sia_roles(*FICHAS_FLOW_ROLES)]
     pagination_class = None
 
 class ParticipacaoEncontroViewSet(viewsets.ModelViewSet):
     queryset = ParticipacaoEncontro.objects.select_related('alpinista', 'encontro', 'funcao').all()
     serializer_class = ParticipacaoEncontroSerializer
-    permission_classes = [IsAuthenticated] #protecao de rota
+    permission_classes = [require_sia_roles(*FICHAS_FLOW_ROLES)]
 
     pagination_class = None
 
@@ -233,14 +238,14 @@ class ParticipacaoEncontroViewSet(viewsets.ModelViewSet):
 class ParticipacaoEventoViewSet(viewsets.ModelViewSet):
     queryset = ParticipacaoEvento.objects.all() 
     serializer_class = ParticipacaoEventoSerializer
-    permission_classes = [IsAuthenticated] #protecao de rota
+    permission_classes = [require_sia_roles(*ADMIN_ROLES)]
 
     filter_backends = [DjangoFilterBackend]
     filterset_fields = ['evento', 'alpinista'] 
 
 
 @api_view(['GET'])
-@permission_classes([IsAuthenticated])
+@permission_classes([require_sia_roles(*FICHAS_FLOW_ROLES)])
 def dashboard_stats(request):
     usuario = request.user
 
@@ -279,10 +284,10 @@ def dashboard_stats(request):
 
     return Response(dados_resposta)
 
-class LogSistemaViewSet(viewsets.ModelViewSet):
+class LogSistemaViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = LogSistema.objects.all()
     serializer_class = LogSistemaSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [require_sia_roles(*ADMIN_ROLES)]
 
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ['acao', 'modulo', 'usuario']

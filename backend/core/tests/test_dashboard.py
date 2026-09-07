@@ -10,7 +10,7 @@ from core.tests.factories import make_alpinista, make_encontro
 class DashboardRegressionTests(AuthenticatedAPITestCase):
     def setUp(self):
         super().setUp()
-        diretoria = Group.objects.create(name='Diretoria')
+        diretoria, _ = Group.objects.get_or_create(name='Diretoria')
         self.user.groups.add(diretoria)
 
     def test_contagens_usam_status_canonicos(self):

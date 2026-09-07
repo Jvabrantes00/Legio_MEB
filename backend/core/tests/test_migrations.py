@@ -2,6 +2,8 @@ from django.db import connection
 from django.db.migrations.executor import MigrationExecutor
 from django.test import TransactionTestCase
 
+from core.roles import RECOGNIZED_ROLES, SiaRole
+
 
 class NormalizeAlpinistaStatusMigrationTests(TransactionTestCase):
     migrate_from = ('core', '0016_alter_alpinista_status')
@@ -130,6 +132,43 @@ class RejectUnknownAlpinistaCPFMigrationTests(TransactionTestCase):
         executor = MigrationExecutor(connection)
         old_apps = executor.loader.project_state([self.migrate_from]).apps
         old_apps.get_model('core', 'Alpinista').objects.all().delete()
+        executor = MigrationExecutor(connection)
+        executor.migrate(executor.loader.graph.leaf_nodes())
+        super().tearDown()
+
+
+class CreateSIARoleGroupsMigrationTests(TransactionTestCase):
+    migrate_from = ('core', '0018_alter_alpinista_cpf')
+    migrate_to = ('core', '0019_create_sia_role_groups')
+
+    def setUp(self):
+        super().setUp()
+        executor = MigrationExecutor(connection)
+        executor.migrate([self.migrate_from])
+        old_apps = executor.loader.project_state([self.migrate_from]).apps
+        Group = old_apps.get_model('auth', 'Group')
+        Group.objects.filter(name__in=RECOGNIZED_ROLES).delete()
+        self.existing_support_id = Group.objects.create(
+            name=SiaRole.SUPORTE.value
+        ).id
+
+        executor = MigrationExecutor(connection)
+        executor.migrate([self.migrate_to])
+        self.apps = executor.loader.project_state([self.migrate_to]).apps
+
+    def test_cria_grupos_sem_duplicar_grupo_existente(self):
+        Group = self.apps.get_model('auth', 'Group')
+
+        groups = Group.objects.filter(name__in=RECOGNIZED_ROLES)
+
+        self.assertEqual(set(groups.values_list('name', flat=True)), set(RECOGNIZED_ROLES))
+        self.assertEqual(groups.count(), len(RECOGNIZED_ROLES))
+        self.assertEqual(
+            groups.get(name=SiaRole.SUPORTE.value).id,
+            self.existing_support_id,
+        )
+
+    def tearDown(self):
         executor = MigrationExecutor(connection)
         executor.migrate(executor.loader.graph.leaf_nodes())
         super().tearDown()
