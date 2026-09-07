@@ -1,11 +1,24 @@
 # Ambientes Virtuais e Cache do Python
 venv/
+.venv/
 env/
 __pycache__/
-*.pyc
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Variáveis de ambiente e secrets
+.env
+.env.*
+!.env.example
+*.key
+*.pem
 
 # Banco de dados local (se você usou SQLite antes do Postgres)
 db.sqlite3
+db.sqlite3-journal
 
 # Arquivos de mídia (uploads de usuários, fotos)
 media/

@@ -14,21 +14,53 @@ from pathlib import Path
 from datetime import timedelta
 import os
 
+from django.core.exceptions import ImproperlyConfigured
+from dotenv import load_dotenv
+
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+# Carrega backend/.env apenas no ambiente local. Variaveis definidas pelo
+# sistema operacional ou pela plataforma de deploy sempre têm prioridade.
+load_dotenv(BASE_DIR / '.env')
+
+
+def env_bool(name, default=False):
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {'1', 'true', 'yes', 'on'}
+
+
+def env_list(name, default=''):
+    value = os.getenv(name, default)
+    return [item.strip() for item in value.split(',') if item.strip()]
+
+
+def required_env(name):
+    value = os.getenv(name)
+    if not value:
+        raise ImproperlyConfigured(
+            f'A variável de ambiente obrigatória {name} não foi configurada.'
+        )
+    return value
 
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-c^*g#84$_4kq0*y2@qw&@4-p5-@@8ql%wzst2z-&^j_d$k9yvu'
+SECRET_KEY = required_env('DJANGO_SECRET_KEY')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = env_bool('DJANGO_DEBUG', default=False)
 
-ALLOWED_HOSTS = ['*']
+ALLOWED_HOSTS = env_list('DJANGO_ALLOWED_HOSTS')
+if not ALLOWED_HOSTS:
+    raise ImproperlyConfigured(
+        'A variável de ambiente obrigatória DJANGO_ALLOWED_HOSTS não foi configurada.'
+    )
 
 
 # Application definition
@@ -83,11 +115,11 @@ WSGI_APPLICATION = 'setup.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'meb_db',
-        'USER': 'meb_user1',
-        'PASSWORD': 'meb_senha_1234',
-        'HOST': 'localhost',
-        'PORT': '5432',
+        'NAME': required_env('POSTGRES_DB'),
+        'USER': required_env('POSTGRES_USER'),
+        'PASSWORD': required_env('POSTGRES_PASSWORD'),
+        'HOST': os.getenv('POSTGRES_HOST', 'localhost'),
+        'PORT': os.getenv('POSTGRES_PORT', '5432'),
     }
 }
 
@@ -128,7 +160,15 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 
-CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOWED_ORIGINS = env_list(
+    'DJANGO_CORS_ALLOWED_ORIGINS',
+)
+
+# Permite o frontend aberto por um VS Code Tunnel na porta 3000. Em produção,
+# configure esta variável com apenas os padrões realmente utilizados.
+CORS_ALLOWED_ORIGIN_REGEXES = env_list(
+    'DJANGO_CORS_ALLOWED_ORIGIN_REGEXES',
+)
 
 # Permite que o Front-end envie o cabeçalho com o Token
 CORS_ALLOW_HEADERS = [
@@ -144,11 +184,9 @@ CORS_ALLOW_HEADERS = [
 ]
 
 # Aqui você coloca tanto o Front quanto o Back para liberar formulários
-CSRF_TRUSTED_ORIGINS = [
-    "https://wpc8m7lx-8000.brs.devtunnels.ms",
-    "http://localhost:8000",
-    "http://127.0.0.1:8000",
-]
+CSRF_TRUSTED_ORIGINS = env_list(
+    'DJANGO_CSRF_TRUSTED_ORIGINS',
+)
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
