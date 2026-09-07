@@ -3,6 +3,8 @@ from django.db.models.signals import post_save
 from django.dispatch import receiver
 from django.contrib.auth.models import User
 
+from .validators import normalize_cpf, validate_cpf
+
 class Alpinista(models.Model):
     class Status(models.TextChoices):
         ATIVO = 'ativo', 'ativo'
@@ -10,7 +12,14 @@ class Alpinista(models.Model):
         CONFIRMADO = 'confirmado', 'confirmado'
         INATIVO = 'inativo', 'inativo'
 
-    cpf = models.CharField(default = False, max_length = 14, unique = True, verbose_name = "CPF")
+    cpf = models.CharField(
+        max_length=14,
+        unique=True,
+        null=True,
+        blank=True,
+        validators=[validate_cpf],
+        verbose_name="CPF",
+    )
     nome = models.CharField(max_length = 255)    
     dataNascimento = models.DateField(null = True, blank = True)
     endereco = models.CharField(max_length = 255, null = True, blank = True)
@@ -33,6 +42,10 @@ class Alpinista(models.Model):
 
     def __str__(self):
         return self.nome
+
+    def clean(self):
+        super().clean()
+        self.cpf = normalize_cpf(self.cpf)
 
 class FuncaoEncontro(models.Model):
     TIPO_FUNCAO = [

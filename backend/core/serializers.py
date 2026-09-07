@@ -1,8 +1,16 @@
 from datetime import date
+from django.core.exceptions import ValidationError
 from rest_framework import serializers
 from .models import Alpinista, Encontro, Evento, ParticipacaoEncontro, ParticipacaoEvento, FuncaoEncontro, LogSistema
+from .validators import normalize_cpf
 
 class AlpinistaSerializer(serializers.ModelSerializer):
+    cpf = serializers.CharField(
+        required=False,
+        allow_null=True,
+        allow_blank=True,
+        max_length=14,
+    )
     idade_atual = serializers.SerializerMethodField()
     encontros_realizados = serializers.SerializerMethodField()
     historico_equipes = serializers.SerializerMethodField()
@@ -11,6 +19,26 @@ class AlpinistaSerializer(serializers.ModelSerializer):
     class Meta:
         model = Alpinista
         fields = '__all__' #Diz para converter todos os campos do modelo Alpinista em JSON
+
+    def validate(self, attrs):
+        if 'cpf' not in attrs:
+            return attrs
+
+        try:
+            cpf = normalize_cpf(attrs['cpf'])
+        except ValidationError as error:
+            raise serializers.ValidationError({'cpf': error.messages}) from error
+
+        if cpf is not None:
+            formatted_cpf = f'{cpf[:3]}.{cpf[3:6]}.{cpf[6:9]}-{cpf[9:]}'
+            matches = Alpinista.objects.filter(cpf__in=(cpf, formatted_cpf))
+            if self.instance is not None:
+                matches = matches.exclude(pk=self.instance.pk)
+            if matches.exists():
+                raise serializers.ValidationError({'cpf': ['Este CPF já está cadastrado.']})
+
+        attrs['cpf'] = cpf
+        return attrs
 
     def get_idade_atual(self, obj):
         if obj.dataNascimento:

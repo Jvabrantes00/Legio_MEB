@@ -10,7 +10,6 @@ _sequence = count(1)
 def make_alpinista(**overrides):
     number = next(_sequence)
     values = {
-        'cpf': f'000.000.000-{number:02d}',
         'nome': f'Alpinista {number}',
         'email': f'alpinista{number}@example.test',
         'telefone': f'610000{number:04d}',

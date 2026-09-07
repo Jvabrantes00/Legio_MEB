@@ -58,19 +58,63 @@ class StatusAlpinistaRegressionTests(TestCase):
 
 
 class CPFRegressionTests(TestCase):
-    def test_cadastros_sem_cpf_colidem_no_default_unico(self):
-        # Arrange
-        Alpinista.objects.create(
-            nome='Sem CPF 1',
-            email='sem-cpf-1@example.test',
-            telefone='6100000001',
-        )
+    valid_cpf = '52998224725'
+    formatted_valid_cpf = '529.982.247-25'
 
-        # Act / Assert: o segundo cadastro recebe o mesmo default "False".
+    def payload(self, index, **extra):
+        return {
+            'nome': f'Alpinista CPF {index}',
+            'email': f'cpf-{index}@example.test',
+            'telefone': f'610000{index:04d}',
+            **extra,
+        }
+
+    def test_permite_dois_alpinistas_sem_cpf(self):
+        first = AlpinistaSerializer(data=self.payload(1))
+        second = AlpinistaSerializer(data=self.payload(2))
+
+        self.assertTrue(first.is_valid(), first.errors)
+        self.assertTrue(second.is_valid(), second.errors)
+        first_alpinista = first.save()
+        second_alpinista = second.save()
+
+        self.assertIsNone(first_alpinista.cpf)
+        self.assertIsNone(second_alpinista.cpf)
+
+    def test_constraint_impede_dois_alpinistas_com_o_mesmo_cpf(self):
+        Alpinista.objects.create(cpf=self.valid_cpf, **self.payload(1))
+
         with self.assertRaises(IntegrityError):
             with transaction.atomic():
-                Alpinista.objects.create(
-                    nome='Sem CPF 2',
-                    email='sem-cpf-2@example.test',
-                    telefone='6100000002',
-                )
+                Alpinista.objects.create(cpf=self.valid_cpf, **self.payload(2))
+
+    def test_cpf_formatado_e_nao_formatado_sao_o_mesmo_valor(self):
+        first = AlpinistaSerializer(data=self.payload(1, cpf=self.valid_cpf))
+        self.assertTrue(first.is_valid(), first.errors)
+        first.save()
+
+        second = AlpinistaSerializer(
+            data=self.payload(2, cpf=self.formatted_valid_cpf)
+        )
+
+        self.assertFalse(second.is_valid())
+        self.assertIn('cpf', second.errors)
+
+    def test_rejeita_cpf_invalido(self):
+        serializer = AlpinistaSerializer(
+            data=self.payload(1, cpf='111.111.111-11')
+        )
+
+        self.assertFalse(serializer.is_valid())
+        self.assertIn('cpf', serializer.errors)
+
+    def test_persiste_cpf_sem_pontuacao(self):
+        serializer = AlpinistaSerializer(
+            data=self.payload(1, cpf=self.formatted_valid_cpf)
+        )
+
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        alpinista = serializer.save()
+        alpinista.refresh_from_db()
+
+        self.assertEqual(alpinista.cpf, self.valid_cpf)
