@@ -15,6 +15,7 @@ from .serializers import (
     )
 
 from django.db.models import Count
+from django.db import IntegrityError, transaction
 from django_filters.rest_framework import DjangoFilterBackend
 from datetime import date
 
@@ -103,30 +104,39 @@ class EncontroViewSet(viewsets.ModelViewSet):
         if not alpinistas_ids:
             return Response({"erro": "Nenhum alpinista selecionado."}, status=status.HTTP_400_BAD_REQUEST)
 
-        funcao, created = FuncaoEncontro.objects.get_or_create(
-            tipo='encontrista',
-            defaults={'nome': 'Encontrista'}
-        )
-
-        sucessos = 0
-        for alp_id in alpinistas_ids:
-            try:
-                alpinista = Alpinista.objects.get(id=alp_id)
-                status_anterior = (alpinista.status or '').lower()
-
-                ParticipacaoEncontro.objects.get_or_create(
-                    encontro=encontro,
-                    alpinista=alpinista,
-                    funcao=funcao
+        try:
+            with transaction.atomic():
+                funcao, _ = FuncaoEncontro.objects.get_or_create(
+                    tipo='encontrista',
+                    defaults={'nome': 'Encontrista'}
                 )
 
-                if status_anterior == Alpinista.Status.PENDENTE:
-                    alpinista.status = Alpinista.Status.CONFIRMADO
-                    alpinista.save(update_fields=['status'])
+                sucessos = 0
+                for alp_id in alpinistas_ids:
+                    alpinista = Alpinista.objects.get(id=alp_id)
+                    status_anterior = (alpinista.status or '').lower()
 
-                sucessos += 1
-            except Alpinista.DoesNotExist:
-                continue
+                    ParticipacaoEncontro.objects.get_or_create(
+                        encontro=encontro,
+                        alpinista=alpinista,
+                        funcao=funcao
+                    )
+
+                    if status_anterior == Alpinista.Status.PENDENTE:
+                        alpinista.status = Alpinista.Status.CONFIRMADO
+                        alpinista.save(update_fields=['status'])
+
+                    sucessos += 1
+        except Alpinista.DoesNotExist:
+            return Response(
+                {"erro": "Alpinista não encontrado."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except IntegrityError:
+            return Response(
+                {"erro": "Não foi possível efetivar o lote."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         return Response({"mensagem": f"{sucessos} alpinistas efetivados com sucesso."}, status=status.HTTP_200_OK)
 

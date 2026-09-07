@@ -68,6 +68,31 @@ class ParticipacaoRegressionTests(AuthenticatedAPITestCase):
 class ParticipacaoLoteRegressionTests(AuthenticatedAPITransactionTestCase):
     reset_sequences = True
 
+    def test_efetivacao_em_lote_valido_persiste_todos(self):
+        encontro = make_encontro()
+        primeiro = make_alpinista()
+        segundo = make_alpinista()
+
+        response = self.client.post(
+            f'/api/encontros/{encontro.pk}/efetivar-encontristas/',
+            {'alpinistas_ids': [primeiro.pk, segundo.pk]},
+            format='json',
+        )
+        primeiro.refresh_from_db()
+        segundo.refresh_from_db()
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            ParticipacaoEncontro.objects.filter(
+                encontro=encontro,
+                alpinista__in=(primeiro, segundo),
+                funcao__tipo='encontrista',
+            ).count(),
+            2,
+        )
+        self.assertEqual(primeiro.status, 'confirmado')
+        self.assertEqual(segundo.status, 'confirmado')
+
     def test_efetivacao_em_lote_nao_deve_persistir_resultado_parcial(self):
         # Arrange
         encontro = make_encontro()
@@ -87,12 +112,14 @@ class ParticipacaoLoteRegressionTests(AuthenticatedAPITransactionTestCase):
             {'alpinistas_ids': [primeiro.pk, segundo.pk]},
             format='json',
         )
+        primeiro.refresh_from_db()
 
-        # Assert: hoje o primeiro item permanece salvo porque não há transação.
+        # Assert: participação e status do primeiro item devem sofrer rollback.
         self.assertFalse(
             ParticipacaoEncontro.objects.filter(
                 encontro=encontro,
                 alpinista=primeiro,
             ).exists()
         )
+        self.assertEqual(primeiro.status, 'pendente')
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
