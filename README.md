@@ -29,3 +29,12 @@ Verificações disponíveis:
 - `npm run lint`
 - `npx tsc --noEmit --incremental false`
 - `npm run build`
+
+## Testes de regressão do backend
+
+A suíte usa um banco SQLite em memória, separado do PostgreSQL local:
+
+`python manage.py test --settings=setup.test_settings`
+
+Alguns testes documentam regressões conhecidas e devem falhar até que as
+correções funcionais correspondentes sejam implementadas.
