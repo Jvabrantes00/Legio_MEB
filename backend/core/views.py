@@ -1,3 +1,7 @@
+import mimetypes
+from pathlib import Path
+
+from django.http import FileResponse, Http404
 from rest_framework import filters, mixins, status, viewsets
 from rest_framework.decorators import api_view, permission_classes, action
 from rest_framework.exceptions import ValidationError
@@ -20,7 +24,7 @@ from .serializers import (
     FuncaoEncontroSerializer, ParticipacaoEncontroSerializer, ParticipacaoEventoSerializer,
     LogSistemaSerializer
     )
-from .permissions import HasAnySiaRole, require_sia_roles
+from .permissions import AlpinistaQueryPolicy, HasAnySiaRole, require_sia_roles
 from .roles import (
     EVENT_MANAGEMENT_ROLES,
     ENCOUNTER_PHOTO_MANAGEMENT_ROLES,
@@ -61,6 +65,22 @@ SUMMARY_PROFILE_FIELDS = (
 )
 
 
+def protected_image_response(image_field, filename):
+    if not image_field:
+        raise Http404('Imagem não encontrada.')
+    try:
+        content = image_field.open('rb')
+    except (FileNotFoundError, OSError) as error:
+        raise Http404('Arquivo de imagem não encontrado.') from error
+    content_type = mimetypes.guess_type(image_field.name)[0] or 'application/octet-stream'
+    return FileResponse(
+        content,
+        as_attachment=False,
+        filename=filename,
+        content_type=content_type,
+    )
+
+
 class AlpinistaFilter(django_filters.FilterSet):
     palestrou = django_filters.BooleanFilter(method='filter_palestrou')
 
@@ -82,6 +102,7 @@ class AlpinistaViewSet(viewsets.ModelViewSet):
     write_roles = FICHAS_MANAGEMENT_ROLES
     action_roles = {
         'foto': PROFILE_PHOTO_MANAGEMENT_ROLES,
+        'foto_arquivo': RECOGNIZED_ROLES,
         'musica': MUSIC_MANAGEMENT_ROLES,
         'historico_violeiro': MUSIC_MANAGEMENT_ROLES,
         'historico_palestras': FORMATION_HISTORY_ROLES,
@@ -89,8 +110,8 @@ class AlpinistaViewSet(viewsets.ModelViewSet):
 
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_class = AlpinistaFilter
-    search_fields = ['nome', 'email', 'telefone', 'grupo']
-    ordering_fields = ['nome', 'data_nascimento', 'status']
+    search_fields = AlpinistaQueryPolicy.ADMIN_SEARCH_FIELDS
+    ordering_fields = AlpinistaQueryPolicy.ADMIN_ORDERING_FIELDS
 
     def has_full_profile_access(self):
         user = self.request.user
@@ -157,6 +178,23 @@ class AlpinistaViewSet(viewsets.ModelViewSet):
         if self.has_full_profile_access():
             return queryset
         return queryset.only(*SUMMARY_PROFILE_FIELDS)
+
+    def filter_queryset(self, queryset):
+        AlpinistaQueryPolicy.validate(self.request.user, self.request.query_params)
+        self.search_fields = AlpinistaQueryPolicy.search_fields(self.request.user)
+        self.ordering_fields = AlpinistaQueryPolicy.ordering_fields(
+            self.request.user
+        )
+        return super().filter_queryset(queryset)
+
+    @action(detail=True, methods=['get'], url_path='foto-arquivo')
+    def foto_arquivo(self, request, pk=None):
+        alpinista = self.get_object()
+        suffix = Path(alpinista.foto.name).suffix.lower() if alpinista.foto else ''
+        return protected_image_response(
+            alpinista.foto,
+            f'alpinista-{alpinista.pk}{suffix}',
+        )
 
     @action(detail=True, methods=['patch'], url_path='musica')
     def musica(self, request, pk=None):
@@ -263,6 +301,7 @@ class EncontroViewSet(viewsets.ModelViewSet):
     action_roles = {
         'fotos': ENCOUNTER_PHOTO_MANAGEMENT_ROLES,
         'foto_detail': ENCOUNTER_PHOTO_MANAGEMENT_ROLES,
+        'foto_arquivo': ENCOUNTER_PHOTO_MANAGEMENT_ROLES,
     }
 
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
@@ -347,6 +386,24 @@ class EncontroViewSet(viewsets.ModelViewSet):
             descricao=f'Foto {foto.pk} substituída no Encontro {encontro.pk}.',
         )
         return Response(serializer.data)
+
+    @action(
+        detail=True,
+        methods=['get'],
+        url_path=r'fotos/(?P<foto_id>[^/.]+)/arquivo',
+    )
+    def foto_arquivo(self, request, pk=None, foto_id=None):
+        encontro = self.get_object()
+        foto = get_object_or_404(
+            FotoEncontro,
+            pk=foto_id,
+            encontro=encontro,
+        )
+        suffix = Path(foto.imagem.name).suffix.lower()
+        return protected_image_response(
+            foto.imagem,
+            f'encontro-{encontro.pk}-foto-{foto.pk}{suffix}',
+        )
 
     def perform_create(self, serializer):
         encontro = serializer.save()

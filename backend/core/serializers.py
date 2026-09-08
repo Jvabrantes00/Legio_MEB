@@ -2,6 +2,7 @@ from datetime import date
 from django.core.exceptions import ValidationError
 from django.utils import timezone
 from rest_framework import serializers
+from rest_framework.reverse import reverse
 from .models import (
     Alpinista, Encontro, EntregaMaterial, Evento, FotoEncontro,
     FuncaoEncontro, LogSistema, Material, Palestra, ParticipacaoEncontro,
@@ -20,7 +21,23 @@ def calculate_age(birth_date):
     )
 
 
-class AlpinistaResumoSerializer(serializers.ModelSerializer):
+class AlpinistaProtectedPhotoMixin:
+    def to_representation(self, instance):
+        representation = super().to_representation(instance)
+        representation['foto'] = None
+        if instance.foto:
+            representation['foto'] = reverse(
+                'alpinista-foto-arquivo',
+                kwargs={'pk': instance.pk},
+                request=self.context.get('request'),
+            )
+        return representation
+
+
+class AlpinistaResumoSerializer(
+    AlpinistaProtectedPhotoMixin,
+    serializers.ModelSerializer,
+):
     idade = serializers.SerializerMethodField()
     whatsapp = serializers.CharField(source='telefone', read_only=True)
     musica = serializers.SerializerMethodField()
@@ -89,7 +106,10 @@ class AlpinistaMusicaCommandSerializer(serializers.Serializer):
         return attrs
 
 
-class AlpinistaFotoSerializer(serializers.ModelSerializer):
+class AlpinistaFotoSerializer(
+    AlpinistaProtectedPhotoMixin,
+    serializers.ModelSerializer,
+):
     foto = serializers.ImageField(
         required=True,
         allow_null=False,
@@ -146,7 +166,10 @@ class HistoricoPalestraSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
-class AlpinistaCompletoSerializer(serializers.ModelSerializer):
+class AlpinistaCompletoSerializer(
+    AlpinistaProtectedPhotoMixin,
+    serializers.ModelSerializer,
+):
     cpf = serializers.CharField(
         required=False,
         allow_null=True,
@@ -265,6 +288,18 @@ class FotoEncontroSerializer(serializers.ModelSerializer):
                 ]
             })
         return attrs
+
+    def to_representation(self, instance):
+        representation = super().to_representation(instance)
+        representation['imagem'] = reverse(
+            'encontro-foto-arquivo',
+            kwargs={
+                'pk': instance.encontro_id,
+                'foto_id': instance.pk,
+            },
+            request=self.context.get('request'),
+        )
+        return representation
 
 
 class MaterialSerializer(serializers.ModelSerializer):

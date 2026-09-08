@@ -1,6 +1,103 @@
+from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.permissions import BasePermission, SAFE_METHODS
 
-from .roles import RECOGNIZED_ROLES, user_has_any_role
+from .roles import (
+    FICHAS_MANAGEMENT_ROLES,
+    RECOGNIZED_ROLES,
+    SiaRole,
+    user_has_any_role,
+)
+
+
+class AlpinistaQueryPolicy:
+    """Allow query capabilities explicitly according to the user's SIA roles."""
+
+    BASE_QUERY_PARAMS = frozenset({'page', 'search', 'ordering', 'format'})
+    KNOWN_FILTERS = frozenset({
+        'status',
+        'eh_violeiro',
+        'canta',
+        'palestrou',
+    })
+    SUMMARY_SEARCH_FIELDS = ('nome', 'telefone', 'grupo')
+    ADMIN_SEARCH_FIELDS = ('nome', 'email', 'telefone', 'grupo')
+    SUMMARY_ORDERING_FIELDS = ('nome', 'grupo')
+    ADMIN_ORDERING_FIELDS = ('nome', 'dataNascimento', 'status')
+    KNOWN_ORDERING_FIELDS = frozenset(
+        SUMMARY_ORDERING_FIELDS + ADMIN_ORDERING_FIELDS
+    )
+
+    @classmethod
+    def has_full_access(cls, user):
+        return user.is_superuser or user_has_any_role(
+            user,
+            *FICHAS_MANAGEMENT_ROLES,
+        )
+
+    @classmethod
+    def allowed_filters(cls, user):
+        if cls.has_full_access(user):
+            return cls.KNOWN_FILTERS
+
+        allowed = set()
+        if user_has_any_role(user, SiaRole.MME):
+            allowed.update({'eh_violeiro', 'canta'})
+        if user_has_any_role(user, SiaRole.FORMACAO):
+            allowed.add('palestrou')
+        return frozenset(allowed)
+
+    @classmethod
+    def search_fields(cls, user):
+        if cls.has_full_access(user):
+            return cls.ADMIN_SEARCH_FIELDS
+        return cls.SUMMARY_SEARCH_FIELDS
+
+    @classmethod
+    def ordering_fields(cls, user):
+        if cls.has_full_access(user):
+            return cls.ADMIN_ORDERING_FIELDS
+        return cls.SUMMARY_ORDERING_FIELDS
+
+    @classmethod
+    def validate(cls, user, query_params):
+        supplied = set(query_params)
+        supported = cls.BASE_QUERY_PARAMS | cls.KNOWN_FILTERS
+        unknown = supplied - supported
+        if unknown:
+            raise ValidationError({
+                'parametros': [
+                    f"Parâmetros desconhecidos: {', '.join(sorted(unknown))}."
+                ]
+            })
+
+        forbidden_filters = (
+            supplied & cls.KNOWN_FILTERS
+        ) - cls.allowed_filters(user)
+        if forbidden_filters:
+            raise PermissionDenied(
+                'Seu papel não pode utilizar os filtros solicitados.'
+            )
+
+        ordering = query_params.get('ordering')
+        if not ordering:
+            return
+
+        requested_fields = {
+            item.removeprefix('-')
+            for item in ordering.split(',')
+            if item
+        }
+        allowed_ordering = set(cls.ordering_fields(user))
+        forbidden_ordering = requested_fields - allowed_ordering
+        if not forbidden_ordering:
+            return
+        if forbidden_ordering <= cls.KNOWN_ORDERING_FIELDS:
+            raise PermissionDenied(
+                'Seu papel não pode utilizar os campos de ordenação solicitados.'
+            )
+        raise ValidationError({
+            'ordering': ['Um ou mais campos de ordenação são desconhecidos.']
+        })
 
 
 class HasAnySiaRole(BasePermission):

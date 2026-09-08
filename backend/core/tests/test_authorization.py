@@ -315,7 +315,11 @@ class AuthorizationFoundationTests(SiaAuthorizationTestCase):
         response = self.client.get(f'/api/alpinistas/{alpinista.pk}/')
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertTrue(response.json()['foto'].endswith('/media/fotos/perfil.jpg'))
+        self.assertTrue(
+            response.json()['foto'].endswith(
+                f'/api/alpinistas/{alpinista.pk}/foto-arquivo/'
+            )
+        )
 
     def test_perfil_resumido_retorna_foto_nula_quando_ausente(self):
         alpinista = self.make_sensitive_alpinista(foto=None)
