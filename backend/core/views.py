@@ -4,12 +4,13 @@ from rest_framework.response import Response
 
 from .models import (
     Alpinista, Encontro, Evento, 
-    FuncaoEncontro, ParticipacaoEncontro, ParticipacaoEvento,
+    FuncaoEncontro, Palestra, ParticipacaoEncontro, ParticipacaoEvento,
     LogSistema
 )
 from .serializers import (
     AlpinistaCompletoSerializer, AlpinistaResumoSerializer,
-    AlpinistaMusicaCommandSerializer, HistoricoVioleiroSerializer,
+    AlpinistaMusicaCommandSerializer, HistoricoPalestraSerializer,
+    HistoricoVioleiroSerializer,
     EncontroSerializer, EventoSerializer,
     FuncaoEncontroSerializer, ParticipacaoEncontroSerializer, ParticipacaoEventoSerializer,
     LogSistemaSerializer
@@ -17,6 +18,7 @@ from .serializers import (
 from .permissions import HasAnySiaRole, require_sia_roles
 from .roles import (
     FICHAS_MANAGEMENT_ROLES,
+    FORMATION_HISTORY_ROLES,
     FULL_ADMIN_ROLES,
     RECOGNIZED_ROLES,
     MUSIC_MANAGEMENT_ROLES,
@@ -27,6 +29,7 @@ from django.db.models import Count
 from django.db import IntegrityError, transaction
 from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
+from django_filters import rest_framework as django_filters
 
 
 SUMMARY_PROFILE_FIELDS = (
@@ -48,6 +51,19 @@ SUMMARY_PROFILE_FIELDS = (
 )
 
 
+class AlpinistaFilter(django_filters.FilterSet):
+    palestrou = django_filters.BooleanFilter(method='filter_palestrou')
+
+    class Meta:
+        model = Alpinista
+        fields = ('status', 'eh_violeiro', 'canta', 'palestrou')
+
+    def filter_palestrou(self, queryset, name, value):
+        if value is None:
+            return queryset
+        return queryset.filter(palestras__isnull=not value).distinct()
+
+
 class AlpinistaViewSet(viewsets.ModelViewSet):
     queryset = Alpinista.objects.all().order_by('nome') #Busca todos os alpinistas no banco de dados
     serializer_class = AlpinistaCompletoSerializer
@@ -57,10 +73,11 @@ class AlpinistaViewSet(viewsets.ModelViewSet):
     action_roles = {
         'musica': MUSIC_MANAGEMENT_ROLES,
         'historico_violeiro': MUSIC_MANAGEMENT_ROLES,
+        'historico_palestras': FORMATION_HISTORY_ROLES,
     }
 
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ['status', 'eh_violeiro', 'canta']
+    filterset_class = AlpinistaFilter
     search_fields = ['nome', 'email', 'telefone', 'grupo']
     ordering_fields = ['nome', 'data_nascimento', 'status']
 
@@ -76,6 +93,8 @@ class AlpinistaViewSet(viewsets.ModelViewSet):
             return AlpinistaMusicaCommandSerializer
         if self.action == 'historico_violeiro':
             return HistoricoVioleiroSerializer
+        if self.action == 'historico_palestras':
+            return HistoricoPalestraSerializer
         if self.has_full_profile_access():
             return AlpinistaCompletoSerializer
         return AlpinistaResumoSerializer
@@ -140,6 +159,18 @@ class AlpinistaViewSet(viewsets.ModelViewSet):
             .order_by('-encontro__data_referencia', '-id')
         )
         serializer = self.get_serializer(participacoes, many=True)
+        return Response(serializer.data)
+
+    @action(detail=True, methods=['get'], url_path='historico-palestras')
+    def historico_palestras(self, request, pk=None):
+        alpinista = self.get_object()
+        palestras = (
+            Palestra.objects
+            .filter(alpinista=alpinista)
+            .select_related('encontro')
+            .order_by('-encontro__data_referencia', '-id')
+        )
+        serializer = self.get_serializer(palestras, many=True)
         return Response(serializer.data)
 
     def perform_create(self, serializer):

@@ -25,6 +25,9 @@ FICHAS_MANAGEMENT_ROLES = (*FULL_ADMIN_ROLES, SiaRole.FICHAS)
 # Gestão das características musicais e do histórico de Violeiro.
 MUSIC_MANAGEMENT_ROLES = (*FICHAS_MANAGEMENT_ROLES, SiaRole.MME)
 
+# Consulta do histórico de palestras, sem conceder escrita à Formação.
+FORMATION_HISTORY_ROLES = (*FICHAS_MANAGEMENT_ROLES, SiaRole.FORMACAO)
+
 
 def role_name(role):
     return role.value if isinstance(role, SiaRole) else str(role)

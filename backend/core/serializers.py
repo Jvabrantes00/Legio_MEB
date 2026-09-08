@@ -2,7 +2,7 @@ from datetime import date
 from django.core.exceptions import ValidationError
 from django.utils import timezone
 from rest_framework import serializers
-from .models import Alpinista, Encontro, Evento, ParticipacaoEncontro, ParticipacaoEvento, FuncaoEncontro, LogSistema
+from .models import Alpinista, Encontro, Evento, Palestra, ParticipacaoEncontro, ParticipacaoEvento, FuncaoEncontro, LogSistema
 from .validators import normalize_cpf
 
 
@@ -99,6 +99,23 @@ class HistoricoVioleiroSerializer(serializers.ModelSerializer):
             'tipo_encontro',
             'data_encontro',
             'funcao',
+        )
+        read_only_fields = fields
+
+
+class HistoricoPalestraSerializer(serializers.ModelSerializer):
+    nome_encontro = serializers.CharField(source='encontro.encontro')
+    tipo_encontro = serializers.CharField(source='encontro.tipo')
+    data_encontro = serializers.DateField(source='encontro.data_referencia')
+
+    class Meta:
+        model = Palestra
+        fields = (
+            'encontro_id',
+            'nome_encontro',
+            'tipo_encontro',
+            'data_encontro',
+            'titulo',
         )
         read_only_fields = fields
 

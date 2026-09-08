@@ -7,8 +7,10 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from core.models import (
+    Alpinista,
     FuncaoEncontro,
     LogSistema,
+    Palestra,
     ParticipacaoEncontro,
     ParticipacaoEvento,
 )
@@ -962,3 +964,182 @@ class MMEMusicaAuthorizationTests(SiaAuthorizationTestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+
+class FormacaoPalestraAuthorizationTests(SiaAuthorizationTestCase):
+    summary_profile_fields = AuthorizationFoundationTests.summary_profile_fields
+
+    def test_formacao_le_perfil_resumido_sem_receber_escrita(self):
+        alpinista = make_alpinista()
+        self.authenticate(self.make_user('formacao-isolada', SiaRole.FORMACAO))
+        detail_url = f'/api/alpinistas/{alpinista.pk}/'
+
+        detail_response = self.client.get(detail_url)
+
+        self.assertEqual(detail_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(set(detail_response.json()), self.summary_profile_fields)
+        self.assertEqual(
+            self.client.patch(
+                detail_url,
+                {'nome': 'Alteração indevida'},
+                format='json',
+            ).status_code,
+            status.HTTP_403_FORBIDDEN,
+        )
+        self.assertEqual(
+            self.client.post('/api/alpinistas/', {}, format='json').status_code,
+            status.HTTP_403_FORBIDDEN,
+        )
+        self.assertEqual(
+            self.client.delete(detail_url).status_code,
+            status.HTTP_403_FORBIDDEN,
+        )
+        self.assertEqual(
+            self.client.patch(
+                f'/api/alpinistas/{alpinista.pk}/musica/',
+                {'canta': True},
+                format='json',
+            ).status_code,
+            status.HTTP_403_FORBIDDEN,
+        )
+        self.assertEqual(
+            self.client.get(
+                f'/api/alpinistas/{alpinista.pk}/historico-violeiro/'
+            ).status_code,
+            status.HTTP_403_FORBIDDEN,
+        )
+
+    def test_historico_retorna_duas_palestras_e_exclui_trabalho_em_equipe(self):
+        alpinista = make_alpinista(
+            cpf='52998224725',
+            restricaoSaude='Dado privado',
+            medicacao='Dado privado',
+            is_neurodivergente=True,
+        )
+        encontro = make_encontro(
+            encontro='Escalada da Formação',
+            tipo='Escalada',
+            data_referencia=date(2032, 3, 20),
+        )
+        Palestra.objects.create(
+            alpinista=alpinista,
+            encontro=encontro,
+            titulo='Família e comunidade',
+        )
+        Palestra.objects.create(
+            alpinista=alpinista,
+            encontro=encontro,
+            titulo='Serviço e espiritualidade',
+        )
+        ParticipacaoEncontro.objects.create(
+            alpinista=alpinista,
+            encontro=encontro,
+            funcao=make_funcao(nome='Cozinha', tipo='equipe'),
+        )
+        self.authenticate(self.make_user('formacao-historico', SiaRole.FORMACAO))
+
+        response = self.client.get(
+            f'/api/alpinistas/{alpinista.pk}/historico-palestras/'
+        )
+        payload = response.json()
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(payload), 2)
+        self.assertEqual(
+            {item['titulo'] for item in payload},
+            {'Família e comunidade', 'Serviço e espiritualidade'},
+        )
+        for item in payload:
+            self.assertEqual(
+                set(item),
+                {
+                    'encontro_id',
+                    'nome_encontro',
+                    'tipo_encontro',
+                    'data_encontro',
+                    'titulo',
+                },
+            )
+            self.assertEqual(item['encontro_id'], encontro.pk)
+            self.assertEqual(item['nome_encontro'], 'Escalada da Formação')
+            self.assertEqual(item['tipo_encontro'], 'Escalada')
+            self.assertEqual(item['data_encontro'], '2032-03-20')
+        self.assertNotIn('Cozinha', str(payload))
+        self.assertNotIn(alpinista.cpf, str(payload))
+        self.assertNotIn('Dado privado', str(payload))
+
+    def test_papeis_autorizados_consultam_historico_de_palestras(self):
+        roles = (
+            SiaRole.SUPORTE,
+            SiaRole.DIRETORIA,
+            SiaRole.FICHAS,
+            SiaRole.FORMACAO,
+        )
+        alpinista = make_alpinista()
+        encontro = make_encontro()
+        Palestra.objects.create(
+            alpinista=alpinista,
+            encontro=encontro,
+            titulo='Palestra autorizada',
+        )
+        url = f'/api/alpinistas/{alpinista.pk}/historico-palestras/'
+
+        for index, role in enumerate(roles):
+            with self.subTest(role=role.value):
+                self.authenticate(self.make_user(f'palestra-permitida-{index}', role))
+                response = self.client.get(url)
+
+                self.assertEqual(response.status_code, status.HTTP_200_OK)
+                self.assertEqual(response.json()[0]['titulo'], 'Palestra autorizada')
+
+    def test_papeis_nao_autorizados_nao_consultam_historico_de_palestras(self):
+        roles = (
+            SiaRole.MME,
+            SiaRole.SECRETARIA,
+            SiaRole.ACAO_SOCIAL,
+            SiaRole.LITURGIA,
+            SiaRole.EVENTOS,
+            SiaRole.COMUNICACAO,
+        )
+        alpinista = make_alpinista()
+        url = f'/api/alpinistas/{alpinista.pk}/historico-palestras/'
+
+        for index, role in enumerate(roles):
+            with self.subTest(role=role.value):
+                self.authenticate(self.make_user(f'palestra-negada-{index}', role))
+                self.assertEqual(
+                    self.client.get(url).status_code,
+                    status.HTTP_403_FORBIDDEN,
+                )
+
+    def test_historico_de_palestras_exige_autenticacao_e_papel(self):
+        alpinista = make_alpinista()
+        url = f'/api/alpinistas/{alpinista.pk}/historico-palestras/'
+
+        self.assertEqual(
+            self.client.get(url).status_code,
+            status.HTTP_401_UNAUTHORIZED,
+        )
+        self.authenticate(self.make_user('palestra-sem-papel'))
+        self.assertEqual(
+            self.client.get(url).status_code,
+            status.HTTP_403_FORBIDDEN,
+        )
+
+    def test_filtro_palestrou_e_derivado_do_historico(self):
+        palestrante = make_alpinista()
+        nao_palestrante = make_alpinista()
+        Palestra.objects.create(
+            alpinista=palestrante,
+            encontro=make_encontro(),
+            titulo='Palestra registrada',
+        )
+        self.authenticate(self.make_user('formacao-filtro', SiaRole.FORMACAO))
+
+        response = self.client.get('/api/alpinistas/?palestrou=true')
+        ids = [item['id'] for item in response.json()['results']]
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(ids, [palestrante.pk])
+        self.assertNotIn(nao_palestrante.pk, ids)
+        self.assertFalse(hasattr(Alpinista, 'eh_palestrante'))

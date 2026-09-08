@@ -117,6 +117,31 @@ class Evento(models.Model):
     def __str__(self):
         return self.nome
 
+
+class Palestra(models.Model):
+    alpinista = models.ForeignKey(
+        Alpinista,
+        on_delete=models.CASCADE,
+        related_name='palestras',
+    )
+    encontro = models.ForeignKey(
+        Encontro,
+        on_delete=models.CASCADE,
+        related_name='palestras',
+    )
+    titulo = models.CharField(max_length=255)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['alpinista', 'encontro', 'titulo'],
+                name='unica_palestra_por_alpinista_encontro_titulo',
+            )
+        ]
+
+    def __str__(self):
+        return f'{self.titulo} - {self.alpinista.nome} em {self.encontro.encontro}'
+
 # Tabelas Intermediárias para relacionamentos Many-to-Many
 class ParticipacaoEncontro(models.Model):
 
