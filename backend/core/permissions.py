@@ -1,4 +1,4 @@
-from rest_framework.permissions import BasePermission
+from rest_framework.permissions import BasePermission, SAFE_METHODS
 
 from .roles import RECOGNIZED_ROLES, user_has_any_role
 
@@ -16,7 +16,18 @@ class HasAnySiaRole(BasePermission):
         if user.is_superuser:
             return True
 
-        allowed_roles = getattr(view, 'allowed_roles', self.allowed_roles)
+        if request.method in SAFE_METHODS:
+            allowed_roles = getattr(
+                view,
+                'read_roles',
+                getattr(view, 'allowed_roles', self.allowed_roles),
+            )
+        else:
+            allowed_roles = getattr(
+                view,
+                'write_roles',
+                getattr(view, 'allowed_roles', self.allowed_roles),
+            )
         return user_has_any_role(user, *allowed_roles)
 
     def has_object_permission(self, request, view, obj):

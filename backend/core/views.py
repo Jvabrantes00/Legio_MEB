@@ -8,12 +8,13 @@ from .models import (
     LogSistema
 )
 from .serializers import (
-    AlpinistaSerializer, EncontroSerializer, EventoSerializer, 
+    AlpinistaCompletoSerializer, AlpinistaResumoSerializer,
+    EncontroSerializer, EventoSerializer,
     FuncaoEncontroSerializer, ParticipacaoEncontroSerializer, ParticipacaoEventoSerializer,
     LogSistemaSerializer
     )
-from .permissions import require_sia_roles
-from .roles import SiaRole
+from .permissions import HasAnySiaRole, require_sia_roles
+from .roles import RECOGNIZED_ROLES, SiaRole, user_has_any_role
 
 from django.db.models import Count
 from django.db import IntegrityError, transaction
@@ -23,17 +24,49 @@ from django_filters.rest_framework import DjangoFilterBackend
 
 ADMIN_ROLES = (SiaRole.SUPORTE, SiaRole.DIRETORIA)
 FICHAS_FLOW_ROLES = (*ADMIN_ROLES, SiaRole.FICHAS)
+SUMMARY_PROFILE_FIELDS = (
+    'id',
+    'nome',
+    'foto',
+    'dataNascimento',
+    'grupo',
+    'telefone',
+    'batizado',
+    'primeira_comunhao',
+    'crismado',
+    'nomePai',
+    'telefonePai',
+    'nomeMae',
+    'telefoneMae',
+)
 
 
 class AlpinistaViewSet(viewsets.ModelViewSet):
     queryset = Alpinista.objects.all().order_by('nome') #Busca todos os alpinistas no banco de dados
-    serializer_class = AlpinistaSerializer #Usa o tradutor para converter os dados do modelo Alpinista em JSON e vice-versa
-    permission_classes = [require_sia_roles(*FICHAS_FLOW_ROLES)]
+    serializer_class = AlpinistaCompletoSerializer
+    permission_classes = [HasAnySiaRole]
+    read_roles = RECOGNIZED_ROLES
+    write_roles = FICHAS_FLOW_ROLES
 
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ['status']
     search_fields = ['nome', 'email', 'telefone', 'grupo']
     ordering_fields = ['nome', 'data_nascimento', 'status']
+
+    def has_full_profile_access(self):
+        user = self.request.user
+        return user.is_superuser or user_has_any_role(user, *FICHAS_FLOW_ROLES)
+
+    def get_serializer_class(self):
+        if self.has_full_profile_access():
+            return AlpinistaCompletoSerializer
+        return AlpinistaResumoSerializer
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        if self.has_full_profile_access():
+            return queryset
+        return queryset.only(*SUMMARY_PROFILE_FIELDS)
 
     def perform_create(self, serializer):
         alpinista = serializer.save()

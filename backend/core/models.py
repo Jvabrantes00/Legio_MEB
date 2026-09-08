@@ -36,6 +36,9 @@ class Alpinista(models.Model):
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDENTE)
     #foto = models.URLField(null = True, blank = True)
     foto = models.ImageField(upload_to='fotos/', null=True, blank=True)
+    batizado = models.BooleanField(null=True, blank=True)
+    primeira_comunhao = models.BooleanField(null=True, blank=True)
+    crismado = models.BooleanField(null=True, blank=True)
 
     is_neurodivergente = models.BooleanField(default=False, verbose_name="É neurodivergente?")
     tipo_neurodivergente = models.CharField(max_length=100, blank=True, null=True, verbose_name="Tipo de Neurodivergencia")

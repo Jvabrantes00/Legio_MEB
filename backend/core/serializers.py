@@ -1,10 +1,64 @@
 from datetime import date
 from django.core.exceptions import ValidationError
+from django.utils import timezone
 from rest_framework import serializers
 from .models import Alpinista, Encontro, Evento, ParticipacaoEncontro, ParticipacaoEvento, FuncaoEncontro, LogSistema
 from .validators import normalize_cpf
 
-class AlpinistaSerializer(serializers.ModelSerializer):
+
+def calculate_age(birth_date):
+    if birth_date is None:
+        return None
+
+    today = timezone.localdate()
+    return today.year - birth_date.year - (
+        (today.month, today.day) < (birth_date.month, birth_date.day)
+    )
+
+
+class AlpinistaResumoSerializer(serializers.ModelSerializer):
+    idade = serializers.SerializerMethodField()
+    whatsapp = serializers.CharField(source='telefone', read_only=True)
+    responsaveis = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Alpinista
+        fields = (
+            'id',
+            'nome',
+            'foto',
+            'idade',
+            'grupo',
+            'whatsapp',
+            'batizado',
+            'primeira_comunhao',
+            'crismado',
+            'responsaveis',
+        )
+        read_only_fields = fields
+
+    def get_idade(self, obj):
+        return calculate_age(obj.dataNascimento)
+
+    def get_responsaveis(self, obj):
+        responsaveis = []
+        for nome, telefone in (
+            (obj.nomePai, obj.telefonePai),
+            (obj.nomeMae, obj.telefoneMae),
+        ):
+            if nome or telefone:
+                responsaveis.append({'nome': nome, 'telefone': telefone})
+        return responsaveis
+
+    def to_representation(self, instance):
+        representation = super().to_representation(instance)
+        idade = representation['idade']
+        if idade is None or idade >= 18:
+            representation.pop('responsaveis', None)
+        return representation
+
+
+class AlpinistaCompletoSerializer(serializers.ModelSerializer):
     cpf = serializers.CharField(
         required=False,
         allow_null=True,
@@ -41,10 +95,7 @@ class AlpinistaSerializer(serializers.ModelSerializer):
         return attrs
 
     def get_idade_atual(self, obj):
-        if obj.dataNascimento:
-            hoje = date.today()
-            idade = hoje.year - obj.dataNascimento.year - ((hoje.month, hoje.day) < (obj.dataNascimento.month, obj.dataNascimento.day))
-            return idade
+        return calculate_age(obj.dataNascimento)
 
     def get_encontros_realizados(self, obj):
         participacoes = obj.participacoes_encontros.filter(funcao__tipo='encontrista')
@@ -78,6 +129,10 @@ class AlpinistaSerializer(serializers.ModelSerializer):
                 "data": p.evento.data_evento.strftime('%d/%m/%Y') if p.evento.data_evento else None,
             } for p in participacoes
         ]
+
+
+# Nome mantido como alias para compatibilidade com imports existentes.
+AlpinistaSerializer = AlpinistaCompletoSerializer
 
 class EncontroSerializer(serializers.ModelSerializer):
     status_encontro = serializers.SerializerMethodField()
