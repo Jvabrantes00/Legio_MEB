@@ -139,6 +139,19 @@ class HasRecognizedSiaRole(HasAnySiaRole):
     allowed_roles = RECOGNIZED_ROLES
 
 
+class IsSiaSuperuser(BasePermission):
+    """Reserve technical endpoints for Django superusers."""
+
+    message = 'Este endpoint é reservado à administração técnica.'
+
+    def has_permission(self, request, view):
+        user = request.user
+        return bool(
+            getattr(user, 'is_authenticated', False)
+            and user.is_superuser
+        )
+
+
 def require_sia_roles(*roles):
     """Build a DRF permission configured for any one of the supplied roles."""
 

@@ -81,6 +81,36 @@ def protected_image_response(image_field, filename):
     )
 
 
+class AuditedCrudViewSetMixin:
+    """Keep CRUD changes and their identifier-only audit log together."""
+
+    audit_module = None
+
+    def _write_audit_log(self, action, object_id, verb):
+        LogSistema.objects.create(
+            usuario=self.request.user,
+            acao=action,
+            modulo=self.audit_module,
+            descricao=f'{self.audit_module} ID {object_id} {verb}.',
+        )
+
+    def perform_create(self, serializer):
+        with transaction.atomic():
+            instance = serializer.save()
+            self._write_audit_log('CREATE', instance.pk, 'criado')
+
+    def perform_update(self, serializer):
+        with transaction.atomic():
+            instance = serializer.save()
+            self._write_audit_log('UPDATE', instance.pk, 'alterado')
+
+    def perform_destroy(self, instance):
+        object_id = instance.pk
+        with transaction.atomic():
+            instance.delete()
+            self._write_audit_log('DELETE', object_id, 'excluído')
+
+
 class AlpinistaFilter(django_filters.FilterSet):
     palestrou = django_filters.BooleanFilter(method='filter_palestrou')
 
@@ -270,7 +300,7 @@ class AlpinistaViewSet(viewsets.ModelViewSet):
             usuario=self.request.user,
             acao='CREATE',
             modulo='Alpinista',
-            descricao=f'Alpinista {alpinista.nome} criado.'
+            descricao=f'Alpinista ID {alpinista.pk} criado.'
         )
     
     def perform_update(self, serializer):
@@ -279,17 +309,17 @@ class AlpinistaViewSet(viewsets.ModelViewSet):
             usuario=self.request.user,
             acao='UPDATE',
             modulo='Alpinista',
-            descricao=f'Alpinista {alpinista.nome} atualizado.'
+            descricao=f'Alpinista ID {alpinista.pk} atualizado.'
         )
 
     def perform_destroy(self, instance):
-        nome_alpinista = instance.nome
+        alpinista_id = instance.pk
         instance.delete()
         LogSistema.objects.create(
             usuario=self.request.user,
             acao='DELETE',
             modulo='Alpinista',
-            descricao=f'Alpinista {nome_alpinista} excluído.'
+            descricao=f'Alpinista ID {alpinista_id} excluído.'
         )
 
 class EncontroViewSet(viewsets.ModelViewSet):
@@ -302,6 +332,8 @@ class EncontroViewSet(viewsets.ModelViewSet):
         'fotos': ENCOUNTER_PHOTO_MANAGEMENT_ROLES,
         'foto_detail': ENCOUNTER_PHOTO_MANAGEMENT_ROLES,
         'foto_arquivo': ENCOUNTER_PHOTO_MANAGEMENT_ROLES,
+        'efetivar_encontrista': FICHAS_MANAGEMENT_ROLES,
+        'remover_encontristas': FICHAS_MANAGEMENT_ROLES,
     }
 
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
@@ -464,6 +496,16 @@ class EncontroViewSet(viewsets.ModelViewSet):
                         alpinista.save(update_fields=['status'])
 
                     sucessos += 1
+
+                LogSistema.objects.create(
+                    usuario=request.user,
+                    acao='CREATE',
+                    modulo='ParticipacaoEncontro',
+                    descricao=(
+                        f'Efetivação em lote no Encontro ID {encontro.pk}; '
+                        f'Alpinistas IDs {list(alpinistas_ids)}.'
+                    ),
+                )
         except Alpinista.DoesNotExist:
             return Response(
                 {"erro": "Alpinista não encontrado."},
@@ -487,6 +529,7 @@ class EncontroViewSet(viewsets.ModelViewSet):
             return Response({"erro": "Nenhum alpinista selecionado."}, status=status.HTTP_400_BAD_REQUEST)
         
         sucessos = 0
+        removidos_ids = []
         for alp_id in alpinistas_ids:
             try:
                 alpinista = Alpinista.objects.get(id=alp_id)
@@ -508,8 +551,19 @@ class EncontroViewSet(viewsets.ModelViewSet):
                         alpinista.save(update_fields=['status'])
                         
                     sucessos += 1
+                    removidos_ids.append(alpinista.pk)
             except Alpinista.DoesNotExist:
                 continue
+
+        LogSistema.objects.create(
+            usuario=request.user,
+            acao='DELETE',
+            modulo='ParticipacaoEncontro',
+            descricao=(
+                f'Remoção em lote no Encontro ID {encontro.pk}; '
+                f'Alpinistas IDs {removidos_ids}.'
+            ),
+        )
 
         return Response({"mensagem": f"{sucessos} encontristas removidos com sucesso!"}, status=status.HTTP_200_OK)
 
@@ -551,23 +605,25 @@ class EventoViewSet(viewsets.ModelViewSet):
             descricao=f'Evento {nome_evento} excluído.'
         )
 
-class FuncaoEncontroViewSet(viewsets.ModelViewSet):
+class FuncaoEncontroViewSet(AuditedCrudViewSetMixin, viewsets.ModelViewSet):
     queryset = FuncaoEncontro.objects.all() 
     serializer_class = FuncaoEncontroSerializer 
     permission_classes = [require_sia_roles(*FICHAS_MANAGEMENT_ROLES)]
     pagination_class = None
+    audit_module = 'FuncaoEncontro'
 
-class ParticipacaoEncontroViewSet(viewsets.ModelViewSet):
+class ParticipacaoEncontroViewSet(AuditedCrudViewSetMixin, viewsets.ModelViewSet):
     queryset = ParticipacaoEncontro.objects.select_related('alpinista', 'encontro', 'funcao').all()
     serializer_class = ParticipacaoEncontroSerializer
     permission_classes = [require_sia_roles(*FICHAS_MANAGEMENT_ROLES)]
+    audit_module = 'ParticipacaoEncontro'
 
     pagination_class = None
 
     filter_backends = [DjangoFilterBackend]
     filterset_fields = ['encontro', 'alpinista', 'funcao']  # Permite filtrar por encontro, alpinista e função
 
-class ParticipacaoEventoViewSet(viewsets.ModelViewSet):
+class ParticipacaoEventoViewSet(AuditedCrudViewSetMixin, viewsets.ModelViewSet):
     queryset = (
         ParticipacaoEvento.objects
         .select_related('alpinista', 'evento')
@@ -575,6 +631,7 @@ class ParticipacaoEventoViewSet(viewsets.ModelViewSet):
     )
     serializer_class = ParticipacaoEventoSerializer
     permission_classes = [require_sia_roles(*EVENT_MANAGEMENT_ROLES)]
+    audit_module = 'ParticipacaoEvento'
 
     filter_backends = [DjangoFilterBackend]
     filterset_fields = ['evento', 'alpinista']

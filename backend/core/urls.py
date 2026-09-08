@@ -7,9 +7,18 @@ from .views import (
     ParticipacaoEncontroViewSet, ParticipacaoEventoViewSet, LogSistemaViewSet,
 )
 from .views import dashboard_stats
+from .permissions import IsSiaSuperuser
+
+
+class SiaApiRootView(DefaultRouter.APIRootView):
+    permission_classes = [IsSiaSuperuser]
+
+
+class SiaRouter(DefaultRouter):
+    APIRootView = SiaApiRootView
 
 # Cria o roteador automativo
-router = DefaultRouter()
+router = SiaRouter()
 
 
 router.register(r'alpinistas', AlpinistaViewSet)

@@ -183,7 +183,43 @@ class AlpinistaCompletoSerializer(
 
     class Meta:
         model = Alpinista
-        fields = '__all__' #Diz para converter todos os campos do modelo Alpinista em JSON
+        fields = (
+            'id',
+            'cpf',
+            'nome',
+            'dataNascimento',
+            'endereco',
+            'email',
+            'telefone',
+            'nomePai',
+            'telefonePai',
+            'nomeMae',
+            'telefoneMae',
+            'restricaoSaude',
+            'medicacao',
+            'conheciaEscalada',
+            'grupo',
+            'status',
+            'foto',
+            'batizado',
+            'primeira_comunhao',
+            'crismado',
+            'eh_violeiro',
+            'canta',
+            'is_neurodivergente',
+            'tipo_neurodivergente',
+            'idade_atual',
+            'encontros_realizados',
+            'historico_equipes',
+            'historico_eventos',
+        )
+        read_only_fields = (
+            'id',
+            'idade_atual',
+            'encontros_realizados',
+            'historico_equipes',
+            'historico_eventos',
+        )
 
     def validate(self, attrs):
         if 'cpf' not in attrs:
@@ -381,8 +417,15 @@ class FuncaoEncontroSerializer(serializers.ModelSerializer):
 
 #Relacionamentos Many-to-Many
 
+class AlpinistaParticipacaoSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Alpinista
+        fields = ('id', 'nome')
+        read_only_fields = fields
+
+
 class ParticipacaoEncontroSerializer(serializers.ModelSerializer):
-    alpinista = AlpinistaSerializer(read_only=True)
+    alpinista = AlpinistaParticipacaoSerializer(read_only=True)
     encontro = EncontroSerializer(read_only=True)
     funcao = FuncaoEncontroSerializer(read_only=True)
 
