@@ -5,6 +5,12 @@ from django.core.exceptions import ValidationError
 
 CPF_DIGITS_PATTERN = re.compile(r'^\d{11}$')
 CPF_FORMATTED_PATTERN = re.compile(r'^\d{3}\.\d{3}\.\d{3}-\d{2}$')
+MAX_IMAGE_UPLOAD_SIZE = 5 * 1024 * 1024
+
+
+def validate_image_upload_size(value):
+    if value and value.size > MAX_IMAGE_UPLOAD_SIZE:
+        raise ValidationError('A imagem deve ter no máximo 5 MiB.')
 
 
 def normalize_cpf(value):

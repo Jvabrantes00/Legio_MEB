@@ -1,13 +1,20 @@
 from datetime import date, timedelta
+from io import BytesIO
+import shutil
+import tempfile
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.test import override_settings
 from django.utils import timezone
+from PIL import Image
 from rest_framework import status
 from rest_framework.test import APITestCase
 
 from core.models import (
     Alpinista,
+    FotoEncontro,
     FuncaoEncontro,
     LogSistema,
     Palestra,
@@ -15,6 +22,7 @@ from core.models import (
     ParticipacaoEvento,
 )
 from core.roles import SiaRole, user_has_any_role, user_has_role
+from core.validators import MAX_IMAGE_UPLOAD_SIZE
 from core.tests.factories import (
     make_alpinista,
     make_encontro,
@@ -678,9 +686,12 @@ class AdministrativeRoleMatrixTests(SiaAuthorizationTestCase):
             with self.subTest(role=role.value):
                 self.authenticate(self.make_user(f'nao-admin-{index}', role))
                 for url in restricted_urls:
+                    expected_status = status.HTTP_403_FORBIDDEN
+                    if role == SiaRole.COMUNICACAO and url == '/api/encontros/':
+                        expected_status = status.HTTP_200_OK
                     self.assertEqual(
                         self.client.get(url).status_code,
-                        status.HTTP_403_FORBIDDEN,
+                        expected_status,
                     )
 
 
@@ -1380,3 +1391,399 @@ class EventosAuthorizationTests(SiaAuthorizationTestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(ids, [participacao.pk for participacao in participacoes])
+
+
+class ComunicacaoFotosAuthorizationTests(SiaAuthorizationTestCase):
+    summary_profile_fields = AuthorizationFoundationTests.summary_profile_fields
+
+    @classmethod
+    def setUpClass(cls):
+        cls.media_root = tempfile.mkdtemp(prefix='sia-test-media-')
+        cls.media_override = override_settings(MEDIA_ROOT=cls.media_root)
+        cls.media_override.enable()
+        super().setUpClass()
+
+    @classmethod
+    def tearDownClass(cls):
+        try:
+            super().tearDownClass()
+        finally:
+            cls.media_override.disable()
+            shutil.rmtree(cls.media_root, ignore_errors=True)
+
+    def make_image(self, name='imagem.png', color='blue'):
+        content = BytesIO()
+        Image.new('RGB', (20, 20), color=color).save(content, format='PNG')
+        return SimpleUploadedFile(
+            name,
+            content.getvalue(),
+            content_type='image/png',
+        )
+
+    def make_oversized_image(self):
+        image = self.make_image().read()
+        return SimpleUploadedFile(
+            'imagem-grande.png',
+            image + b'0' * (MAX_IMAGE_UPLOAD_SIZE + 1),
+            content_type='image/png',
+        )
+
+    def test_comunicacao_le_resumo_sem_patch_geral_de_alpinista(self):
+        alpinista = make_alpinista()
+        self.authenticate(self.make_user('comunicacao-resumo', SiaRole.COMUNICACAO))
+        detail_url = f'/api/alpinistas/{alpinista.pk}/'
+
+        response = self.client.get(detail_url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(set(response.json()), self.summary_profile_fields)
+        self.assertEqual(
+            self.client.patch(
+                detail_url,
+                {'nome': 'Alteração indevida'},
+                format='json',
+            ).status_code,
+            status.HTTP_403_FORBIDDEN,
+        )
+
+    def test_comunicacao_adiciona_substitui_e_remove_foto_de_perfil(self):
+        alpinista = make_alpinista()
+        self.authenticate(self.make_user('comunicacao-foto', SiaRole.COMUNICACAO))
+        url = f'/api/alpinistas/{alpinista.pk}/foto/'
+
+        adicionar = self.client.patch(
+            url,
+            {'foto': self.make_image('primeira.png', 'blue')},
+            format='multipart',
+        )
+        alpinista.refresh_from_db()
+        primeiro_nome = alpinista.foto.name
+        storage = alpinista.foto.storage
+
+        self.assertEqual(adicionar.status_code, status.HTTP_200_OK)
+        self.assertTrue(storage.exists(primeiro_nome))
+
+        substituir = self.client.patch(
+            url,
+            {'foto': self.make_image('segunda.png', 'red')},
+            format='multipart',
+        )
+        alpinista.refresh_from_db()
+        segundo_nome = alpinista.foto.name
+
+        self.assertEqual(substituir.status_code, status.HTTP_200_OK)
+        self.assertNotEqual(primeiro_nome, segundo_nome)
+        self.assertFalse(storage.exists(primeiro_nome))
+        self.assertTrue(storage.exists(segundo_nome))
+
+        remover = self.client.delete(url)
+        alpinista.refresh_from_db()
+
+        self.assertEqual(remover.status_code, status.HTTP_200_OK)
+        self.assertFalse(alpinista.foto)
+        self.assertIsNone(remover.json()['foto'])
+        self.assertIsNone(self.client.get(f'/api/alpinistas/{alpinista.pk}/').json()['foto'])
+        self.assertFalse(storage.exists(segundo_nome))
+        self.assertEqual(
+            LogSistema.objects.filter(
+                modulo='Alpinista',
+                descricao__contains=f'Alpinista {alpinista.pk}',
+            ).count(),
+            3,
+        )
+
+    def test_foto_de_perfil_rejeita_campo_extra_sem_alterar_ou_logar(self):
+        alpinista = make_alpinista()
+        self.authenticate(self.make_user('comunicacao-extra', SiaRole.COMUNICACAO))
+
+        response = self.client.patch(
+            f'/api/alpinistas/{alpinista.pk}/foto/',
+            {'foto': self.make_image(), 'nome': 'Não permitido'},
+            format='multipart',
+        )
+        alpinista.refresh_from_db()
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertFalse(alpinista.foto)
+        self.assertFalse(
+            LogSistema.objects.filter(
+                modulo='Alpinista',
+                descricao__contains=f'Alpinista {alpinista.pk}',
+            ).exists()
+        )
+
+    def test_foto_de_perfil_rejeita_arquivo_invalido_e_excesso_de_tamanho(self):
+        alpinista = make_alpinista()
+        self.authenticate(self.make_user('comunicacao-validacao', SiaRole.COMUNICACAO))
+        url = f'/api/alpinistas/{alpinista.pk}/foto/'
+
+        invalida = self.client.patch(
+            url,
+            {
+                'foto': SimpleUploadedFile(
+                    'falsa.png',
+                    b'isto nao e uma imagem',
+                    content_type='image/png',
+                )
+            },
+            format='multipart',
+        )
+        grande = self.client.patch(
+            url,
+            {'foto': self.make_oversized_image()},
+            format='multipart',
+        )
+        alpinista.refresh_from_db()
+
+        self.assertEqual(invalida.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(grande.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertFalse(alpinista.foto)
+        self.assertFalse(LogSistema.objects.filter(modulo='Alpinista').exists())
+
+    def test_matriz_da_action_de_foto_de_perfil(self):
+        permitidos = (
+            SiaRole.SUPORTE,
+            SiaRole.DIRETORIA,
+            SiaRole.FICHAS,
+            SiaRole.COMUNICACAO,
+        )
+        bloqueados = (SiaRole.MME, SiaRole.FORMACAO, SiaRole.EVENTOS)
+        alpinista = make_alpinista()
+        url = f'/api/alpinistas/{alpinista.pk}/foto/'
+
+        for index, role in enumerate(permitidos):
+            with self.subTest(role=role.value):
+                self.authenticate(self.make_user(f'foto-permitida-{index}', role))
+                response = self.client.patch(
+                    url,
+                    {'foto': self.make_image(f'permitida-{index}.png')},
+                    format='multipart',
+                )
+                self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        for index, role in enumerate(bloqueados):
+            with self.subTest(role=role.value):
+                self.authenticate(self.make_user(f'foto-negada-{index}', role))
+                self.assertEqual(
+                    self.client.patch(
+                        url,
+                        {'foto': self.make_image(f'negada-{index}.png')},
+                        format='multipart',
+                    ).status_code,
+                    status.HTTP_403_FORBIDDEN,
+                )
+
+        self.client.force_authenticate(user=None)
+        self.assertEqual(
+            self.client.patch(
+                url,
+                {'foto': self.make_image('anonima.png')},
+                format='multipart',
+            ).status_code,
+            status.HTTP_401_UNAUTHORIZED,
+        )
+        self.authenticate(self.make_user('foto-sem-papel'))
+        self.assertEqual(
+            self.client.patch(
+                url,
+                {'foto': self.make_image('sem-papel.png')},
+                format='multipart',
+            ).status_code,
+            status.HTTP_403_FORBIDDEN,
+        )
+
+    def test_comunicacao_le_identificacao_minima_sem_crud_de_encontro(self):
+        encontro = make_encontro()
+        self.authenticate(self.make_user('comunicacao-encontro', SiaRole.COMUNICACAO))
+        detail_url = f'/api/encontros/{encontro.pk}/'
+
+        lista = self.client.get('/api/encontros/')
+        detalhe = self.client.get(detail_url)
+
+        self.assertEqual(lista.status_code, status.HTTP_200_OK)
+        self.assertEqual(detalhe.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            set(detalhe.json()),
+            {'id', 'encontro', 'tipo', 'data_referencia'},
+        )
+        self.assertEqual(
+            self.client.post('/api/encontros/', {}, format='json').status_code,
+            status.HTTP_403_FORBIDDEN,
+        )
+        self.assertEqual(
+            self.client.patch(
+                detail_url,
+                {'encontro': 'Alteração indevida'},
+                format='json',
+            ).status_code,
+            status.HTTP_403_FORBIDDEN,
+        )
+        self.assertEqual(
+            self.client.delete(detail_url).status_code,
+            status.HTTP_403_FORBIDDEN,
+        )
+
+    def test_galeria_aceita_multiplas_fotos_e_nao_expoe_encontro(self):
+        encontro = make_encontro()
+        self.authenticate(self.make_user('comunicacao-galeria', SiaRole.COMUNICACAO))
+        url = f'/api/encontros/{encontro.pk}/fotos/'
+
+        primeira = self.client.post(
+            url,
+            {'imagem': self.make_image('galeria-1.png', 'blue')},
+            format='multipart',
+        )
+        segunda = self.client.post(
+            url,
+            {'imagem': self.make_image('galeria-2.png', 'red')},
+            format='multipart',
+        )
+        lista = self.client.get(url)
+
+        self.assertEqual(primeira.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(segunda.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(lista.status_code, status.HTTP_200_OK)
+        self.assertEqual(FotoEncontro.objects.filter(encontro=encontro).count(), 2)
+        self.assertEqual(len(lista.json()), 2)
+        for item in lista.json():
+            self.assertEqual(set(item), {'id', 'imagem'})
+        self.assertEqual(
+            LogSistema.objects.filter(
+                modulo='FotoEncontro',
+                acao='CREATE',
+                descricao__contains=f'Encontro {encontro.pk}',
+            ).count(),
+            2,
+        )
+
+    def test_comunicacao_substitui_e_remove_foto_do_encontro(self):
+        encontro = make_encontro()
+        foto = FotoEncontro.objects.create(
+            encontro=encontro,
+            imagem=self.make_image('original.png', 'blue'),
+        )
+        storage = foto.imagem.storage
+        original = foto.imagem.name
+        self.authenticate(self.make_user('comunicacao-edita-galeria', SiaRole.COMUNICACAO))
+        url = f'/api/encontros/{encontro.pk}/fotos/{foto.pk}/'
+
+        substituir = self.client.patch(
+            url,
+            {'imagem': self.make_image('substituta.png', 'red')},
+            format='multipart',
+        )
+        foto.refresh_from_db()
+        substituta = foto.imagem.name
+
+        self.assertEqual(substituir.status_code, status.HTTP_200_OK)
+        self.assertFalse(storage.exists(original))
+        self.assertTrue(storage.exists(substituta))
+
+        remover = self.client.delete(url)
+
+        self.assertEqual(remover.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertFalse(FotoEncontro.objects.filter(pk=foto.pk).exists())
+        self.assertFalse(storage.exists(substituta))
+        self.assertEqual(
+            LogSistema.objects.filter(
+                modulo='FotoEncontro',
+                descricao__contains=f'Encontro {encontro.pk}',
+            ).count(),
+            2,
+        )
+
+    def test_foto_de_outro_encontro_nao_pode_ser_manipulada_por_id(self):
+        encontro = make_encontro()
+        outro_encontro = make_encontro()
+        foto = FotoEncontro.objects.create(
+            encontro=outro_encontro,
+            imagem=self.make_image('outro-encontro.png'),
+        )
+        storage = foto.imagem.storage
+        nome = foto.imagem.name
+        self.authenticate(self.make_user('comunicacao-idor', SiaRole.COMUNICACAO))
+
+        response = self.client.delete(
+            f'/api/encontros/{encontro.pk}/fotos/{foto.pk}/'
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertTrue(FotoEncontro.objects.filter(pk=foto.pk).exists())
+        self.assertTrue(storage.exists(nome))
+        self.assertFalse(LogSistema.objects.filter(modulo='FotoEncontro').exists())
+
+    def test_galeria_rejeita_arquivo_invalido_e_campo_extra_sem_log(self):
+        encontro = make_encontro()
+        self.authenticate(self.make_user('comunicacao-galeria-invalida', SiaRole.COMUNICACAO))
+        url = f'/api/encontros/{encontro.pk}/fotos/'
+
+        invalida = self.client.post(
+            url,
+            {
+                'imagem': SimpleUploadedFile(
+                    'falsa.jpg',
+                    b'conteudo invalido',
+                    content_type='image/jpeg',
+                )
+            },
+            format='multipart',
+        )
+        extra = self.client.post(
+            url,
+            {'imagem': self.make_image(), 'encontro': encontro.pk},
+            format='multipart',
+        )
+
+        self.assertEqual(invalida.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(extra.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertFalse(FotoEncontro.objects.exists())
+        self.assertFalse(LogSistema.objects.filter(modulo='FotoEncontro').exists())
+
+    def test_matriz_de_autorizacao_da_galeria(self):
+        permitidos = (
+            SiaRole.SUPORTE,
+            SiaRole.DIRETORIA,
+            SiaRole.COMUNICACAO,
+        )
+        bloqueados = (
+            SiaRole.FICHAS,
+            SiaRole.MME,
+            SiaRole.FORMACAO,
+            SiaRole.SECRETARIA,
+            SiaRole.ACAO_SOCIAL,
+            SiaRole.LITURGIA,
+            SiaRole.EVENTOS,
+        )
+        encontro = make_encontro()
+        url = f'/api/encontros/{encontro.pk}/fotos/'
+
+        for index, role in enumerate(permitidos):
+            with self.subTest(role=role.value):
+                self.authenticate(self.make_user(f'galeria-permitida-{index}', role))
+                self.assertEqual(
+                    self.client.post(
+                        url,
+                        {'imagem': self.make_image(f'galeria-{index}.png')},
+                        format='multipart',
+                    ).status_code,
+                    status.HTTP_201_CREATED,
+                )
+
+        for index, role in enumerate(bloqueados):
+            with self.subTest(role=role.value):
+                self.authenticate(self.make_user(f'galeria-negada-{index}', role))
+                self.assertEqual(
+                    self.client.get(url).status_code,
+                    status.HTTP_403_FORBIDDEN,
+                )
+
+        self.client.force_authenticate(user=None)
+        self.assertEqual(
+            self.client.get(url).status_code,
+            status.HTTP_401_UNAUTHORIZED,
+        )
+        self.authenticate(self.make_user('galeria-sem-papel'))
+        self.assertEqual(
+            self.client.get(url).status_code,
+            status.HTTP_403_FORBIDDEN,
+        )

@@ -31,6 +31,16 @@ FORMATION_HISTORY_ROLES = (*FICHAS_MANAGEMENT_ROLES, SiaRole.FORMACAO)
 # Administração do domínio existente de Eventos e suas participações.
 EVENT_MANAGEMENT_ROLES = (*FULL_ADMIN_ROLES, SiaRole.EVENTOS)
 
+# Foto de perfil é parte da ficha; Comunicação recebe somente a action dedicada.
+PROFILE_PHOTO_MANAGEMENT_ROLES = (
+    *FICHAS_MANAGEMENT_ROLES,
+    SiaRole.COMUNICACAO,
+)
+
+# Galeria de Encontro é um subrecurso próprio, sem conceder CRUD do Encontro.
+ENCOUNTER_PHOTO_MANAGEMENT_ROLES = (*FULL_ADMIN_ROLES, SiaRole.COMUNICACAO)
+ENCOUNTER_READ_ROLES = (*FICHAS_MANAGEMENT_ROLES, SiaRole.COMUNICACAO)
+
 
 def role_name(role):
     return role.value if isinstance(role, SiaRole) else str(role)

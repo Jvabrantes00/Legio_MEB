@@ -2,8 +2,8 @@ from datetime import date
 from django.core.exceptions import ValidationError
 from django.utils import timezone
 from rest_framework import serializers
-from .models import Alpinista, Encontro, Evento, Palestra, ParticipacaoEncontro, ParticipacaoEvento, FuncaoEncontro, LogSistema
-from .validators import normalize_cpf
+from .models import Alpinista, Encontro, Evento, FotoEncontro, Palestra, ParticipacaoEncontro, ParticipacaoEvento, FuncaoEncontro, LogSistema
+from .validators import normalize_cpf, validate_image_upload_size
 
 
 def calculate_age(birth_date):
@@ -81,6 +81,28 @@ class AlpinistaMusicaCommandSerializer(serializers.Serializer):
         if not attrs:
             raise serializers.ValidationError({
                 'musica': ['Informe ao menos uma característica musical.']
+            })
+        return attrs
+
+
+class AlpinistaFotoSerializer(serializers.ModelSerializer):
+    foto = serializers.ImageField(
+        required=True,
+        allow_null=False,
+        validators=[validate_image_upload_size],
+    )
+
+    class Meta:
+        model = Alpinista
+        fields = ('foto',)
+
+    def validate(self, attrs):
+        extra_fields = set(self.initial_data) - set(self.fields)
+        if extra_fields:
+            raise serializers.ValidationError({
+                'campos_extras': [
+                    f"Campos não permitidos: {', '.join(sorted(extra_fields))}."
+                ]
             })
         return attrs
 
@@ -210,6 +232,35 @@ class EncontroSerializer(serializers.ModelSerializer):
             return "Concluído"
         else:
             return "Em Breve"
+
+
+class EncontroComunicacaoSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Encontro
+        fields = ('id', 'encontro', 'tipo', 'data_referencia')
+        read_only_fields = fields
+
+
+class FotoEncontroSerializer(serializers.ModelSerializer):
+    imagem = serializers.ImageField(
+        required=True,
+        validators=[validate_image_upload_size],
+    )
+
+    class Meta:
+        model = FotoEncontro
+        fields = ('id', 'imagem')
+        read_only_fields = ('id',)
+
+    def validate(self, attrs):
+        extra_fields = set(self.initial_data) - set(self.fields)
+        if extra_fields:
+            raise serializers.ValidationError({
+                'campos_extras': [
+                    f"Campos não permitidos: {', '.join(sorted(extra_fields))}."
+                ]
+            })
+        return attrs
 
 class EventoSerializer(serializers.ModelSerializer):
     status_evento = serializers.SerializerMethodField()

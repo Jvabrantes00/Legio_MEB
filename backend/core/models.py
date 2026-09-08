@@ -3,7 +3,7 @@ from django.db.models.signals import post_save
 from django.dispatch import receiver
 from django.contrib.auth.models import User
 
-from .validators import normalize_cpf, validate_cpf
+from .validators import normalize_cpf, validate_cpf, validate_image_upload_size
 
 class Alpinista(models.Model):
     class Status(models.TextChoices):
@@ -35,7 +35,12 @@ class Alpinista(models.Model):
     grupo = models.CharField(max_length = 100, null = True, blank = True)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDENTE)
     #foto = models.URLField(null = True, blank = True)
-    foto = models.ImageField(upload_to='fotos/', null=True, blank=True)
+    foto = models.ImageField(
+        upload_to='fotos/',
+        null=True,
+        blank=True,
+        validators=[validate_image_upload_size],
+    )
     batizado = models.BooleanField(null=True, blank=True)
     primeira_comunhao = models.BooleanField(null=True, blank=True)
     crismado = models.BooleanField(null=True, blank=True)
@@ -141,6 +146,24 @@ class Palestra(models.Model):
 
     def __str__(self):
         return f'{self.titulo} - {self.alpinista.nome} em {self.encontro.encontro}'
+
+
+class FotoEncontro(models.Model):
+    encontro = models.ForeignKey(
+        Encontro,
+        on_delete=models.CASCADE,
+        related_name='fotos',
+    )
+    imagem = models.ImageField(
+        upload_to='encontros/',
+        validators=[validate_image_upload_size],
+    )
+
+    class Meta:
+        ordering = ['id']
+
+    def __str__(self):
+        return f'Foto {self.pk} do Encontro {self.encontro_id}'
 
 # Tabelas Intermediárias para relacionamentos Many-to-Many
 class ParticipacaoEncontro(models.Model):

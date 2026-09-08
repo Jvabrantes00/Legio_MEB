@@ -2,27 +2,34 @@ from rest_framework import viewsets, filters, status
 from rest_framework.decorators import api_view, permission_classes, action
 from rest_framework.response import Response
 
+from django.shortcuts import get_object_or_404
+
 from .models import (
-    Alpinista, Encontro, Evento, 
+    Alpinista, Encontro, Evento, FotoEncontro,
     FuncaoEncontro, Palestra, ParticipacaoEncontro, ParticipacaoEvento,
     LogSistema
 )
 from .serializers import (
-    AlpinistaCompletoSerializer, AlpinistaResumoSerializer,
+    AlpinistaCompletoSerializer, AlpinistaFotoSerializer,
+    AlpinistaResumoSerializer,
     AlpinistaMusicaCommandSerializer, HistoricoPalestraSerializer,
     HistoricoVioleiroSerializer,
-    EncontroSerializer, EventoSerializer,
+    EncontroComunicacaoSerializer, EncontroSerializer, EventoSerializer,
+    FotoEncontroSerializer,
     FuncaoEncontroSerializer, ParticipacaoEncontroSerializer, ParticipacaoEventoSerializer,
     LogSistemaSerializer
     )
 from .permissions import HasAnySiaRole, require_sia_roles
 from .roles import (
     EVENT_MANAGEMENT_ROLES,
+    ENCOUNTER_PHOTO_MANAGEMENT_ROLES,
+    ENCOUNTER_READ_ROLES,
     FICHAS_MANAGEMENT_ROLES,
     FORMATION_HISTORY_ROLES,
     FULL_ADMIN_ROLES,
     RECOGNIZED_ROLES,
     MUSIC_MANAGEMENT_ROLES,
+    PROFILE_PHOTO_MANAGEMENT_ROLES,
     user_has_any_role,
 )
 
@@ -72,6 +79,7 @@ class AlpinistaViewSet(viewsets.ModelViewSet):
     read_roles = RECOGNIZED_ROLES
     write_roles = FICHAS_MANAGEMENT_ROLES
     action_roles = {
+        'foto': PROFILE_PHOTO_MANAGEMENT_ROLES,
         'musica': MUSIC_MANAGEMENT_ROLES,
         'historico_violeiro': MUSIC_MANAGEMENT_ROLES,
         'historico_palestras': FORMATION_HISTORY_ROLES,
@@ -90,6 +98,8 @@ class AlpinistaViewSet(viewsets.ModelViewSet):
         )
 
     def get_serializer_class(self):
+        if self.action == 'foto':
+            return AlpinistaFotoSerializer
         if self.action == 'musica':
             return AlpinistaMusicaCommandSerializer
         if self.action == 'historico_violeiro':
@@ -99,6 +109,46 @@ class AlpinistaViewSet(viewsets.ModelViewSet):
         if self.has_full_profile_access():
             return AlpinistaCompletoSerializer
         return AlpinistaResumoSerializer
+
+    @action(detail=True, methods=['patch', 'delete'], url_path='foto')
+    def foto(self, request, pk=None):
+        alpinista = self.get_object()
+        foto_anterior = alpinista.foto
+        nome_anterior = foto_anterior.name if foto_anterior else None
+        storage = foto_anterior.storage if foto_anterior else None
+
+        if request.method == 'DELETE':
+            if nome_anterior:
+                alpinista.foto = None
+                alpinista.save(update_fields=['foto'])
+                storage.delete(nome_anterior)
+                LogSistema.objects.create(
+                    usuario=request.user,
+                    acao='DELETE',
+                    modulo='Alpinista',
+                    descricao=f'Foto do Alpinista {alpinista.pk} removida.',
+                )
+            return Response({'id': alpinista.pk, 'foto': None})
+
+        serializer = self.get_serializer(alpinista, data=request.data)
+        serializer.is_valid(raise_exception=True)
+        alpinista = serializer.save()
+        nome_novo = alpinista.foto.name
+        if nome_anterior and nome_anterior != nome_novo:
+            storage.delete(nome_anterior)
+        LogSistema.objects.create(
+            usuario=request.user,
+            acao='UPDATE',
+            modulo='Alpinista',
+            descricao=(
+                f'Foto do Alpinista {alpinista.pk} '
+                f'{"substituída" if nome_anterior else "adicionada"}.'
+            ),
+        )
+        return Response({
+            'id': alpinista.pk,
+            'foto': serializer.data['foto'],
+        })
 
     def get_queryset(self):
         queryset = super().get_queryset()
@@ -205,12 +255,96 @@ class AlpinistaViewSet(viewsets.ModelViewSet):
 class EncontroViewSet(viewsets.ModelViewSet):
     queryset = Encontro.objects.all().order_by('-data_referencia') 
     serializer_class = EncontroSerializer
-    permission_classes = [require_sia_roles(*FICHAS_MANAGEMENT_ROLES)]
+    permission_classes = [HasAnySiaRole]
+    read_roles = ENCOUNTER_READ_ROLES
+    write_roles = FICHAS_MANAGEMENT_ROLES
+    action_roles = {
+        'fotos': ENCOUNTER_PHOTO_MANAGEMENT_ROLES,
+        'foto_detail': ENCOUNTER_PHOTO_MANAGEMENT_ROLES,
+    }
 
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ['encontro']
     search_fields = ['encontro']
     ordering_fields = ['data_referencia', 'encontro']
+
+    def has_full_encontro_access(self):
+        user = self.request.user
+        return user.is_superuser or user_has_any_role(
+            user,
+            *FICHAS_MANAGEMENT_ROLES,
+        )
+
+    def get_serializer_class(self):
+        if self.action in {'fotos', 'foto_detail'}:
+            return FotoEncontroSerializer
+        if self.has_full_encontro_access():
+            return EncontroSerializer
+        return EncontroComunicacaoSerializer
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        if self.has_full_encontro_access():
+            return queryset
+        return queryset.only('id', 'encontro', 'tipo', 'data_referencia')
+
+    @action(detail=True, methods=['get', 'post'], url_path='fotos')
+    def fotos(self, request, pk=None):
+        encontro = self.get_object()
+        if request.method == 'GET':
+            serializer = self.get_serializer(encontro.fotos.all(), many=True)
+            return Response(serializer.data)
+
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        foto = serializer.save(encontro=encontro)
+        LogSistema.objects.create(
+            usuario=request.user,
+            acao='CREATE',
+            modulo='FotoEncontro',
+            descricao=f'Foto {foto.pk} adicionada ao Encontro {encontro.pk}.',
+        )
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    @action(
+        detail=True,
+        methods=['patch', 'delete'],
+        url_path=r'fotos/(?P<foto_id>[^/.]+)',
+    )
+    def foto_detail(self, request, pk=None, foto_id=None):
+        encontro = self.get_object()
+        foto = get_object_or_404(
+            FotoEncontro,
+            pk=foto_id,
+            encontro=encontro,
+        )
+        nome_anterior = foto.imagem.name
+        storage = foto.imagem.storage
+
+        if request.method == 'DELETE':
+            foto_pk = foto.pk
+            foto.delete()
+            storage.delete(nome_anterior)
+            LogSistema.objects.create(
+                usuario=request.user,
+                acao='DELETE',
+                modulo='FotoEncontro',
+                descricao=f'Foto {foto_pk} removida do Encontro {encontro.pk}.',
+            )
+            return Response(status=status.HTTP_204_NO_CONTENT)
+
+        serializer = self.get_serializer(foto, data=request.data)
+        serializer.is_valid(raise_exception=True)
+        foto = serializer.save()
+        if nome_anterior != foto.imagem.name:
+            storage.delete(nome_anterior)
+        LogSistema.objects.create(
+            usuario=request.user,
+            acao='UPDATE',
+            modulo='FotoEncontro',
+            descricao=f'Foto {foto.pk} substituída no Encontro {encontro.pk}.',
+        )
+        return Response(serializer.data)
 
     def perform_create(self, serializer):
         encontro = serializer.save()
