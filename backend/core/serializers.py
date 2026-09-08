@@ -2,7 +2,11 @@ from datetime import date
 from django.core.exceptions import ValidationError
 from django.utils import timezone
 from rest_framework import serializers
-from .models import Alpinista, Encontro, Evento, FotoEncontro, Palestra, ParticipacaoEncontro, ParticipacaoEvento, FuncaoEncontro, LogSistema
+from .models import (
+    Alpinista, Encontro, EntregaMaterial, Evento, FotoEncontro,
+    FuncaoEncontro, LogSistema, Material, Palestra, ParticipacaoEncontro,
+    ParticipacaoEvento,
+)
 from .validators import normalize_cpf, validate_image_upload_size
 
 
@@ -261,6 +265,58 @@ class FotoEncontroSerializer(serializers.ModelSerializer):
                 ]
             })
         return attrs
+
+
+class MaterialSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Material
+        fields = ('id', 'nome', 'quantidade_disponivel')
+        read_only_fields = ('id',)
+
+    def validate_quantidade_disponivel(self, value):
+        if value < 0:
+            raise serializers.ValidationError(
+                'A quantidade disponível não pode ser negativa.'
+            )
+        return value
+
+
+class EntregaMaterialSerializer(serializers.ModelSerializer):
+    material_id = serializers.PrimaryKeyRelatedField(
+        queryset=Material.objects.all(),
+        source='material',
+    )
+    material_nome = serializers.CharField(source='material.nome', read_only=True)
+    alpinista_id = serializers.PrimaryKeyRelatedField(
+        queryset=Alpinista.objects.all(),
+        source='alpinista',
+    )
+    alpinista_nome = serializers.CharField(source='alpinista.nome', read_only=True)
+
+    class Meta:
+        model = EntregaMaterial
+        fields = (
+            'id',
+            'material_id',
+            'material_nome',
+            'alpinista_id',
+            'alpinista_nome',
+            'quantidade',
+            'entregue_em',
+        )
+        read_only_fields = (
+            'id',
+            'material_nome',
+            'alpinista_nome',
+            'entregue_em',
+        )
+
+    def validate_quantidade(self, value):
+        if value <= 0:
+            raise serializers.ValidationError(
+                'A quantidade da entrega deve ser maior que zero.'
+            )
+        return value
 
 class EventoSerializer(serializers.ModelSerializer):
     status_evento = serializers.SerializerMethodField()

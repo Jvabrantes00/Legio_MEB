@@ -41,6 +41,9 @@ PROFILE_PHOTO_MANAGEMENT_ROLES = (
 ENCOUNTER_PHOTO_MANAGEMENT_ROLES = (*FULL_ADMIN_ROLES, SiaRole.COMUNICACAO)
 ENCOUNTER_READ_ROLES = (*FICHAS_MANAGEMENT_ROLES, SiaRole.COMUNICACAO)
 
+# Controle de estoque e registro histórico de entregas da Secretaria.
+MATERIAL_MANAGEMENT_ROLES = (*FULL_ADMIN_ROLES, SiaRole.SECRETARIA)
+
 
 def role_name(role):
     return role.value if isinstance(role, SiaRole) else str(role)

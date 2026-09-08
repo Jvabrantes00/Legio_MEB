@@ -5,8 +5,8 @@ from rest_framework.routers import DefaultRouter
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView # <-- Importamos as rotas de login
 from .views import (
     AlpinistaViewSet, EncontroViewSet, EventoViewSet, 
-    FuncaoEncontroViewSet, ParticipacaoEncontroViewSet, ParticipacaoEventoViewSet,
-    LogSistemaViewSet
+    EntregaMaterialViewSet, FuncaoEncontroViewSet, MaterialViewSet,
+    ParticipacaoEncontroViewSet, ParticipacaoEventoViewSet, LogSistemaViewSet,
 )
 from .views import dashboard_stats
 
@@ -22,6 +22,8 @@ router.register(r'funcoes', FuncaoEncontroViewSet)
 router.register(r'participacoes-encontros', ParticipacaoEncontroViewSet)
 router.register(r'participacoes-eventos', ParticipacaoEventoViewSet)
 router.register(r'logs', LogSistemaViewSet)
+router.register(r'materiais', MaterialViewSet)
+router.register(r'entregas-materiais', EntregaMaterialViewSet)
 
 # Exporta as rotas 
 urlpatterns = [

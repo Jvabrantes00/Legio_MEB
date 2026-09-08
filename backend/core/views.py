@@ -1,13 +1,14 @@
-from rest_framework import viewsets, filters, status
+from rest_framework import filters, mixins, status, viewsets
 from rest_framework.decorators import api_view, permission_classes, action
+from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 
 from django.shortcuts import get_object_or_404
 
 from .models import (
-    Alpinista, Encontro, Evento, FotoEncontro,
+    Alpinista, Encontro, EntregaMaterial, Evento, FotoEncontro,
     FuncaoEncontro, Palestra, ParticipacaoEncontro, ParticipacaoEvento,
-    LogSistema
+    LogSistema, Material,
 )
 from .serializers import (
     AlpinistaCompletoSerializer, AlpinistaFotoSerializer,
@@ -15,7 +16,7 @@ from .serializers import (
     AlpinistaMusicaCommandSerializer, HistoricoPalestraSerializer,
     HistoricoVioleiroSerializer,
     EncontroComunicacaoSerializer, EncontroSerializer, EventoSerializer,
-    FotoEncontroSerializer,
+    EntregaMaterialSerializer, FotoEncontroSerializer, MaterialSerializer,
     FuncaoEncontroSerializer, ParticipacaoEncontroSerializer, ParticipacaoEventoSerializer,
     LogSistemaSerializer
     )
@@ -29,6 +30,7 @@ from .roles import (
     FULL_ADMIN_ROLES,
     RECOGNIZED_ROLES,
     MUSIC_MANAGEMENT_ROLES,
+    MATERIAL_MANAGEMENT_ROLES,
     PROFILE_PHOTO_MANAGEMENT_ROLES,
     user_has_any_role,
 )
@@ -518,7 +520,99 @@ class ParticipacaoEventoViewSet(viewsets.ModelViewSet):
     permission_classes = [require_sia_roles(*EVENT_MANAGEMENT_ROLES)]
 
     filter_backends = [DjangoFilterBackend]
-    filterset_fields = ['evento', 'alpinista'] 
+    filterset_fields = ['evento', 'alpinista']
+
+
+class MaterialViewSet(viewsets.ModelViewSet):
+    queryset = Material.objects.all()
+    serializer_class = MaterialSerializer
+    permission_classes = [require_sia_roles(*MATERIAL_MANAGEMENT_ROLES)]
+
+    filter_backends = [filters.SearchFilter, filters.OrderingFilter]
+    search_fields = ['nome']
+    ordering_fields = ['nome', 'quantidade_disponivel']
+
+    def perform_create(self, serializer):
+        with transaction.atomic():
+            material = serializer.save()
+            LogSistema.objects.create(
+                usuario=self.request.user,
+                acao='CREATE',
+                modulo='Material',
+                descricao=f'Material {material.pk} criado.',
+            )
+
+    def perform_update(self, serializer):
+        with transaction.atomic():
+            material = serializer.save()
+            LogSistema.objects.create(
+                usuario=self.request.user,
+                acao='UPDATE',
+                modulo='Material',
+                descricao=f'Material {material.pk} alterado.',
+            )
+
+    def destroy(self, request, *args, **kwargs):
+        material = self.get_object()
+        with transaction.atomic():
+            material = Material.objects.select_for_update().get(pk=material.pk)
+            if material.entregas.exists():
+                raise ValidationError({
+                    'material': [
+                        'Materiais com entregas registradas não podem ser excluídos.'
+                    ]
+                })
+            material_pk = material.pk
+            material.delete()
+            LogSistema.objects.create(
+                usuario=request.user,
+                acao='DELETE',
+                modulo='Material',
+                descricao=f'Material {material_pk} excluído.',
+            )
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class EntregaMaterialViewSet(
+    mixins.CreateModelMixin,
+    mixins.ListModelMixin,
+    mixins.RetrieveModelMixin,
+    viewsets.GenericViewSet,
+):
+    queryset = (
+        EntregaMaterial.objects
+        .select_related('material', 'alpinista')
+        .all()
+    )
+    serializer_class = EntregaMaterialSerializer
+    permission_classes = [require_sia_roles(*MATERIAL_MANAGEMENT_ROLES)]
+
+    filter_backends = [DjangoFilterBackend]
+    filterset_fields = ['material', 'alpinista']
+
+    def perform_create(self, serializer):
+        material_id = serializer.validated_data['material'].pk
+        quantidade = serializer.validated_data['quantidade']
+
+        with transaction.atomic():
+            material = Material.objects.select_for_update().get(pk=material_id)
+            if quantidade > material.quantidade_disponivel:
+                raise ValidationError({
+                    'quantidade': ['A quantidade solicitada excede o estoque disponível.']
+                })
+
+            material.quantidade_disponivel -= quantidade
+            material.save(update_fields=['quantidade_disponivel'])
+            entrega = serializer.save(material=material)
+            LogSistema.objects.create(
+                usuario=self.request.user,
+                acao='CREATE',
+                modulo='EntregaMaterial',
+                descricao=(
+                    f'Entrega {entrega.pk} registrada para o Material '
+                    f'{material.pk} e Alpinista {entrega.alpinista_id}.'
+                ),
+            )
 
 
 @api_view(['GET'])

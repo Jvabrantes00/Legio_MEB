@@ -165,6 +165,50 @@ class FotoEncontro(models.Model):
     def __str__(self):
         return f'Foto {self.pk} do Encontro {self.encontro_id}'
 
+
+class Material(models.Model):
+    nome = models.CharField(max_length=255, unique=True)
+    quantidade_disponivel = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ['nome', 'id']
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(quantidade_disponivel__gte=0),
+                name='material_quantidade_nao_negativa',
+            )
+        ]
+
+    def __str__(self):
+        return self.nome
+
+
+class EntregaMaterial(models.Model):
+    material = models.ForeignKey(
+        Material,
+        on_delete=models.PROTECT,
+        related_name='entregas',
+    )
+    alpinista = models.ForeignKey(
+        Alpinista,
+        on_delete=models.PROTECT,
+        related_name='entregas_materiais',
+    )
+    quantidade = models.PositiveIntegerField()
+    entregue_em = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-entregue_em', '-id']
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(quantidade__gt=0),
+                name='entrega_material_quantidade_positiva',
+            )
+        ]
+
+    def __str__(self):
+        return f'Entrega {self.pk} do Material {self.material_id}'
+
 # Tabelas Intermediárias para relacionamentos Many-to-Many
 class ParticipacaoEncontro(models.Model):
 
