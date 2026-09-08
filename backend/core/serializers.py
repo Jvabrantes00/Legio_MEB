@@ -19,6 +19,7 @@ def calculate_age(birth_date):
 class AlpinistaResumoSerializer(serializers.ModelSerializer):
     idade = serializers.SerializerMethodField()
     whatsapp = serializers.CharField(source='telefone', read_only=True)
+    musica = serializers.SerializerMethodField()
     responsaveis = serializers.SerializerMethodField()
 
     class Meta:
@@ -33,12 +34,19 @@ class AlpinistaResumoSerializer(serializers.ModelSerializer):
             'batizado',
             'primeira_comunhao',
             'crismado',
+            'musica',
             'responsaveis',
         )
         read_only_fields = fields
 
     def get_idade(self, obj):
         return calculate_age(obj.dataNascimento)
+
+    def get_musica(self, obj):
+        return {
+            'violeiro': obj.eh_violeiro,
+            'canta': obj.canta,
+        }
 
     def get_responsaveis(self, obj):
         responsaveis = []
@@ -56,6 +64,43 @@ class AlpinistaResumoSerializer(serializers.ModelSerializer):
         if idade is None or idade >= 18:
             representation.pop('responsaveis', None)
         return representation
+
+
+class AlpinistaMusicaCommandSerializer(serializers.Serializer):
+    violeiro = serializers.BooleanField(required=False)
+    canta = serializers.BooleanField(required=False)
+
+    def validate(self, attrs):
+        extra_fields = set(self.initial_data) - set(self.fields)
+        if extra_fields:
+            raise serializers.ValidationError({
+                'campos_extras': [
+                    f"Campos não permitidos: {', '.join(sorted(extra_fields))}."
+                ]
+            })
+        if not attrs:
+            raise serializers.ValidationError({
+                'musica': ['Informe ao menos uma característica musical.']
+            })
+        return attrs
+
+
+class HistoricoVioleiroSerializer(serializers.ModelSerializer):
+    nome_encontro = serializers.CharField(source='encontro.encontro')
+    tipo_encontro = serializers.CharField(source='encontro.tipo')
+    data_encontro = serializers.DateField(source='encontro.data_referencia')
+    funcao = serializers.CharField(source='funcao.nome')
+
+    class Meta:
+        model = ParticipacaoEncontro
+        fields = (
+            'encontro_id',
+            'nome_encontro',
+            'tipo_encontro',
+            'data_encontro',
+            'funcao',
+        )
+        read_only_fields = fields
 
 
 class AlpinistaCompletoSerializer(serializers.ModelSerializer):

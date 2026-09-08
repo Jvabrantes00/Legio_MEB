@@ -9,6 +9,7 @@ from .models import (
 )
 from .serializers import (
     AlpinistaCompletoSerializer, AlpinistaResumoSerializer,
+    AlpinistaMusicaCommandSerializer, HistoricoVioleiroSerializer,
     EncontroSerializer, EventoSerializer,
     FuncaoEncontroSerializer, ParticipacaoEncontroSerializer, ParticipacaoEventoSerializer,
     LogSistemaSerializer
@@ -18,6 +19,7 @@ from .roles import (
     FICHAS_MANAGEMENT_ROLES,
     FULL_ADMIN_ROLES,
     RECOGNIZED_ROLES,
+    MUSIC_MANAGEMENT_ROLES,
     user_has_any_role,
 )
 
@@ -37,6 +39,8 @@ SUMMARY_PROFILE_FIELDS = (
     'batizado',
     'primeira_comunhao',
     'crismado',
+    'eh_violeiro',
+    'canta',
     'nomePai',
     'telefonePai',
     'nomeMae',
@@ -50,9 +54,13 @@ class AlpinistaViewSet(viewsets.ModelViewSet):
     permission_classes = [HasAnySiaRole]
     read_roles = RECOGNIZED_ROLES
     write_roles = FICHAS_MANAGEMENT_ROLES
+    action_roles = {
+        'musica': MUSIC_MANAGEMENT_ROLES,
+        'historico_violeiro': MUSIC_MANAGEMENT_ROLES,
+    }
 
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ['status']
+    filterset_fields = ['status', 'eh_violeiro', 'canta']
     search_fields = ['nome', 'email', 'telefone', 'grupo']
     ordering_fields = ['nome', 'data_nascimento', 'status']
 
@@ -64,6 +72,10 @@ class AlpinistaViewSet(viewsets.ModelViewSet):
         )
 
     def get_serializer_class(self):
+        if self.action == 'musica':
+            return AlpinistaMusicaCommandSerializer
+        if self.action == 'historico_violeiro':
+            return HistoricoVioleiroSerializer
         if self.has_full_profile_access():
             return AlpinistaCompletoSerializer
         return AlpinistaResumoSerializer
@@ -73,6 +85,62 @@ class AlpinistaViewSet(viewsets.ModelViewSet):
         if self.has_full_profile_access():
             return queryset
         return queryset.only(*SUMMARY_PROFILE_FIELDS)
+
+    @action(detail=True, methods=['patch'], url_path='musica')
+    def musica(self, request, pk=None):
+        alpinista = self.get_object()
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        field_mapping = {
+            'violeiro': 'eh_violeiro',
+            'canta': 'canta',
+        }
+        alteracoes = []
+        update_fields = []
+        for api_field, model_field in field_mapping.items():
+            if api_field not in serializer.validated_data:
+                continue
+            valor_anterior = getattr(alpinista, model_field)
+            novo_valor = serializer.validated_data[api_field]
+            if valor_anterior != novo_valor:
+                setattr(alpinista, model_field, novo_valor)
+                update_fields.append(model_field)
+                alteracoes.append(
+                    f'{model_field}: {valor_anterior} -> {novo_valor}'
+                )
+
+        if update_fields:
+            alpinista.save(update_fields=update_fields)
+            LogSistema.objects.create(
+                usuario=request.user,
+                acao='UPDATE',
+                modulo='Alpinista',
+                descricao=(
+                    f'Características musicais do Alpinista {alpinista.pk}: '
+                    f'{"; ".join(alteracoes)}.'
+                ),
+            )
+
+        return Response({
+            'id': alpinista.pk,
+            'musica': {
+                'violeiro': alpinista.eh_violeiro,
+                'canta': alpinista.canta,
+            },
+        })
+
+    @action(detail=True, methods=['get'], url_path='historico-violeiro')
+    def historico_violeiro(self, request, pk=None):
+        alpinista = self.get_object()
+        participacoes = (
+            alpinista.participacoes_encontros
+            .filter(funcao__eh_violeiro=True)
+            .select_related('encontro', 'funcao')
+            .order_by('-encontro__data_referencia', '-id')
+        )
+        serializer = self.get_serializer(participacoes, many=True)
+        return Response(serializer.data)
 
     def perform_create(self, serializer):
         alpinista = serializer.save()

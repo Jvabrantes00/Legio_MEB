@@ -172,3 +172,53 @@ class CreateSIARoleGroupsMigrationTests(TransactionTestCase):
         executor = MigrationExecutor(connection)
         executor.migrate(executor.loader.graph.leaf_nodes())
         super().tearDown()
+
+
+class AddMusicaFieldsMigrationTests(TransactionTestCase):
+    migrate_from = ('core', '0020_alpinista_sacramentos')
+    migrate_to = ('core', '0021_alpinista_musica_e_funcao_violeiro')
+
+    def setUp(self):
+        super().setUp()
+        executor = MigrationExecutor(connection)
+        executor.migrate([self.migrate_from])
+        old_apps = executor.loader.project_state([self.migrate_from]).apps
+        Alpinista = old_apps.get_model('core', 'Alpinista')
+        FuncaoEncontro = old_apps.get_model('core', 'FuncaoEncontro')
+
+        self.alpinista_id = Alpinista.objects.create(
+            nome='Alpinista existente',
+            email='violeiro-migration@example.test',
+            telefone='6100040001',
+        ).pk
+        for nome in ('Violeiro', ' violeiro ', 'Violeiro auxiliar', 'Cozinha'):
+            FuncaoEncontro.objects.create(nome=nome, tipo='equipe')
+
+        executor = MigrationExecutor(connection)
+        executor.migrate([self.migrate_to])
+        self.apps = executor.loader.project_state([self.migrate_to]).apps
+
+    def test_default_conservador_e_classificacao_exata_de_funcoes_existentes(self):
+        Alpinista = self.apps.get_model('core', 'Alpinista')
+        FuncaoEncontro = self.apps.get_model('core', 'FuncaoEncontro')
+
+        alpinista = Alpinista.objects.get(pk=self.alpinista_id)
+        self.assertFalse(alpinista.eh_violeiro)
+        self.assertFalse(alpinista.canta)
+        marcacoes = dict(
+            FuncaoEncontro.objects.values_list('nome', 'eh_violeiro')
+        )
+        self.assertEqual(
+            marcacoes,
+            {
+                'Violeiro': True,
+                ' violeiro ': True,
+                'Violeiro auxiliar': False,
+                'Cozinha': False,
+            },
+        )
+
+    def tearDown(self):
+        executor = MigrationExecutor(connection)
+        executor.migrate(executor.loader.graph.leaf_nodes())
+        super().tearDown()

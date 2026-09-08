@@ -22,6 +22,9 @@ FULL_ADMIN_ROLES = (SiaRole.SUPORTE, SiaRole.DIRETORIA)
 # Administração de pessoas e da operação dos encontros.
 FICHAS_MANAGEMENT_ROLES = (*FULL_ADMIN_ROLES, SiaRole.FICHAS)
 
+# Gestão das características musicais e do histórico de Violeiro.
+MUSIC_MANAGEMENT_ROLES = (*FICHAS_MANAGEMENT_ROLES, SiaRole.MME)
+
 
 def role_name(role):
     return role.value if isinstance(role, SiaRole) else str(role)

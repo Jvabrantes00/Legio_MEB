@@ -39,6 +39,8 @@ class Alpinista(models.Model):
     batizado = models.BooleanField(null=True, blank=True)
     primeira_comunhao = models.BooleanField(null=True, blank=True)
     crismado = models.BooleanField(null=True, blank=True)
+    eh_violeiro = models.BooleanField(default=False)
+    canta = models.BooleanField(default=False)
 
     is_neurodivergente = models.BooleanField(default=False, verbose_name="É neurodivergente?")
     tipo_neurodivergente = models.CharField(max_length=100, blank=True, null=True, verbose_name="Tipo de Neurodivergencia")
@@ -64,6 +66,7 @@ class FuncaoEncontro(models.Model):
     )
 
     ordem = models.IntegerField(default=99, verbose_name="Ordem de exibição")
+    eh_violeiro = models.BooleanField(default=False)
 
     class Meta:
         ordering = ['ordem']

@@ -16,7 +16,11 @@ class HasAnySiaRole(BasePermission):
         if user.is_superuser:
             return True
 
-        if request.method in SAFE_METHODS:
+        action_roles = getattr(view, 'action_roles', {})
+        action = getattr(view, 'action', None)
+        if action in action_roles:
+            allowed_roles = action_roles[action]
+        elif request.method in SAFE_METHODS:
             allowed_roles = getattr(
                 view,
                 'read_roles',

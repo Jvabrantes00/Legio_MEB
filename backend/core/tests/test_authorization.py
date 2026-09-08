@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import date, timedelta
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
@@ -6,7 +6,12 @@ from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from core.models import LogSistema, ParticipacaoEvento
+from core.models import (
+    FuncaoEncontro,
+    LogSistema,
+    ParticipacaoEncontro,
+    ParticipacaoEvento,
+)
 from core.roles import SiaRole, user_has_any_role, user_has_role
 from core.tests.factories import (
     make_alpinista,
@@ -45,6 +50,7 @@ class AuthorizationFoundationTests(SiaAuthorizationTestCase):
         'batizado',
         'primeira_comunhao',
         'crismado',
+        'musica',
     }
 
     def make_sensitive_alpinista(self, **overrides):
@@ -675,3 +681,284 @@ class AdministrativeRoleMatrixTests(SiaAuthorizationTestCase):
                         self.client.get(url).status_code,
                         status.HTTP_403_FORBIDDEN,
                     )
+
+
+class MMEMusicaAuthorizationTests(SiaAuthorizationTestCase):
+    def test_mme_altera_e_desmarca_musica_com_log_de_auditoria(self):
+        alpinista = make_alpinista()
+        user = self.make_user('mme-violeiro', SiaRole.MME)
+        self.authenticate(user)
+        url = f'/api/alpinistas/{alpinista.pk}/musica/'
+
+        marcar = self.client.patch(
+            url,
+            {'violeiro': True, 'canta': True},
+            format='json',
+        )
+        alpinista.refresh_from_db()
+
+        self.assertEqual(marcar.status_code, status.HTTP_200_OK)
+        self.assertIs(alpinista.eh_violeiro, True)
+        self.assertIs(alpinista.canta, True)
+        self.assertEqual(
+            marcar.json(),
+            {
+                'id': alpinista.pk,
+                'musica': {'violeiro': True, 'canta': True},
+            },
+        )
+        log = LogSistema.objects.get(usuario=user, modulo='Alpinista')
+        self.assertIn(str(alpinista.pk), log.descricao)
+        self.assertIn('eh_violeiro: False -> True', log.descricao)
+        self.assertIn('canta: False -> True', log.descricao)
+        self.assertNotIn(alpinista.nome, log.descricao)
+        self.assertNotIn(alpinista.cpf or 'cpf-ausente', log.descricao)
+
+        desmarcar = self.client.patch(
+            url,
+            {'violeiro': False, 'canta': False},
+            format='json',
+        )
+        alpinista.refresh_from_db()
+
+        self.assertEqual(desmarcar.status_code, status.HTTP_200_OK)
+        self.assertIs(alpinista.eh_violeiro, False)
+        self.assertIs(alpinista.canta, False)
+        self.assertEqual(
+            LogSistema.objects.filter(usuario=user, modulo='Alpinista').count(),
+            2,
+        )
+
+    def test_mme_altera_somente_canta_sem_mudar_indicacao_de_violeiro(self):
+        alpinista = make_alpinista(eh_violeiro=True, canta=False)
+        self.authenticate(self.make_user('mme-somente-canta', SiaRole.MME))
+
+        marcar = self.client.patch(
+            f'/api/alpinistas/{alpinista.pk}/musica/',
+            {'canta': True},
+            format='json',
+        )
+        alpinista.refresh_from_db()
+
+        self.assertEqual(marcar.status_code, status.HTTP_200_OK)
+        self.assertIs(alpinista.eh_violeiro, True)
+        self.assertIs(alpinista.canta, True)
+
+        desmarcar = self.client.patch(
+            f'/api/alpinistas/{alpinista.pk}/musica/',
+            {'canta': False},
+            format='json',
+        )
+        alpinista.refresh_from_db()
+
+        self.assertEqual(desmarcar.status_code, status.HTTP_200_OK)
+        self.assertIs(alpinista.eh_violeiro, True)
+        self.assertIs(alpinista.canta, False)
+
+    def test_action_rejeita_campos_extras_sem_alterar_a_ficha(self):
+        alpinista = make_alpinista(cpf='52998224725')
+        nome_original = alpinista.nome
+        cpf_original = alpinista.cpf
+        self.authenticate(self.make_user('mme-payload-estrito', SiaRole.MME))
+
+        response = self.client.patch(
+            f'/api/alpinistas/{alpinista.pk}/musica/',
+            {
+                'violeiro': True,
+                'canta': True,
+                'nome': 'Nome alterado indevidamente',
+                'cpf': '11144477735',
+            },
+            format='json',
+        )
+        alpinista.refresh_from_db()
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('campos_extras', response.json())
+        self.assertIs(alpinista.eh_violeiro, False)
+        self.assertIs(alpinista.canta, False)
+        self.assertEqual(alpinista.nome, nome_original)
+        self.assertEqual(alpinista.cpf, cpf_original)
+        self.assertFalse(LogSistema.objects.exists())
+
+    def test_papeis_autorizados_podem_alterar_caracteristicas_musicais(self):
+        roles = (
+            SiaRole.SUPORTE,
+            SiaRole.DIRETORIA,
+            SiaRole.FICHAS,
+            SiaRole.MME,
+        )
+        for index, role in enumerate(roles):
+            with self.subTest(role=role.value):
+                alpinista = make_alpinista()
+                self.authenticate(self.make_user(f'violeiro-permitido-{index}', role))
+
+                response = self.client.patch(
+                    f'/api/alpinistas/{alpinista.pk}/musica/',
+                    {'violeiro': True, 'canta': True},
+                    format='json',
+                )
+                alpinista.refresh_from_db()
+
+                self.assertEqual(response.status_code, status.HTTP_200_OK)
+                self.assertIs(alpinista.eh_violeiro, True)
+                self.assertIs(alpinista.canta, True)
+
+    def test_formacao_e_comunicacao_nao_podem_alterar_indicacao(self):
+        for index, role in enumerate((SiaRole.FORMACAO, SiaRole.COMUNICACAO)):
+            with self.subTest(role=role.value):
+                alpinista = make_alpinista()
+                self.authenticate(self.make_user(f'violeiro-negado-{index}', role))
+
+                response = self.client.patch(
+                    f'/api/alpinistas/{alpinista.pk}/musica/',
+                    {'violeiro': True, 'canta': True},
+                    format='json',
+                )
+                alpinista.refresh_from_db()
+
+                self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+                self.assertIs(alpinista.eh_violeiro, False)
+                self.assertIs(alpinista.canta, False)
+
+    def test_mme_consulta_somente_historico_marcado_como_violeiro(self):
+        alpinista = make_alpinista(
+            cpf='52998224725',
+            restricaoSaude='Dado privado',
+            medicacao='Dado privado',
+            is_neurodivergente=True,
+        )
+        funcao_violeiro = make_funcao(
+            nome='Violeiro',
+            tipo='equipe',
+            eh_violeiro=True,
+        )
+        outra_funcao = make_funcao(
+            nome='Violeiro',
+            tipo='equipe',
+            eh_violeiro=False,
+        )
+        encontro_violeiro = make_encontro(
+            encontro='Escalada com música',
+            tipo='Escalada',
+            data_referencia=date(2031, 5, 10),
+        )
+        outro_encontro = make_encontro(
+            encontro='Escalada em outra equipe',
+            data_referencia=date(2031, 6, 10),
+        )
+        ParticipacaoEncontro.objects.create(
+            alpinista=alpinista,
+            encontro=encontro_violeiro,
+            funcao=funcao_violeiro,
+        )
+        ParticipacaoEncontro.objects.create(
+            alpinista=alpinista,
+            encontro=outro_encontro,
+            funcao=outra_funcao,
+        )
+        self.authenticate(self.make_user('mme-historico', SiaRole.MME))
+
+        response = self.client.get(
+            f'/api/alpinistas/{alpinista.pk}/historico-violeiro/'
+        )
+        payload = response.json()
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(payload), 1)
+        self.assertEqual(
+            set(payload[0]),
+            {
+                'encontro_id',
+                'nome_encontro',
+                'tipo_encontro',
+                'data_encontro',
+                'funcao',
+            },
+        )
+        self.assertEqual(payload[0]['encontro_id'], encontro_violeiro.pk)
+        self.assertEqual(payload[0]['nome_encontro'], 'Escalada com música')
+        self.assertEqual(payload[0]['data_encontro'], '2031-05-10')
+        self.assertNotEqual(payload[0]['encontro_id'], outro_encontro.pk)
+        self.assertNotIn(alpinista.cpf, str(payload))
+        self.assertNotIn('Dado privado', str(payload))
+
+    def test_historico_restrito_por_papel_e_autenticacao(self):
+        alpinista = make_alpinista()
+        url = f'/api/alpinistas/{alpinista.pk}/historico-violeiro/'
+
+        self.assertEqual(
+            self.client.get(url).status_code,
+            status.HTTP_401_UNAUTHORIZED,
+        )
+
+        self.authenticate(self.make_user('historico-sem-papel'))
+        self.assertEqual(
+            self.client.get(url).status_code,
+            status.HTTP_403_FORBIDDEN,
+        )
+
+        self.authenticate(self.make_user('historico-formacao', SiaRole.FORMACAO))
+        self.assertEqual(
+            self.client.get(url).status_code,
+            status.HTTP_403_FORBIDDEN,
+        )
+
+    def test_perfil_resumido_agrupa_caracteristicas_musicais(self):
+        alpinista = make_alpinista(eh_violeiro=True, canta=True)
+        self.authenticate(self.make_user('mme-perfil-musical', SiaRole.MME))
+
+        response = self.client.get(f'/api/alpinistas/{alpinista.pk}/')
+        payload = response.json()
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(payload['musica'], {'violeiro': True, 'canta': True})
+        self.assertNotIn('eh_violeiro', payload)
+        self.assertNotIn('canta', payload)
+
+    def test_filtro_retorna_somente_alpinistas_indicados(self):
+        indicado = make_alpinista(eh_violeiro=True)
+        make_alpinista(eh_violeiro=False)
+        self.authenticate(self.make_user('mme-filtro', SiaRole.MME))
+
+        response = self.client.get('/api/alpinistas/?eh_violeiro=true')
+        payload = response.json()
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual([item['id'] for item in payload['results']], [indicado.pk])
+        self.assertTrue(payload['results'][0]['musica']['violeiro'])
+
+    def test_filtros_de_canto_e_violeiro_funcionam_em_conjunto(self):
+        ambos = make_alpinista(eh_violeiro=True, canta=True)
+        make_alpinista(eh_violeiro=True, canta=False)
+        somente_cantor = make_alpinista(eh_violeiro=False, canta=True)
+        self.authenticate(self.make_user('mme-filtro-musical', SiaRole.MME))
+
+        resposta_canto = self.client.get('/api/alpinistas/?canta=true')
+        resposta_combinada = self.client.get(
+            '/api/alpinistas/?eh_violeiro=true&canta=true'
+        )
+        somente_canto = resposta_canto.json()
+        combinados = resposta_combinada.json()
+
+        self.assertEqual(resposta_canto.status_code, status.HTTP_200_OK)
+        self.assertEqual(resposta_combinada.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            {item['id'] for item in somente_canto['results']},
+            {ambos.pk, somente_cantor.pk},
+        )
+        self.assertEqual(
+            [item['id'] for item in combinados['results']],
+            [ambos.pk],
+        )
+
+    def test_nao_existe_classificacao_ou_historico_independente_de_canto(self):
+        self.assertFalse(hasattr(FuncaoEncontro, 'eh_canto'))
+        alpinista = make_alpinista(canta=True)
+        self.authenticate(self.make_user('mme-sem-historico-canto', SiaRole.MME))
+
+        response = self.client.get(
+            f'/api/alpinistas/{alpinista.pk}/historico-canto/'
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
