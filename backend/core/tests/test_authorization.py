@@ -6,25 +6,17 @@ from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from core.models import LogSistema
+from core.models import LogSistema, ParticipacaoEvento
 from core.roles import SiaRole, user_has_any_role, user_has_role
-from core.tests.factories import make_alpinista
+from core.tests.factories import (
+    make_alpinista,
+    make_encontro,
+    make_evento,
+    make_funcao,
+)
 
 
-class AuthorizationFoundationTests(APITestCase):
-    protected_url = '/api/alpinistas/'
-    summary_profile_fields = {
-        'id',
-        'nome',
-        'foto',
-        'idade',
-        'grupo',
-        'whatsapp',
-        'batizado',
-        'primeira_comunhao',
-        'crismado',
-    }
-
+class SiaAuthorizationTestCase(APITestCase):
     def make_user(self, username, *roles, is_superuser=False):
         user = get_user_model().objects.create_user(
             username=username,
@@ -39,6 +31,21 @@ class AuthorizationFoundationTests(APITestCase):
 
     def authenticate(self, user):
         self.client.force_authenticate(user=user)
+
+
+class AuthorizationFoundationTests(SiaAuthorizationTestCase):
+    protected_url = '/api/alpinistas/'
+    summary_profile_fields = {
+        'id',
+        'nome',
+        'foto',
+        'idade',
+        'grupo',
+        'whatsapp',
+        'batizado',
+        'primeira_comunhao',
+        'crismado',
+    }
 
     def make_sensitive_alpinista(self, **overrides):
         values = {
@@ -152,7 +159,7 @@ class AuthorizationFoundationTests(APITestCase):
             status.HTTP_403_FORBIDDEN,
         )
 
-    def test_fichas_acessa_fluxos_provisorios_de_pessoas_e_encontros(self):
+    def test_fichas_acessa_fluxos_de_pessoas_e_encontros(self):
         self.authenticate(self.make_user('fichas', SiaRole.FICHAS))
 
         urls = (
@@ -398,3 +405,273 @@ class AuthorizationFoundationTests(APITestCase):
         response = self.client.get(f'/api/alpinistas/{alpinista.pk}/')
 
         self.assertNotIn('responsaveis', response.json())
+
+
+class AdministrativeRoleMatrixTests(SiaAuthorizationTestCase):
+    non_administrative_roles = (
+        SiaRole.MME,
+        SiaRole.FORMACAO,
+        SiaRole.SECRETARIA,
+        SiaRole.ACAO_SOCIAL,
+        SiaRole.LITURGIA,
+        SiaRole.EVENTOS,
+        SiaRole.COMUNICACAO,
+    )
+
+    def assert_crud_allowed(self, base_url, create_payload, update_payload):
+        self.assertEqual(self.client.get(base_url).status_code, status.HTTP_200_OK)
+
+        create_response = self.client.post(base_url, create_payload, format='json')
+        self.assertEqual(create_response.status_code, status.HTTP_201_CREATED)
+        detail_url = f"{base_url}{create_response.json()['id']}/"
+
+        self.assertEqual(
+            self.client.get(detail_url).status_code,
+            status.HTTP_200_OK,
+        )
+        self.assertEqual(
+            self.client.put(detail_url, create_payload, format='json').status_code,
+            status.HTTP_200_OK,
+        )
+        self.assertEqual(
+            self.client.patch(detail_url, update_payload, format='json').status_code,
+            status.HTTP_200_OK,
+        )
+        self.assertEqual(
+            self.client.delete(detail_url).status_code,
+            status.HTTP_204_NO_CONTENT,
+        )
+
+    def assert_people_and_encounter_crud(self, suffix):
+        self.assert_crud_allowed(
+            '/api/alpinistas/',
+            {
+                'nome': f'Alpinista administrativo {suffix}',
+                'email': f'administrativo-{suffix}@example.test',
+                'telefone': '61999990000',
+            },
+            {'nome': f'Alpinista atualizado {suffix}'},
+        )
+        self.assert_crud_allowed(
+            '/api/encontros/',
+            {
+                'encontro': f'Encontro administrativo {suffix}',
+                'tipo': 'Escalada',
+                'data_referencia': '2031-01-01',
+                'data_exato': '1 de janeiro de 2031',
+                'local': 'Local administrativo',
+                'status': 'agendado',
+            },
+            {'local': 'Local atualizado'},
+        )
+        self.assert_crud_allowed(
+            '/api/funcoes/',
+            {
+                'nome': f'Equipe administrativa {suffix}',
+                'tipo': 'equipe',
+                'descricao_faq': 'Descrição para teste',
+                'ordem': 10,
+            },
+            {'ordem': 11},
+        )
+
+        alpinista = make_alpinista()
+        encontro = make_encontro()
+        funcao = make_funcao()
+        self.assert_crud_allowed(
+            '/api/participacoes-encontros/',
+            {
+                'alpinista_id': alpinista.pk,
+                'encontro_id': encontro.pk,
+                'funcao_id': funcao.pk,
+                'cor_grupo': 'Azul',
+            },
+            {'cor_grupo': 'Verde'},
+        )
+
+    def assert_event_crud(self, suffix):
+        self.assert_crud_allowed(
+            '/api/eventos/',
+            {
+                'nome': f'Evento administrativo {suffix}',
+                'data_evento': '2031-02-01',
+                'local': 'Local do evento',
+            },
+            {'local': 'Local atualizado'},
+        )
+
+        alpinista = make_alpinista()
+        evento = make_evento()
+        self.assert_crud_allowed(
+            '/api/participacoes-eventos/',
+            {'alpinista': alpinista.pk, 'evento': evento.pk},
+            {'evento': evento.pk},
+        )
+
+    def test_suporte_e_diretoria_possuem_crud_administrativo_amplo(self):
+        for index, role in enumerate((SiaRole.SUPORTE, SiaRole.DIRETORIA)):
+            with self.subTest(role=role.value):
+                self.authenticate(self.make_user(f'admin-{index}', role))
+                self.assert_people_and_encounter_crud(f'admin-{index}')
+                self.assert_event_crud(f'admin-{index}')
+                self.assertEqual(
+                    self.client.get('/api/dashboard-stats/').status_code,
+                    status.HTTP_200_OK,
+                )
+
+    def test_suporte_e_diretoria_leem_logs_mas_nao_os_modificam(self):
+        for index, role in enumerate((SiaRole.SUPORTE, SiaRole.DIRETORIA)):
+            with self.subTest(role=role.value):
+                user = self.make_user(f'logs-admin-{index}', role)
+                self.authenticate(user)
+                log = LogSistema.objects.create(
+                    usuario=user,
+                    acao='LOGIN',
+                    modulo='Autorização',
+                    descricao='Log criado pelo servidor.',
+                )
+
+                self.assertEqual(
+                    self.client.get('/api/logs/').status_code,
+                    status.HTTP_200_OK,
+                )
+                self.assertEqual(
+                    self.client.get(f'/api/logs/{log.pk}/').status_code,
+                    status.HTTP_200_OK,
+                )
+                self.assertEqual(
+                    self.client.post('/api/logs/', {}, format='json').status_code,
+                    status.HTTP_405_METHOD_NOT_ALLOWED,
+                )
+                self.assertEqual(
+                    self.client.put(
+                        f'/api/logs/{log.pk}/',
+                        {},
+                        format='json',
+                    ).status_code,
+                    status.HTTP_405_METHOD_NOT_ALLOWED,
+                )
+                self.assertEqual(
+                    self.client.patch(
+                        f'/api/logs/{log.pk}/',
+                        {},
+                        format='json',
+                    ).status_code,
+                    status.HTTP_405_METHOD_NOT_ALLOWED,
+                )
+                self.assertEqual(
+                    self.client.delete(f'/api/logs/{log.pk}/').status_code,
+                    status.HTTP_405_METHOD_NOT_ALLOWED,
+                )
+
+    def test_fichas_possui_crud_de_pessoas_e_encontros_e_dashboard(self):
+        self.authenticate(self.make_user('fichas-matriz', SiaRole.FICHAS))
+
+        self.assert_people_and_encounter_crud('fichas')
+        self.assertEqual(
+            self.client.get('/api/dashboard-stats/').status_code,
+            status.HTTP_200_OK,
+        )
+
+    def assert_all_methods_forbidden(self, base_url, detail_url):
+        requests = (
+            self.client.get(base_url),
+            self.client.post(base_url, {}, format='json'),
+            self.client.get(detail_url),
+            self.client.put(detail_url, {}, format='json'),
+            self.client.patch(detail_url, {}, format='json'),
+            self.client.delete(detail_url),
+        )
+        for response in requests:
+            self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_fichas_nao_acessa_eventos_participacoes_de_evento_ou_logs(self):
+        user = self.make_user('fichas-bloqueado', SiaRole.FICHAS)
+        evento = make_evento()
+        participacao = ParticipacaoEvento.objects.create(
+            alpinista=make_alpinista(),
+            evento=evento,
+        )
+        log = LogSistema.objects.create(
+            usuario=user,
+            acao='LOGIN',
+            modulo='Autorização',
+            descricao='Log protegido.',
+        )
+        self.authenticate(user)
+
+        self.assert_all_methods_forbidden(
+            '/api/eventos/',
+            f'/api/eventos/{evento.pk}/',
+        )
+        self.assert_all_methods_forbidden(
+            '/api/participacoes-eventos/',
+            f'/api/participacoes-eventos/{participacao.pk}/',
+        )
+        self.assert_all_methods_forbidden(
+            '/api/logs/',
+            f'/api/logs/{log.pk}/',
+        )
+
+    def test_actions_de_encontro_sao_permitidas_aos_papeis_administrativos(self):
+        roles = (SiaRole.SUPORTE, SiaRole.DIRETORIA, SiaRole.FICHAS)
+        for index, role in enumerate(roles):
+            with self.subTest(role=role.value):
+                encontro = make_encontro()
+                alpinista = make_alpinista()
+                self.authenticate(self.make_user(f'action-admin-{index}', role))
+                payload = {'alpinistas_ids': [alpinista.pk]}
+
+                self.assertEqual(
+                    self.client.post(
+                        f'/api/encontros/{encontro.pk}/efetivar-encontristas/',
+                        payload,
+                        format='json',
+                    ).status_code,
+                    status.HTTP_200_OK,
+                )
+                self.assertEqual(
+                    self.client.post(
+                        f'/api/encontros/{encontro.pk}/remover-encontristas/',
+                        payload,
+                        format='json',
+                    ).status_code,
+                    status.HTTP_200_OK,
+                )
+
+    def test_papeis_nao_administrativos_nao_contornam_actions_diretas(self):
+        encontro = make_encontro()
+        alpinista = make_alpinista()
+        payload = {'alpinistas_ids': [alpinista.pk]}
+        action_urls = (
+            f'/api/encontros/{encontro.pk}/efetivar-encontristas/',
+            f'/api/encontros/{encontro.pk}/remover-encontristas/',
+        )
+
+        for index, role in enumerate(self.non_administrative_roles):
+            with self.subTest(role=role.value):
+                self.authenticate(self.make_user(f'action-negada-{index}', role))
+                for url in action_urls:
+                    self.assertEqual(
+                        self.client.post(url, payload, format='json').status_code,
+                        status.HTTP_403_FORBIDDEN,
+                    )
+
+    def test_papeis_nao_administrativos_nao_recebem_novos_acessos(self):
+        restricted_urls = (
+            '/api/encontros/',
+            '/api/funcoes/',
+            '/api/participacoes-encontros/',
+            '/api/eventos/',
+            '/api/participacoes-eventos/',
+            '/api/dashboard-stats/',
+            '/api/logs/',
+        )
+        for index, role in enumerate(self.non_administrative_roles):
+            with self.subTest(role=role.value):
+                self.authenticate(self.make_user(f'nao-admin-{index}', role))
+                for url in restricted_urls:
+                    self.assertEqual(
+                        self.client.get(url).status_code,
+                        status.HTTP_403_FORBIDDEN,
+                    )

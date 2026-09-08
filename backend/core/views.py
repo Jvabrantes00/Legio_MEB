@@ -14,7 +14,12 @@ from .serializers import (
     LogSistemaSerializer
     )
 from .permissions import HasAnySiaRole, require_sia_roles
-from .roles import RECOGNIZED_ROLES, SiaRole, user_has_any_role
+from .roles import (
+    FICHAS_MANAGEMENT_ROLES,
+    FULL_ADMIN_ROLES,
+    RECOGNIZED_ROLES,
+    user_has_any_role,
+)
 
 from django.db.models import Count
 from django.db import IntegrityError, transaction
@@ -22,8 +27,6 @@ from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
 
 
-ADMIN_ROLES = (SiaRole.SUPORTE, SiaRole.DIRETORIA)
-FICHAS_FLOW_ROLES = (*ADMIN_ROLES, SiaRole.FICHAS)
 SUMMARY_PROFILE_FIELDS = (
     'id',
     'nome',
@@ -46,7 +49,7 @@ class AlpinistaViewSet(viewsets.ModelViewSet):
     serializer_class = AlpinistaCompletoSerializer
     permission_classes = [HasAnySiaRole]
     read_roles = RECOGNIZED_ROLES
-    write_roles = FICHAS_FLOW_ROLES
+    write_roles = FICHAS_MANAGEMENT_ROLES
 
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ['status']
@@ -55,7 +58,10 @@ class AlpinistaViewSet(viewsets.ModelViewSet):
 
     def has_full_profile_access(self):
         user = self.request.user
-        return user.is_superuser or user_has_any_role(user, *FICHAS_FLOW_ROLES)
+        return user.is_superuser or user_has_any_role(
+            user,
+            *FICHAS_MANAGEMENT_ROLES,
+        )
 
     def get_serializer_class(self):
         if self.has_full_profile_access():
@@ -99,7 +105,7 @@ class AlpinistaViewSet(viewsets.ModelViewSet):
 class EncontroViewSet(viewsets.ModelViewSet):
     queryset = Encontro.objects.all().order_by('-data_referencia') 
     serializer_class = EncontroSerializer
-    permission_classes = [require_sia_roles(*FICHAS_FLOW_ROLES)]
+    permission_classes = [require_sia_roles(*FICHAS_MANAGEMENT_ROLES)]
 
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ['encontro']
@@ -218,7 +224,7 @@ class EncontroViewSet(viewsets.ModelViewSet):
 class EventoViewSet(viewsets.ModelViewSet):
     queryset = Evento.objects.all().order_by('data_evento', 'id')
     serializer_class = EventoSerializer 
-    permission_classes = [require_sia_roles(*ADMIN_ROLES)]
+    permission_classes = [require_sia_roles(*FULL_ADMIN_ROLES)]
 
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     search_fields = [ 'nome', 'local']
@@ -255,13 +261,13 @@ class EventoViewSet(viewsets.ModelViewSet):
 class FuncaoEncontroViewSet(viewsets.ModelViewSet):
     queryset = FuncaoEncontro.objects.all() 
     serializer_class = FuncaoEncontroSerializer 
-    permission_classes = [require_sia_roles(*FICHAS_FLOW_ROLES)]
+    permission_classes = [require_sia_roles(*FICHAS_MANAGEMENT_ROLES)]
     pagination_class = None
 
 class ParticipacaoEncontroViewSet(viewsets.ModelViewSet):
     queryset = ParticipacaoEncontro.objects.select_related('alpinista', 'encontro', 'funcao').all()
     serializer_class = ParticipacaoEncontroSerializer
-    permission_classes = [require_sia_roles(*FICHAS_FLOW_ROLES)]
+    permission_classes = [require_sia_roles(*FICHAS_MANAGEMENT_ROLES)]
 
     pagination_class = None
 
@@ -271,14 +277,14 @@ class ParticipacaoEncontroViewSet(viewsets.ModelViewSet):
 class ParticipacaoEventoViewSet(viewsets.ModelViewSet):
     queryset = ParticipacaoEvento.objects.all() 
     serializer_class = ParticipacaoEventoSerializer
-    permission_classes = [require_sia_roles(*ADMIN_ROLES)]
+    permission_classes = [require_sia_roles(*FULL_ADMIN_ROLES)]
 
     filter_backends = [DjangoFilterBackend]
     filterset_fields = ['evento', 'alpinista'] 
 
 
 @api_view(['GET'])
-@permission_classes([require_sia_roles(*FICHAS_FLOW_ROLES)])
+@permission_classes([require_sia_roles(*FICHAS_MANAGEMENT_ROLES)])
 def dashboard_stats(request):
     usuario = request.user
 
@@ -320,7 +326,7 @@ def dashboard_stats(request):
 class LogSistemaViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = LogSistema.objects.all()
     serializer_class = LogSistemaSerializer
-    permission_classes = [require_sia_roles(*ADMIN_ROLES)]
+    permission_classes = [require_sia_roles(*FULL_ADMIN_ROLES)]
 
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_fields = ['acao', 'modulo', 'usuario']

@@ -16,6 +16,12 @@ class SiaRole(str, Enum):
 
 RECOGNIZED_ROLES = tuple(role.value for role in SiaRole)
 
+# Papéis com administração ampla dos recursos atuais do SIA.
+FULL_ADMIN_ROLES = (SiaRole.SUPORTE, SiaRole.DIRETORIA)
+
+# Administração de pessoas e da operação dos encontros.
+FICHAS_MANAGEMENT_ROLES = (*FULL_ADMIN_ROLES, SiaRole.FICHAS)
+
 
 def role_name(role):
     return role.value if isinstance(role, SiaRole) else str(role)
