@@ -17,6 +17,7 @@ from .serializers import (
     )
 from .permissions import HasAnySiaRole, require_sia_roles
 from .roles import (
+    EVENT_MANAGEMENT_ROLES,
     FICHAS_MANAGEMENT_ROLES,
     FORMATION_HISTORY_ROLES,
     FULL_ADMIN_ROLES,
@@ -323,7 +324,7 @@ class EncontroViewSet(viewsets.ModelViewSet):
 class EventoViewSet(viewsets.ModelViewSet):
     queryset = Evento.objects.all().order_by('data_evento', 'id')
     serializer_class = EventoSerializer 
-    permission_classes = [require_sia_roles(*FULL_ADMIN_ROLES)]
+    permission_classes = [require_sia_roles(*EVENT_MANAGEMENT_ROLES)]
 
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     search_fields = [ 'nome', 'local']
@@ -374,9 +375,13 @@ class ParticipacaoEncontroViewSet(viewsets.ModelViewSet):
     filterset_fields = ['encontro', 'alpinista', 'funcao']  # Permite filtrar por encontro, alpinista e função
 
 class ParticipacaoEventoViewSet(viewsets.ModelViewSet):
-    queryset = ParticipacaoEvento.objects.all() 
+    queryset = (
+        ParticipacaoEvento.objects
+        .select_related('alpinista', 'evento')
+        .order_by('id')
+    )
     serializer_class = ParticipacaoEventoSerializer
-    permission_classes = [require_sia_roles(*FULL_ADMIN_ROLES)]
+    permission_classes = [require_sia_roles(*EVENT_MANAGEMENT_ROLES)]
 
     filter_backends = [DjangoFilterBackend]
     filterset_fields = ['evento', 'alpinista'] 

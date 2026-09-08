@@ -28,6 +28,9 @@ MUSIC_MANAGEMENT_ROLES = (*FICHAS_MANAGEMENT_ROLES, SiaRole.MME)
 # Consulta do histórico de palestras, sem conceder escrita à Formação.
 FORMATION_HISTORY_ROLES = (*FICHAS_MANAGEMENT_ROLES, SiaRole.FORMACAO)
 
+# Administração do domínio existente de Eventos e suas participações.
+EVENT_MANAGEMENT_ROLES = (*FULL_ADMIN_ROLES, SiaRole.EVENTOS)
+
 
 def role_name(role):
     return role.value if isinstance(role, SiaRole) else str(role)

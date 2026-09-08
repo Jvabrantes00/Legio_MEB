@@ -422,7 +422,6 @@ class AdministrativeRoleMatrixTests(SiaAuthorizationTestCase):
         SiaRole.SECRETARIA,
         SiaRole.ACAO_SOCIAL,
         SiaRole.LITURGIA,
-        SiaRole.EVENTOS,
         SiaRole.COMUNICACAO,
     )
 
@@ -1143,3 +1142,241 @@ class FormacaoPalestraAuthorizationTests(SiaAuthorizationTestCase):
         self.assertEqual(ids, [palestrante.pk])
         self.assertNotIn(nao_palestrante.pk, ids)
         self.assertFalse(hasattr(Alpinista, 'eh_palestrante'))
+
+
+class EventosAuthorizationTests(SiaAuthorizationTestCase):
+    summary_profile_fields = AuthorizationFoundationTests.summary_profile_fields
+
+    def test_eventos_possui_crud_completo_de_eventos(self):
+        self.authenticate(self.make_user('eventos-crud', SiaRole.EVENTOS))
+        base_url = '/api/eventos/'
+
+        self.assertEqual(self.client.get(base_url).status_code, status.HTTP_200_OK)
+        create_response = self.client.post(
+            base_url,
+            {
+                'nome': 'Evento da pasta Eventos',
+                'data_evento': '2033-04-10',
+                'local': 'Local inicial',
+            },
+            format='json',
+        )
+        self.assertEqual(create_response.status_code, status.HTTP_201_CREATED)
+        detail_url = f"{base_url}{create_response.json()['id']}/"
+
+        self.assertEqual(self.client.get(detail_url).status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            self.client.put(
+                detail_url,
+                {
+                    'nome': 'Evento substituído',
+                    'data_evento': '2033-04-11',
+                    'local': 'Local substituído',
+                },
+                format='json',
+            ).status_code,
+            status.HTTP_200_OK,
+        )
+        self.assertEqual(
+            self.client.patch(
+                detail_url,
+                {'local': 'Local atualizado'},
+                format='json',
+            ).status_code,
+            status.HTTP_200_OK,
+        )
+        self.assertEqual(
+            self.client.delete(detail_url).status_code,
+            status.HTTP_204_NO_CONTENT,
+        )
+
+    def test_eventos_possui_crud_completo_de_participacoes(self):
+        alpinista = make_alpinista()
+        outro_alpinista = make_alpinista()
+        evento = make_evento()
+        outro_evento = make_evento()
+        self.authenticate(self.make_user('eventos-participacoes', SiaRole.EVENTOS))
+        base_url = '/api/participacoes-eventos/'
+
+        self.assertEqual(self.client.get(base_url).status_code, status.HTTP_200_OK)
+        create_response = self.client.post(
+            base_url,
+            {'alpinista': alpinista.pk, 'evento': evento.pk},
+            format='json',
+        )
+        self.assertEqual(create_response.status_code, status.HTTP_201_CREATED)
+        detail_url = f"{base_url}{create_response.json()['id']}/"
+
+        self.assertEqual(self.client.get(detail_url).status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            self.client.put(
+                detail_url,
+                {'alpinista': outro_alpinista.pk, 'evento': outro_evento.pk},
+                format='json',
+            ).status_code,
+            status.HTTP_200_OK,
+        )
+        self.assertEqual(
+            self.client.patch(
+                detail_url,
+                {'evento': evento.pk},
+                format='json',
+            ).status_code,
+            status.HTTP_200_OK,
+        )
+        self.assertEqual(
+            self.client.delete(detail_url).status_code,
+            status.HTTP_204_NO_CONTENT,
+        )
+
+    def test_eventos_recebe_perfil_resumido_e_nao_escreve_alpinista(self):
+        alpinista = make_alpinista(
+            cpf='52998224725',
+            endereco='Endereço privado',
+            restricaoSaude='Saúde privada',
+            is_neurodivergente=True,
+        )
+        self.authenticate(self.make_user('eventos-alpinista', SiaRole.EVENTOS))
+        detail_url = f'/api/alpinistas/{alpinista.pk}/'
+
+        list_response = self.client.get('/api/alpinistas/')
+        detail_response = self.client.get(detail_url)
+
+        self.assertEqual(list_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(detail_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(set(detail_response.json()), self.summary_profile_fields)
+        self.assertEqual(
+            self.client.patch(
+                detail_url,
+                {'nome': 'Alteração indevida'},
+                format='json',
+            ).status_code,
+            status.HTTP_403_FORBIDDEN,
+        )
+        self.assertEqual(
+            self.client.post('/api/alpinistas/', {}, format='json').status_code,
+            status.HTTP_403_FORBIDDEN,
+        )
+        self.assertEqual(
+            self.client.delete(detail_url).status_code,
+            status.HTTP_403_FORBIDDEN,
+        )
+
+    def test_eventos_permanece_isolado_dos_outros_dominios(self):
+        alpinista = make_alpinista()
+        encontro = make_encontro()
+        self.authenticate(self.make_user('eventos-isolado', SiaRole.EVENTOS))
+        requests = (
+            self.client.get('/api/encontros/'),
+            self.client.get('/api/funcoes/'),
+            self.client.get('/api/participacoes-encontros/'),
+            self.client.get('/api/dashboard-stats/'),
+            self.client.get('/api/logs/'),
+            self.client.post(
+                f'/api/encontros/{encontro.pk}/efetivar-encontristas/',
+                {'alpinistas_ids': [alpinista.pk]},
+                format='json',
+            ),
+            self.client.post(
+                f'/api/encontros/{encontro.pk}/remover-encontristas/',
+                {'alpinistas_ids': [alpinista.pk]},
+                format='json',
+            ),
+            self.client.patch(
+                f'/api/alpinistas/{alpinista.pk}/musica/',
+                {'canta': True},
+                format='json',
+            ),
+            self.client.get(
+                f'/api/alpinistas/{alpinista.pk}/historico-violeiro/'
+            ),
+            self.client.get(
+                f'/api/alpinistas/{alpinista.pk}/historico-palestras/'
+            ),
+        )
+
+        for response in requests:
+            self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_outros_papeis_continuam_bloqueados_no_modulo_eventos(self):
+        roles = (
+            SiaRole.FICHAS,
+            SiaRole.MME,
+            SiaRole.FORMACAO,
+            SiaRole.SECRETARIA,
+            SiaRole.ACAO_SOCIAL,
+            SiaRole.LITURGIA,
+            SiaRole.COMUNICACAO,
+        )
+        for index, role in enumerate(roles):
+            with self.subTest(role=role.value):
+                self.authenticate(self.make_user(f'evento-negado-{index}', role))
+                self.assertEqual(
+                    self.client.get('/api/eventos/').status_code,
+                    status.HTTP_403_FORBIDDEN,
+                )
+                self.assertEqual(
+                    self.client.get('/api/participacoes-eventos/').status_code,
+                    status.HTTP_403_FORBIDDEN,
+                )
+
+    def test_modulo_eventos_exige_autenticacao_e_papel(self):
+        urls = ('/api/eventos/', '/api/participacoes-eventos/')
+        for url in urls:
+            self.assertEqual(
+                self.client.get(url).status_code,
+                status.HTTP_401_UNAUTHORIZED,
+            )
+
+        self.authenticate(self.make_user('eventos-sem-papel'))
+        for url in urls:
+            self.assertEqual(
+                self.client.get(url).status_code,
+                status.HTTP_403_FORBIDDEN,
+            )
+
+    def test_participacao_evento_expoe_somente_dados_operacionais(self):
+        alpinista = make_alpinista(
+            cpf='52998224725',
+            endereco='Endereço privado',
+            restricaoSaude='Saúde privada',
+            medicacao='Medicação privada',
+            is_neurodivergente=True,
+        )
+        evento = make_evento()
+        participacao = ParticipacaoEvento.objects.create(
+            alpinista=alpinista,
+            evento=evento,
+        )
+        self.authenticate(self.make_user('eventos-dados-minimos', SiaRole.EVENTOS))
+
+        response = self.client.get(
+            f'/api/participacoes-eventos/{participacao.pk}/'
+        )
+        payload = response.json()
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            set(payload),
+            {'id', 'alpinista', 'alpinista_nome', 'evento', 'evento_nome'},
+        )
+        self.assertEqual(payload['alpinista_nome'], alpinista.nome)
+        self.assertNotIn(alpinista.cpf, str(payload))
+        self.assertNotIn('privad', str(payload).lower())
+
+    def test_participacoes_evento_possuem_ordering_deterministico_por_id(self):
+        evento = make_evento()
+        participacoes = [
+            ParticipacaoEvento.objects.create(
+                alpinista=make_alpinista(),
+                evento=evento,
+            )
+            for _ in range(3)
+        ]
+        self.authenticate(self.make_user('eventos-ordering', SiaRole.EVENTOS))
+
+        response = self.client.get('/api/participacoes-eventos/')
+        ids = [item['id'] for item in response.json()['results']]
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(ids, [participacao.pk for participacao in participacoes])
