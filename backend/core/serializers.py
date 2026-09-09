@@ -9,6 +9,7 @@ from .models import (
     ParticipacaoEvento,
 )
 from .validators import normalize_cpf, validate_image_upload_size
+from .roles import recognized_user_roles
 
 
 def calculate_age(birth_date):
@@ -19,6 +20,16 @@ def calculate_age(birth_date):
     return today.year - birth_date.year - (
         (today.month, today.day) < (birth_date.month, birth_date.day)
     )
+
+
+class CurrentUserSerializer(serializers.Serializer):
+    id = serializers.IntegerField(read_only=True)
+    username = serializers.CharField(read_only=True)
+    roles = serializers.SerializerMethodField()
+    superuser = serializers.BooleanField(source='is_superuser', read_only=True)
+
+    def get_roles(self, user):
+        return list(recognized_user_roles(user))
 
 
 class AlpinistaProtectedPhotoMixin:

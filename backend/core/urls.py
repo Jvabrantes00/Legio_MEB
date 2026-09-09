@@ -7,6 +7,7 @@ from .views import (
     ParticipacaoEncontroViewSet, ParticipacaoEventoViewSet, LogSistemaViewSet,
 )
 from .views import dashboard_stats
+from .views import current_user
 from .permissions import IsSiaSuperuser
 
 
@@ -36,6 +37,7 @@ router.register(r'entregas-materiais', EntregaMaterialViewSet)
 urlpatterns = [
     path('', include(router.urls)),
     path('dashboard-stats/', dashboard_stats, name='dashboard-stats'),
+    path('auth/me/', current_user, name='current-user'),
     
     # --- ROTAS DE AUTENTICAÇÃO ---
     # É aqui que o Next.js vai bater para fazer o login

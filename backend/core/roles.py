@@ -60,3 +60,16 @@ def user_has_any_role(user, *roles):
         return False
     names = {role_name(role) for role in roles}
     return user.groups.filter(name__in=names).exists()
+
+
+def recognized_user_roles(user):
+    """Return the user's recognized SIA roles in the canonical business order."""
+    if not getattr(user, 'is_authenticated', False):
+        return ()
+    assigned_names = set(
+        user.groups.filter(name__in=RECOGNIZED_ROLES).values_list(
+            'name',
+            flat=True,
+        )
+    )
+    return tuple(name for name in RECOGNIZED_ROLES if name in assigned_names)

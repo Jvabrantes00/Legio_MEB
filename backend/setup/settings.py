@@ -53,6 +53,10 @@ def required_env(name):
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = required_env('DJANGO_SECRET_KEY')
 
+# Use uma chave exclusiva para assinar JWTs. Separá-la da SECRET_KEY permite
+# rotacionar tokens sem afetar sessões e outros recursos criptográficos do Django.
+JWT_SIGNING_KEY = required_env('JWT_SIGNING_KEY')
+
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = env_bool('DJANGO_DEBUG', default=False)
 
@@ -201,9 +205,20 @@ REST_FRAMEWORK = {
 }
 
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(days=1),
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=15),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
+    'ROTATE_REFRESH_TOKENS': False,
+    'BLACKLIST_AFTER_ROTATION': False,
+    'UPDATE_LAST_LOGIN': False,
+    'ALGORITHM': 'HS256',
+    'SIGNING_KEY': JWT_SIGNING_KEY,
     'AUTH_HEADER_TYPES': ('Bearer',),
+    'USER_ID_FIELD': 'id',
+    'USER_ID_CLAIM': 'user_id',
+    'TOKEN_TYPE_CLAIM': 'token_type',
+    'AUTH_TOKEN_CLASSES': (
+        'rest_framework_simplejwt.tokens.AccessToken',
+    ),
 }
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'

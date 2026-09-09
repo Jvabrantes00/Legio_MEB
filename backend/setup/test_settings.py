@@ -3,6 +3,7 @@ import os
 
 # Valores exclusivos da suíte. Não são credenciais de desenvolvimento ou produção.
 os.environ.setdefault('DJANGO_SECRET_KEY', 'test-only-key-not-for-production')
+os.environ.setdefault('JWT_SIGNING_KEY', 'test-only-jwt-key-not-for-production')
 os.environ.setdefault('DJANGO_ALLOWED_HOSTS', 'testserver,localhost')
 os.environ.setdefault('POSTGRES_DB', 'unused_in_tests')
 os.environ.setdefault('POSTGRES_USER', 'unused_in_tests')

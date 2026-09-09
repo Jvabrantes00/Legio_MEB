@@ -5,6 +5,7 @@ from django.http import FileResponse, Http404
 from rest_framework import filters, mixins, status, viewsets
 from rest_framework.decorators import api_view, permission_classes, action
 from rest_framework.exceptions import ValidationError
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from django.shortcuts import get_object_or_404
@@ -15,7 +16,7 @@ from .models import (
     LogSistema, Material,
 )
 from .serializers import (
-    AlpinistaCompletoSerializer, AlpinistaFotoSerializer,
+    AlpinistaCompletoSerializer, AlpinistaFotoSerializer, CurrentUserSerializer,
     AlpinistaResumoSerializer,
     AlpinistaMusicaCommandSerializer, HistoricoPalestraSerializer,
     HistoricoVioleiroSerializer,
@@ -79,6 +80,13 @@ def protected_image_response(image_field, filename):
         filename=filename,
         content_type=content_type,
     )
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def current_user(request):
+    """Return the minimal authenticated identity required by the future BFF."""
+    return Response(CurrentUserSerializer(request.user).data)
 
 
 class AuditedCrudViewSetMixin:
