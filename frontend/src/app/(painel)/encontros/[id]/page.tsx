@@ -5,6 +5,7 @@ import Link from "next/link";
 import toast from "react-hot-toast";
 import { ArrowLeft, Edit, Users, Briefcase } from "lucide-react";
 import { useParams } from "next/navigation";
+import { siaFetch } from "../../../../lib/sia-api";
 
 export default function DetalhesEncontro() {
     const params = useParams();
@@ -24,10 +25,7 @@ export default function DetalhesEncontro() {
 
     async function buscarPendentes() {
         try {
-            const token = document.cookie.replace(/(?:(?:^|.*;\s*)sia_token\s*\=\s*([^;]*).*$)|^.*$/, "$1");
-            const resposta = await fetch(`https://wpc8m7lx-8000.brs.devtunnels.ms/api/alpinistas/?status=pendente`, {
-                headers: { "Authorization": `Bearer ${token}` }
-            });
+            const resposta = await siaFetch("/alpinistas/?status=pendente");
             if (resposta.ok) {
                 const dados = await resposta.json();
                 setPendentes(dados.results || []);
@@ -39,11 +37,7 @@ export default function DetalhesEncontro() {
 
     async function buscarConfirmados() {
         try {
-            const token = document.cookie.replace(/(?:(?:^|.*;\s*)sia_token\s*\=\s*([^;]*).*$)|^.*$/, "$1");
-
-            const resposta = await fetch(`https://wpc8m7lx-8000.brs.devtunnels.ms/api/participacoes-encontros/?encontro=${encontroId}`, {
-                headers: { "Authorization": `Bearer ${token}` }
-            });
+            const resposta = await siaFetch(`/participacoes-encontros/?encontro=${encontroId}`);
             if (resposta.ok) {
                 const dados = await resposta.json();    
                 const listaConfirmados = (dados.results || dados)
@@ -76,11 +70,9 @@ export default function DetalhesEncontro() {
         if (selecionados.length === 0) return toast.error("Selecione pelo menos um alpinista.");
         setEfetivando(true);
         try {
-            const token = document.cookie.replace(/(?:(?:^|.*;\s*)sia_token\s*\=\s*([^;]*).*$)|^.*$/, "$1");
-            const resposta = await fetch(`https://wpc8m7lx-8000.brs.devtunnels.ms/api/encontros/${encontroId}/efetivar-encontristas/`, {
+            const resposta = await siaFetch(`/encontros/${encontroId}/efetivar-encontristas/`, {
                 method: "POST",
                 headers: {
-                    "Authorization": `Bearer ${token}`,
                     "Content-Type": "application/json"
                 },
                 body: JSON.stringify ({ alpinistas_ids: selecionados })
@@ -104,13 +96,10 @@ export default function DetalhesEncontro() {
 
     const alternarCoordenador = async (participacaoId: number, statusAtual: boolean) => {
         try {
-            const token = document.cookie.replace(/(?:(?:^|.*;\s*)sia_token\s*\=\s*([^;]*).*$)|^.*$/, "$1");
-            
             // Usamos PATCH porque queremos atualizar apenas um campo (coordenador)
-            const resposta = await fetch(`https://wpc8m7lx-8000.brs.devtunnels.ms/api/participacoes-encontros/${participacaoId}/`, {
+            const resposta = await siaFetch(`/participacoes-encontros/${participacaoId}/`, {
                 method: "PATCH", 
                 headers: { 
-                    "Authorization": `Bearer ${token}`,
                     "Content-Type": "application/json"
                 },
                 body: JSON.stringify({ coordenador: !statusAtual }) // Inverte o status atual
@@ -131,11 +120,9 @@ export default function DetalhesEncontro() {
         if (selecionados.length === 0) return toast.error("Selecione pelo menos um alpinista para remover.");
         setEfetivando(true); 
         try {
-            const token = document.cookie.replace(/(?:(?:^|.*;\s*)sia_token\s*\=\s*([^;]*).*$)|^.*$/, "$1");
-            const resposta = await fetch(`https://wpc8m7lx-8000.brs.devtunnels.ms/api/encontros/${encontroId}/remover-encontristas/`, {
+            const resposta = await siaFetch(`/encontros/${encontroId}/remover-encontristas/`, {
                 method: "POST",
                 headers: {
-                    "Authorization": `Bearer ${token}`,
                     "Content-Type": "application/json"
                 },
                 body: JSON.stringify ({ alpinistas_ids: selecionados })
@@ -175,10 +162,7 @@ export default function DetalhesEncontro() {
 
     async function buscarFuncoes() {
         try {
-            const token = document.cookie.replace(/(?:(?:^|.*;\s*)sia_token\s*\=\s*([^;]*).*$)|^.*$/, "$1");
-            const resposta = await fetch(`https://wpc8m7lx-8000.brs.devtunnels.ms/api/funcoes/`, {
-                headers: { "Authorization": `Bearer ${token}` }
-            });
+            const resposta = await siaFetch("/funcoes/");
             if (resposta.ok) {
                 const dados = await resposta.json();
                 setFuncoes((dados.results || dados).filter((f: any) => f.tipo !== "encontrista"));
@@ -190,10 +174,7 @@ export default function DetalhesEncontro() {
 
     async function buscarEquipeTrabalho() {
         try {
-            const token = document.cookie.replace(/(?:(?:^|.*;\s*)sia_token\s*\=\s*([^;]*).*$)|^.*$/, "$1");
-            const resposta = await fetch(`https://wpc8m7lx-8000.brs.devtunnels.ms/api/participacoes-encontros/?encontro=${encontroId}`, {
-                headers: { "Authorization": `Bearer ${token}` }
-            });
+            const resposta = await siaFetch(`/participacoes-encontros/?encontro=${encontroId}`);
             if (resposta.ok) {
                 const dados = await resposta.json();
                 setEquipeTrabalho((dados.results || dados).filter((p: any) => p.funcao?.tipo !== "encontrista"));
@@ -215,10 +196,7 @@ export default function DetalhesEncontro() {
             if(termoBusca.length >= 2){
                 setBuscando(true);
                 try {
-                    const token = document.cookie.replace(/(?:(?:^|.*;\s*)sia_token\s*\=\s*([^;]*).*$)|^.*$/, "$1");
-                    const resposta = await fetch(`https://wpc8m7lx-8000.brs.devtunnels.ms/api/alpinistas/?search=${termoBusca}&status=ativo`, {
-                        headers: { "Authorization": `Bearer ${token}` }
-                    });
+                    const resposta = await siaFetch(`/alpinistas/?search=${encodeURIComponent(termoBusca)}&status=ativo`);
                     if (resposta.ok) {
                         const dados = await resposta.json();
                         setResultadosBusca(dados.results || []);
@@ -238,17 +216,15 @@ export default function DetalhesEncontro() {
 
     const adicionarNaEquipe = async (alpinistaId: number) => {
         try {
-            const token = document.cookie.replace(/(?:(?:^|.*;\s*)sia_token\s*\=\s*([^;]*).*$)|^.*$/, "$1");
             const payload = {
                 encontro_id: encontroId,
                 alpinista_id: alpinistaId,
                 funcao_id: funcaoAtual.id
             };
 
-            const resposta = await fetch (`https://wpc8m7lx-8000.brs.devtunnels.ms/api/participacoes-encontros/`, {
+            const resposta = await siaFetch("/participacoes-encontros/", {
                 method: "POST",
                 headers: {
-                    "Authorization": `Bearer ${token}`,
                     "Content-Type": "application/json"
                 },
                 body: JSON.stringify(payload)
@@ -270,10 +246,8 @@ export default function DetalhesEncontro() {
     const removerDaEquipe = async (participacaoId: number) => {
         if(!window.confirm("Remover este alpinista da equipe?")) return;
         try {
-            const token = document.cookie.replace(/(?:(?:^|.*;\s*)sia_token\s*\=\s*([^;]*).*$)|^.*$/, "$1");
-            const resposta = await fetch(`https://wpc8m7lx-8000.brs.devtunnels.ms/api/participacoes-encontros/${participacaoId}/`, {
+            const resposta = await siaFetch(`/participacoes-encontros/${participacaoId}/`, {
                 method: "DELETE",
-                headers: { "Authorization": `Bearer ${token}` }
             });
 
             if (resposta.ok) {
@@ -290,11 +264,8 @@ export default function DetalhesEncontro() {
     useEffect(() => {
         async function carregarDetalhes() {
             try {
-                const token = document.cookie.replace(/(?:(?:^|.*;\s*)sia_token\s*\=\s*([^;]*).*$)|^.*$/, "$1");
-
-                const resposta = await fetch (`https://wpc8m7lx-8000.brs.devtunnels.ms/api/encontros/${encontroId}/`, {
+                const resposta = await siaFetch(`/encontros/${encontroId}/`, {
                     method: "GET",
-                    headers: { "Authorization": `Bearer ${token}` }
                 });
                 if (resposta.ok) {
                     const dados = await resposta.json();

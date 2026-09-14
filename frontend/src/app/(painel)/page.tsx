@@ -6,6 +6,7 @@
 import { useState, useEffect } from "react";
 import { Users, CalendarDays, Activity, HeartPulse, ArrowRight, Plus } from "lucide-react";
 import Link from "next/link"; 
+import { siaFetch } from "../../lib/sia-api";
 
 // ============================================================================
 // INTERFACE (CONTRATO DE DADOS)
@@ -29,12 +30,20 @@ interface Alpinista {
     foto?: string;
 }
 
+interface DashboardData {
+    usuarioLogado: string;
+    totalAlpinistas: number;
+    proximosEncontros: Array<{ nome: string; data: string }>;
+    visaoGeral?: { ativos: number; pendentes: number; inativos: number };
+}
+
 export default function Dashboard() {
     
     // ============================================================================
     // ESTADOS DO DASHBOARD
     // ============================================================================
     const [alpinistas, setAlpinistas] = useState<Alpinista[]>([]);
+    const [dashboard, setDashboard] = useState<DashboardData | null>(null);
     const [carregando, setCarregando] = useState(true);
     const [erro, setErro] = useState("");
 
@@ -57,33 +66,22 @@ export default function Dashboard() {
     // ============================================================================
     // FUNÇÃO DE BUSCA (API REST)
     // ============================================================================
-    const getCookie = (nome: string) => {
-        const valor = `; ${document.cookie}`;
-        const partes = valor.split(`; ${nome}=`);
-        if (partes.length === 2) return partes.pop()?.split(';').shift();
-        return null;
-    };
-
-    const buscarDadosGerais = async (url: string = "https://wpc8m7lx-8000.brs.devtunnels.ms/api/alpinistas/") => {
+    const buscarDadosGerais = async () => {
         try {
             setCarregando(true);
-            const token = getCookie('sia_token');
-            if (!token) throw new Error("Token de autenticação não encontrado.");
+            const [statsResponse, alpinistasResponse] = await Promise.all([
+                siaFetch('/dashboard-stats/'),
+                siaFetch('/alpinistas/'),
+            ]);
+            if (!statsResponse.ok || !alpinistasResponse.ok) {
+                throw new Error("Erro ao carregar os dados do painel.");
+            }
 
-            const resposta = await fetch(url, {
-                method: "GET",
-                headers: {
-                    "Content-Type": "application/json",
-                    "Authorization": `Bearer ${token}`
-                }
-            });
-
-            if (!resposta.ok) throw new Error("Erro ao carregar os dados do painel.");
-
-            const dados = await resposta.json();
-
+            const stats: DashboardData = await statsResponse.json();
+            const dados = await alpinistasResponse.json();
+            setDashboard(stats);
             setAlpinistas(dados.results || []);
-            setTotalAlpinistas(dados.count || 0);
+            setTotalAlpinistas(stats.totalAlpinistas || 0);
             
 
         } catch (error: any) {
@@ -97,7 +95,8 @@ export default function Dashboard() {
     // LÓGICA DE NEGÓCIO: CÁLCULO DAS MÉTRICAS (AGREGAÇÃO)
     // ============================================================================
     
-    const totalAtivos = alpinistas.filter(a => (a.status || "").toLowerCase() === "ativo").length;
+    const totalAtivos = dashboard?.visaoGeral?.ativos
+        ?? alpinistas.filter(a => (a.status || "").toLowerCase() === "ativo").length;
     const totalComRestricao = alpinistas.filter(a => (a.restricaoSaude || "").trim() !== "").length;
     
     const ultimasInscricoesPendentes = alpinistas
@@ -118,7 +117,7 @@ export default function Dashboard() {
             
             {/* CABEÇALHO DA PÁGINA */}
             <div>
-                <h1 className="text-3xl font-bold text-escalada-texto">Bem-vindo, Usuário!</h1>
+                <h1 className="text-3xl font-bold text-escalada-texto">Bem-vindo, {dashboard?.usuarioLogado || 'Usuário'}!</h1>
                 <p className="text-gray-500 mt-1">Aqui está o panorama atual do Movimento Escalada.</p>
             </div>
 
@@ -165,7 +164,9 @@ export default function Dashboard() {
                     </div>
                     <div>
                         <p className="text-sm font-medium text-gray-500">Próximo Encontro</p>
-                        <h3 className="text-2xl font-bold text-escalada-texto">Em 15 Dias</h3>
+                        <h3 className="text-2xl font-bold text-escalada-texto">
+                            {dashboard?.proximosEncontros?.[0]?.nome || 'Nenhum agendado'}
+                        </h3>
                     </div>
                 </div>
                 

@@ -6,6 +6,7 @@
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { Plus, Search, MoreHorizontal, X, Pencil, Trash2, Filter, ChevronLeft, ChevronRight, Calendar, Briefcase, Camera, Key, Maximize2, Ticket, ArrowUpDown  } from "lucide-react";
+import { siaFetch } from "../../../lib/sia-api";
 
 // ============================================================================
 // INTERFACE (CONTRATO DE DADOS)
@@ -116,36 +117,11 @@ export default function AlpinistasPage() {
     // ============================================================================
     // INTEGRAÇÃO COM A API (DEBOUCE)
     // ============================================================================
-    const getCookie = (nome: string) => {
-        if(typeof document === 'undefined') return null;
-        const valor = `; ${document.cookie}`;
-        const partes = valor.split(`; ${nome}=`);
-        if (partes.length === 2) return partes.pop()?.split(';').shift();
-        return null;
-    };
-
-    const buscarAlpinistas = async (url: string = "https://wpc8m7lx-8000.brs.devtunnels.ms/api/alpinistas/") => {
+    const buscarAlpinistas = async (url: string = "/alpinistas/") => {
         try {
             setCarregando(true);
-            const token = getCookie('sia_token');
-            if (!token) throw new Error("Token de autenticação não encontrado.");
-
-            let urlCorrigida = url;
-            if(url.includes('127.0.0.1') || url.includes( 'localhost')){
-                const urlObj = new URL(url);
-                urlCorrigida = `https://wpc8m7lx-8000.brs.devtunnels.ms${urlObj.pathname}${urlObj.search}`;
-
-            }
-            urlCorrigida = urlCorrigida + ( urlCorrigida.includes('?') ? '&' : '?') + 't=' + new Date().getTime();
-
-            const resposta = await fetch(urlCorrigida, {
-                method: "GET",
-                headers: {
-                    "Content-Type": "application/json",
-                    "Authorization": `Bearer ${token}`
-                },
-                cache: 'no-store'
-            });
+            const urlAtualizada = url + (url.includes('?') ? '&' : '?') + 't=' + new Date().getTime();
+            const resposta = await siaFetch(urlAtualizada);
 
             if (!resposta.ok) throw new Error("Não foi possível carregar a lista de alpinistas.");
 
@@ -165,7 +141,7 @@ export default function AlpinistasPage() {
 
     useEffect(()=> {
         const timer = setTimeout(() => {
-            const baseUrl = "https://wpc8m7lx-8000.brs.devtunnels.ms/api/alpinistas/";
+            const baseUrl = "/alpinistas/";
             const url = busca.trim() !== ""
                 ? `${ baseUrl}?search=${encodeURIComponent(busca)}`
                 : baseUrl;
@@ -176,7 +152,7 @@ export default function AlpinistasPage() {
     }, [busca]);
 
     const irParaPrimeiraPagina = () => {
-        const baseUrl = "https://wpc8m7lx-8000.brs.devtunnels.ms/api/alpinistas/";
+        const baseUrl = "/alpinistas/";
         const url = busca.trim() !==""
             ? `${ baseUrl}?search=${encodeURIComponent(busca)}`
             : baseUrl;
@@ -199,7 +175,6 @@ export default function AlpinistasPage() {
         setSalvando(true);
 
         try {
-            const token = getCookie('sia_token');
             const formDataToSend = new FormData();
 
             Object.entries(formData).forEach(([key, value]) => {
@@ -217,23 +192,20 @@ export default function AlpinistasPage() {
             }
 
             const url = idEdicao 
-                ? `https://wpc8m7lx-8000.brs.devtunnels.ms/api/alpinistas/${idEdicao}/` 
-                : "https://wpc8m7lx-8000.brs.devtunnels.ms/api/alpinistas/";
+                ? `/alpinistas/${idEdicao}/`
+                : "/alpinistas/";
             
             const metodo = idEdicao ? "PUT" : "POST";
 
-            const resposta = await fetch(url, {
+            const resposta = await siaFetch(url, {
                 method: metodo,
-                headers: {
-                    "Authorization": `Bearer ${token}` 
-                },
                 body: formDataToSend
             });
 
             if (!resposta.ok) throw new Error("Erro ao salvar. Verifique os dados e tente novamente.");
 
             setIsModalOpen(false); 
-            buscarAlpinistas("https://wpc8m7lx-8000.brs.devtunnels.ms/api/alpinistas/");    
+            buscarAlpinistas("/alpinistas/");
 
         } catch (error: any) {
             alert(error.message);
@@ -247,12 +219,8 @@ export default function AlpinistasPage() {
         setDeletando(true);
 
         try {
-            const token = getCookie('sia_token');
-            const resposta = await fetch(`https://wpc8m7lx-8000.brs.devtunnels.ms/api/alpinistas/${alpinistaParaDeletar.id}/`, {
-                method: "DELETE",
-                headers: {
-                    "Authorization": `Bearer ${token}` 
-                }
+            const resposta = await siaFetch(`/alpinistas/${alpinistaParaDeletar.id}/`, {
+                method: "DELETE"
             });
 
             if (!resposta.ok) throw new Error("Não foi possível excluir o alpinista.");
@@ -260,7 +228,7 @@ export default function AlpinistasPage() {
             setIsDeleteModalOpen(false);
             setAlpinistaParaDeletar(null);
 
-            const baseUrl = "https://wpc8m7lx-8000.brs.devtunnels.ms/api/alpinistas/";
+            const baseUrl = "/alpinistas/";
             const url = busca.trim() !== ""
                 ? `${ baseUrl}?search=${encodeURIComponent(busca)}`
                 : baseUrl;

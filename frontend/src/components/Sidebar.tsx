@@ -8,6 +8,7 @@ import Link from 'next/link';
 // 1. Importamos o useRouter para podermos navegar o usuário via código
 import { usePathname, useRouter } from 'next/navigation'; 
 import { LayoutDashboard, Users, Calendar, Settings, LogOut } from 'lucide-react';
+import { authMutation } from '../lib/sia-api';
 
 export default function Sidebar() {
     const pathname = usePathname();
@@ -21,18 +22,12 @@ export default function Sidebar() {
         { nome: 'Configurações', rota: '/configuracoes', icone: Settings },
     ];
 
-    // 3. Criamos a função que executa a saída do sistema
-    const handleLogout = () => {
-        // A forma de "deletar" um cookie no JavaScript é reescrevê-lo com uma data de validade no passado.
-        // Aqui dizemos que ele expirou em 1970. O navegador destrói ele na mesma hora.
-        document.cookie = "sia_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
-        document.cookie = "sia_refresh=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
-
-        // Limpamos também o localStorage só por precaução (herança do nosso primeiro teste de login)
-        localStorage.removeItem('sia_token');
-
-        // Redirecionamos o usuário de volta para a tela de login
-        router.push('/login');
+    const handleLogout = async () => {
+        const response = await authMutation('/api/auth/logout');
+        if (response.ok) {
+            router.push('/login');
+            router.refresh();
+        }
     };
 
     return (

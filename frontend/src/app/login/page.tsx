@@ -3,6 +3,26 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Lock, User } from 'lucide-react';
+import { authMutation } from '../../lib/sia-api';
+
+interface SessionData {
+    id: number;
+    username: string;
+    roles: string[];
+    superuser: boolean;
+}
+
+function isSessionData(value: unknown): value is SessionData {
+    if (!value || typeof value !== 'object') return false;
+    const session = value as Record<string, unknown>;
+    return (
+        typeof session.id === 'number' &&
+        typeof session.username === 'string' &&
+        Array.isArray(session.roles) &&
+        session.roles.every((role) => typeof role === 'string') &&
+        typeof session.superuser === 'boolean'
+    );
+}
 
 export default function Login() {
     const [usuario, setUsuario] = useState('');
@@ -24,8 +44,7 @@ export default function Login() {
         }
 
         try {
-            const resposta = await fetch('https://wpc8m7lx-8000.brs.devtunnels.ms/api/token/', {
-                method: 'POST',
+            const resposta = await authMutation('/api/auth/login', {
                 headers: {
                     'Content-Type': 'application/json',
                 },
@@ -41,16 +60,9 @@ export default function Login() {
                 throw new Error(erroData?.detail || 'Usuário ou senha incorretos.');
             }
 
-            const dados = await resposta.json();
-
-            // 3. Verifica o nome do token retornado pelo Django (geralmente access ou access_token)
-            // Salvamos o token em um Cookie que vale para todo o site (path=/)
-            if (dados.access) {
-                document.cookie = `sia_token=${dados.access}; path=/; max-age=86400`; // Expira em 1 dia
-
-                if(dados.refresh){
-                    document.cookie = `sia_refresh=${dados.refresh}; path=/; max-age=604800`; // Expira em 7 dias
-                }
+            const dados: unknown = await resposta.json();
+            if (!isSessionData(dados)) {
+                throw new Error('O servidor retornou uma sessão inválida.');
             }
 
             router.push('/'); 

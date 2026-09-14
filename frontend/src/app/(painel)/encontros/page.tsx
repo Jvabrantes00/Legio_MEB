@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import toast from "react-hot-toast"; 
 import Link from "next/link";
 import { Settings, Trash2 } from "lucide-react";
+import { siaFetch } from "../../../lib/sia-api";
 
 const MAPA_STATUS: Record<string, string> = {
   agendado: "Agendado",
@@ -29,13 +30,8 @@ export default function Encontros() {
 
   async function carregarEncontros() {
     try {
-      const token = document.cookie.replace(/(?:(?:^|.*;\s*)sia_token\s*\=\s*([^;]*).*$)|^.*$/, "$1");
-      const resposta = await fetch("https://wpc8m7lx-8000.brs.devtunnels.ms/api/encontros/", {
+      const resposta = await siaFetch("/encontros/", {
         method: "GET",
-        headers: {
-          "Authorization": `Bearer ${token}`, // Passaporte de entrada
-          "Content-Type": "application/json"  // Idioma da conversa (JSON)
-        }
       });
 
       if (resposta.ok) {
@@ -77,13 +73,9 @@ export default function Encontros() {
     setSalvando(true);
 
     try {
-      const token = document.cookie.replace(/(?:(?:^|.*;\s*)sia_token\s*\=\s*([^;]*).*$)|^.*$/, "$1");
-      const url = `https://wpc8m7lx-8000.brs.devtunnels.ms/api/encontros/`;
-
-      const resposta = await fetch(url, {
+      const resposta = await siaFetch("/encontros/", {
         method: "POST",
         headers: {
-          "Authorization": `Bearer ${token}`,
           "Content-Type": "application/json"
         },
         body: JSON.stringify(formData)
@@ -109,14 +101,8 @@ export default function Encontros() {
     if (!window.confirm("Tem certeza que deseja excluir este encontro definitivamente?")) return;
 
     try {
-      const token = document.cookie.replace(/(?:(?:^|.*;\s*)sia_token\s*\=\s*([^;]*).*$)|^.*$/, "$1");
-      
-      // ⚠️ ATENÇÃO: Substitua o link! Notem a interpolação ${id} na URL.
-      const resposta = await fetch(`https://wpc8m7lx-8000.brs.devtunnels.ms/api/encontros/${id}/`, {
+      const resposta = await siaFetch(`/encontros/${id}/`, {
         method: "DELETE",
-        headers: {
-          "Authorization": `Bearer ${token}`,
-        }
       });
 
       if (resposta.ok) {
