@@ -2,10 +2,12 @@ import { describe, expect, it } from "vitest";
 
 import {
   appendUniqueById,
-  buildAlpinistaFormEntries,
+  buildAlpinistaCreatePayload,
+  buildAlpinistaUpdatePayload,
   buildPaginatedPath,
   paginationControls,
   startPaginatedSearch,
+  type AlpinistaFormValues,
   type PaginatedResponse,
 } from "./integration-contracts";
 
@@ -42,29 +44,100 @@ describe("queries aceitas pela API de Alpinistas", () => {
 });
 
 describe("payload de Alpinista", () => {
-  const values = {
+  const values: AlpinistaFormValues = {
     nome: "Pessoa de teste",
     email: "pessoa@example.test",
     telefone: "61999999999",
+    cpf: "",
+    dataNascimento: "",
+    endereco: "",
+    nomePai: "",
+    telefonePai: "",
+    nomeMae: "",
+    telefoneMae: "",
+    restricaoSaude: "",
+    medicacao: "",
+    conheciaEscalada: "",
+    grupo: "",
     status: "ativo",
     is_neurodivergente: false,
     tipo_neurodivergente: "",
+    batizado: "",
+    primeira_comunhao: "",
+    crismado: "",
   };
 
-  it("omite status no create sem remover os demais campos", () => {
-    const payload = Object.fromEntries(buildAlpinistaFormEntries(values, "create"));
+  it("omite status e CPF vazio no create sem remover os demais campos", () => {
+    const payload = buildAlpinistaCreatePayload(values);
     expect(payload).toEqual({
       nome: "Pessoa de teste",
       email: "pessoa@example.test",
       telefone: "61999999999",
-      is_neurodivergente: "false",
+      is_neurodivergente: false,
     });
     expect(payload.status).toBeUndefined();
   });
 
+  it("não envia e-mail ou telefone vazios na criação", () => {
+    expect(() => buildAlpinistaCreatePayload({ ...values, email: " " })).toThrow(/e-mail/);
+    expect(() => buildAlpinistaCreatePayload({ ...values, telefone: "" })).toThrow(/telefone/);
+  });
+
   it("preserva o status no update existente", () => {
-    const payload = Object.fromEntries(buildAlpinistaFormEntries(values, "update"));
+    const payload = buildAlpinistaUpdatePayload(values);
     expect(payload.status).toBe("ativo");
+  });
+
+  it("envia CPF formatado ao backend sem duplicar sua validação", () => {
+    expect(buildAlpinistaCreatePayload({ ...values, cpf: "123.456.789-09" }).cpf)
+      .toBe("123.456.789-09");
+  });
+
+  it("remove CPF, data e textos opcionais com null explícito no PATCH", () => {
+    const payload = buildAlpinistaUpdatePayload(values);
+    expect(payload.cpf).toBeNull();
+    expect(payload.dataNascimento).toBeNull();
+    expect(payload.endereco).toBeNull();
+    expect(payload.nomePai).toBeNull();
+    expect(payload.restricaoSaude).toBeNull();
+  });
+
+  it("mantém data ISO sem construir Date e salva campos preenchidos", () => {
+    const payload = buildAlpinistaUpdatePayload({
+      ...values,
+      dataNascimento: "2004-05-06",
+      endereco: "Rua de teste",
+    });
+    expect(payload.dataNascimento).toBe("2004-05-06");
+    expect(payload.endereco).toBe("Rua de teste");
+  });
+
+  it("desmarcar neurodivergência limpa o tipo antigo", () => {
+    const payload = buildAlpinistaUpdatePayload({
+      ...values,
+      is_neurodivergente: false,
+      tipo_neurodivergente: "Valor antigo",
+    });
+    expect(payload.is_neurodivergente).toBe(false);
+    expect(payload.tipo_neurodivergente).toBeNull();
+  });
+
+  it("preserva sacramentos false e não confunde não informado com não", () => {
+    const payload = buildAlpinistaUpdatePayload({
+      ...values,
+      batizado: "false",
+      crismado: "",
+    });
+    expect(payload.batizado).toBe(false);
+    expect(payload.crismado).toBeNull();
+  });
+
+  it("não copia campos read-only ou desconhecidos para o payload", () => {
+    const source = { ...values, id: 9, idade_atual: 20, uiOnly: "x" };
+    const payload = buildAlpinistaCreatePayload(source);
+    expect(payload.id).toBeUndefined();
+    expect(payload.idade_atual).toBeUndefined();
+    expect(payload.uiOnly).toBeUndefined();
   });
 });
 

@@ -8,9 +8,13 @@ import { createPortal } from "react-dom";
 import { Plus, Search, MoreHorizontal, X, Pencil, Trash2, Filter, ChevronLeft, ChevronRight, Calendar, Briefcase, Camera, Key, Maximize2, Ticket, ArrowUpDown  } from "lucide-react";
 import { siaFetch } from "../../../lib/sia-api";
 import {
-    buildAlpinistaFormEntries,
+    buildAlpinistaCreatePayload,
+    buildAlpinistaUpdatePayload,
     buildPaginatedPath,
+    type AlpinistaFormValues,
+    type SacramentValue,
 } from "../../../lib/integration-contracts";
+import { readDrfFormError } from "../../../lib/form-api-error";
 
 // ============================================================================
 // INTERFACE (CONTRATO DE DADOS)
@@ -40,24 +44,41 @@ interface Alpinista {
     nome: string;
     email: string;
     telefone: string;
-    dataNascimento: string; 
-    endereco: string;
-    nomePai: string;
-    telefonePai: string;
-    nomeMae: string;
-    telefoneMae: string;
-    restricaoSaude: string;
-    medicacao: string;
-    grupo: string;
+    cpf: string | null;
+    dataNascimento: string | null;
+    endereco: string | null;
+    nomePai: string | null;
+    telefonePai: string | null;
+    nomeMae: string | null;
+    telefoneMae: string | null;
+    restricaoSaude: string | null;
+    medicacao: string | null;
+    conheciaEscalada: string | null;
+    grupo: string | null;
     status: string;
-    foto?: string;
+    foto: string | null;
+    batizado: boolean | null;
+    primeira_comunhao: boolean | null;
+    crismado: boolean | null;
 
-    is_neurodivergente?: boolean;
-    tipo_neurodivergente?: string;
+    is_neurodivergente: boolean;
+    tipo_neurodivergente: string | null;
 
     encontros_realizados?: EncontroRealizado[];
     historico_eventos?: HistoricoEvento[];
     historico_equipes?: HistoricoEquipe[];
+}
+
+const EMPTY_ALPINISTA_FORM: AlpinistaFormValues = {
+    nome: '', email: '', telefone: '', cpf: '', dataNascimento: '',
+    endereco: '', nomePai: '', telefonePai: '', nomeMae: '',
+    telefoneMae: '', restricaoSaude: '', medicacao: '', conheciaEscalada: '',
+    grupo: '', status: 'pendente', is_neurodivergente: false,
+    tipo_neurodivergente: '', batizado: '', primeira_comunhao: '', crismado: '',
+};
+
+function sacramentFromApi(value: boolean | null): SacramentValue {
+    return value === null ? '' : String(value) as SacramentValue;
 }
 
 export default function AlpinistasPage() {
@@ -96,14 +117,7 @@ export default function AlpinistasPage() {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [salvando, setSalvando] = useState(false);
     const [idEdicao, setIdEdicao] = useState<number | null>(null);
-    const [fotoArquivo, setFotoArquivo] = useState<File | null>(null)
-
-    const [formData, setFormData] = useState({
-        nome: '', email: '', telefone: '', dataNascimento: '',
-        endereco: '', nomePai: '', telefonePai: '', nomeMae: '',
-        telefoneMae: '', restricaoSaude: '', medicacao: '',
-        grupo: '', status: 'pendente', is_neurodivergente: false, tipo_neurodivergente: ''
-    });
+    const [formData, setFormData] = useState<AlpinistaFormValues>(EMPTY_ALPINISTA_FORM);
 
     // ============================================================================
     // ESTADOS DA FICHA DETALHADA (READ) E EXCLUSÃO (DELETE)
@@ -173,38 +187,33 @@ export default function AlpinistasPage() {
             [name]: type === 'checkbox' ? checked : value }));
     };
 
-    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        if(e.target.files && e.target.files.length > 0) setFotoArquivo(e.target.files[0]);
-    }
-
     const salvarAlpinista = async (e: React.FormEvent) => {
         e.preventDefault(); 
         setSalvando(true);
 
         try {
-            const formDataToSend = new FormData();
-
-            const mode = idEdicao ? "update" : "create";
-            buildAlpinistaFormEntries(formData, mode).forEach(([key, value]) => {
-                formDataToSend.append(key, value);
-            });
-
-            if (fotoArquivo) {
-                formDataToSend.append( 'foto', fotoArquivo);
-            }
+            const payload = idEdicao
+                ? buildAlpinistaUpdatePayload(formData)
+                : buildAlpinistaCreatePayload(formData);
 
             const url = idEdicao 
                 ? `/alpinistas/${idEdicao}/`
                 : "/alpinistas/";
             
-            const metodo = idEdicao ? "PUT" : "POST";
+            const metodo = idEdicao ? "PATCH" : "POST";
 
             const resposta = await siaFetch(url, {
                 method: metodo,
-                body: formDataToSend
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload),
             });
 
-            if (!resposta.ok) throw new Error("Erro ao salvar. Verifique os dados e tente novamente.");
+            if (!resposta.ok) {
+                throw new Error(await readDrfFormError(
+                    resposta,
+                    "Erro ao salvar. Verifique os dados e tente novamente.",
+                ));
+            }
 
             setIsModalOpen(false); 
             buscarAlpinistas("/alpinistas/");
@@ -254,24 +263,27 @@ export default function AlpinistasPage() {
 
     const abrirModalNovo = () => {
         setIdEdicao(null); 
-        setFormData({
-            nome: '', email: '', telefone: '', dataNascimento: '',
-            endereco: '', nomePai: '', telefonePai: '', nomeMae: '',
-            telefoneMae: '', restricaoSaude: '', medicacao: '',
-            grupo: '', status: 'pendente', is_neurodivergente: false, tipo_neurodivergente: ''
-        });
+        setFormData({ ...EMPTY_ALPINISTA_FORM });
         setIsModalOpen(true);
     };
 
     const abrirModalEdicao = (alpinista: Alpinista) => {
         setIdEdicao(alpinista.id); 
         setFormData({
-            nome: alpinista.nome || '', email: alpinista.email || '', telefone: alpinista.telefone || '', 
-            dataNascimento: alpinista.dataNascimento || '', endereco: alpinista.endereco || '', 
-            nomePai: alpinista.nomePai || '', telefonePai: alpinista.telefonePai || '', 
-            nomeMae: alpinista.nomeMae || '', telefoneMae: alpinista.telefoneMae || '', 
-            restricaoSaude: alpinista.restricaoSaude || '', medicacao: alpinista.medicacao || '',
-            grupo: alpinista.grupo || '', status: alpinista.status || 'ativo', is_neurodivergente: alpinista.is_neurodivergente || false, tipo_neurodivergente: alpinista.tipo_neurodivergente || ''
+            nome: alpinista.nome, email: alpinista.email, telefone: alpinista.telefone,
+            cpf: alpinista.cpf ?? '', dataNascimento: alpinista.dataNascimento ?? '',
+            endereco: alpinista.endereco ?? '', nomePai: alpinista.nomePai ?? '',
+            telefonePai: alpinista.telefonePai ?? '', nomeMae: alpinista.nomeMae ?? '',
+            telefoneMae: alpinista.telefoneMae ?? '',
+            restricaoSaude: alpinista.restricaoSaude ?? '',
+            medicacao: alpinista.medicacao ?? '',
+            conheciaEscalada: alpinista.conheciaEscalada ?? '',
+            grupo: alpinista.grupo ?? '', status: alpinista.status,
+            is_neurodivergente: alpinista.is_neurodivergente,
+            tipo_neurodivergente: alpinista.tipo_neurodivergente ?? '',
+            batizado: sacramentFromApi(alpinista.batizado),
+            primeira_comunhao: sacramentFromApi(alpinista.primeira_comunhao),
+            crismado: sacramentFromApi(alpinista.crismado),
         });
         
         setIsFichaOpen(false); 
@@ -540,8 +552,9 @@ export default function AlpinistasPage() {
                                     <h3 className="text-lg font-semibold text-gray-800 border-b pb-2 mb-4">Dados Pessoais</h3>
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                         <div className="md:col-span-2"><label className="block text-sm font-medium text-gray-700 mb-1">Nome Completo *</label><input type="text" name="nome" required value={formData.nome} onChange={handleChange} className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-escalada-azul/20 focus:border-escalada-azul" /></div>
-                                        <div><label className="block text-sm font-medium text-gray-700 mb-1">E-mail</label><input type="email" name="email" value={formData.email} onChange={handleChange} className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-escalada-azul/20 focus:border-escalada-azul" /></div>
-                                        <div><label className="block text-sm font-medium text-gray-700 mb-1">Telefone</label><input type="tel" name="telefone" value={formData.telefone} onChange={handleChange} className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-escalada-azul/20 focus:border-escalada-azul" /></div>
+                                        <div><label className="block text-sm font-medium text-gray-700 mb-1">E-mail *</label><input type="email" name="email" required value={formData.email} onChange={handleChange} className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-escalada-azul/20 focus:border-escalada-azul" /></div>
+                                        <div><label className="block text-sm font-medium text-gray-700 mb-1">Telefone / WhatsApp *</label><input type="tel" name="telefone" required value={formData.telefone} onChange={handleChange} className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-escalada-azul/20 focus:border-escalada-azul" /></div>
+                                        <div><label className="block text-sm font-medium text-gray-700 mb-1">CPF (opcional)</label><input type="text" name="cpf" inputMode="numeric" value={formData.cpf} onChange={handleChange} placeholder="Com ou sem pontuação" className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-escalada-azul/20 focus:border-escalada-azul" /></div>
                                         <div><label className="block text-sm font-medium text-gray-700 mb-1">Data de Nascimento</label><input type="date" name="dataNascimento" value={formData.dataNascimento} onChange={handleChange} className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-escalada-azul/20 focus:border-escalada-azul" /></div>
                                         <div className="md:col-span-2"><label className="block text-sm font-medium text-gray-700 mb-1">Endereço</label><input type="text" name="endereco" value={formData.endereco} onChange={handleChange} className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-escalada-azul/20 focus:border-escalada-azul" /></div>
                                     </div>
@@ -561,14 +574,44 @@ export default function AlpinistasPage() {
                                         <div className="md:col-span-2"><label className="block text-sm font-medium text-gray-700 mb-1">Restrições de Saúde</label><input type="text" name="restricaoSaude" value={formData.restricaoSaude} onChange={handleChange} className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-escalada-azul/20 focus:border-escalada-azul" placeholder="Alergias, condições, etc." /></div>
                                         <div className="md:col-span-2"><label className="block text-sm font-medium text-gray-700 mb-1">Medicações em Uso</label><input type="text" name="medicacao" value={formData.medicacao} onChange={handleChange} className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-escalada-azul/20 focus:border-escalada-azul" /></div>
                                         <div><label className="block text-sm font-medium text-gray-700 mb-1">Grupo</label><input type="text" name="grupo" value={formData.grupo} onChange={handleChange} className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-escalada-azul/20 focus:border-escalada-azul" /></div>
-                                        <div>
+                                        <div><label className="block text-sm font-medium text-gray-700 mb-1">Como conheceu a Escalada</label><input type="text" name="conheciaEscalada" value={formData.conheciaEscalada} onChange={handleChange} className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-escalada-azul/20 focus:border-escalada-azul" /></div>
+                                        <div className="md:col-span-2">
+                                            <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+                                                <input type="checkbox" name="is_neurodivergente" checked={formData.is_neurodivergente} onChange={handleChange} />
+                                                É neurodivergente?
+                                            </label>
+                                        </div>
+                                        {formData.is_neurodivergente && (
+                                            <div className="md:col-span-2"><label className="block text-sm font-medium text-gray-700 mb-1">Tipo de neurodivergência</label><input type="text" name="tipo_neurodivergente" value={formData.tipo_neurodivergente} onChange={handleChange} className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-escalada-azul/20 focus:border-escalada-azul" /></div>
+                                        )}
+                                        {idEdicao && <div>
                                             <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
                                             <select name="status" value={formData.status} onChange={handleChange} className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-escalada-azul/20 focus:border-escalada-azul bg-white">
                                                 <option value="ativo">Ativo</option>
                                                 <option value="inativo">Inativo</option>
                                                 <option value="pendente">Pendente</option>
+                                                <option value="confirmado">Confirmado</option>
                                             </select>
-                                        </div>
+                                        </div>}
+                                    </div>
+                                </div>
+                                <div>
+                                    <h3 className="text-lg font-semibold text-gray-800 border-b pb-2 mb-4">Situação sacramental</h3>
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                        {([
+                                            ['batizado', 'Batizado'],
+                                            ['primeira_comunhao', 'Primeira comunhão'],
+                                            ['crismado', 'Crismado'],
+                                        ] as const).map(([field, label]) => (
+                                            <div key={field}>
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
+                                                <select name={field} value={formData[field]} onChange={handleChange} className="w-full px-4 py-2 border border-gray-200 rounded-lg bg-white">
+                                                    <option value="">Não informado</option>
+                                                    <option value="true">Sim</option>
+                                                    <option value="false">Não</option>
+                                                </select>
+                                            </div>
+                                        ))}
                                     </div>
                                 </div>
                             </form>

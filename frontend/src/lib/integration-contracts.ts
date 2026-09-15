@@ -46,22 +46,83 @@ export function startPaginatedSearch(search: string) {
   return { search, page: 1 };
 }
 
-export type AlpinistaFormValues = Record<string, string | boolean> & {
-  is_neurodivergente: boolean;
-};
+export type SacramentValue = "" | "true" | "false";
 
-export function buildAlpinistaFormEntries(
+export interface AlpinistaFormValues {
+  nome: string;
+  email: string;
+  telefone: string;
+  cpf: string;
+  dataNascimento: string;
+  endereco: string;
+  nomePai: string;
+  telefonePai: string;
+  nomeMae: string;
+  telefoneMae: string;
+  restricaoSaude: string;
+  medicacao: string;
+  conheciaEscalada: string;
+  grupo: string;
+  status: string;
+  is_neurodivergente: boolean;
+  tipo_neurodivergente: string;
+  batizado: SacramentValue;
+  primeira_comunhao: SacramentValue;
+  crismado: SacramentValue;
+}
+
+type AlpinistaPayload = Record<string, string | boolean | null>;
+
+const NULLABLE_TEXT_FIELDS = [
+  "cpf", "endereco", "nomePai", "telefonePai", "nomeMae", "telefoneMae",
+  "restricaoSaude", "medicacao", "conheciaEscalada", "grupo",
+] as const;
+const SACRAMENT_FIELDS = ["batizado", "primeira_comunhao", "crismado"] as const;
+
+function buildAlpinistaPayload(
   values: AlpinistaFormValues,
   mode: "create" | "update",
-): Array<[string, string]> {
-  const entries: Array<[string, string]> = [];
-
-  for (const [key, value] of Object.entries(values)) {
-    if (mode === "create" && key === "status") continue;
-    if (key === "tipo_neurodivergente" && !values.is_neurodivergente) continue;
-    if (value === "" || value === null) continue;
-    entries.push([key, String(value)]);
+): AlpinistaPayload {
+  if (!values.nome.trim() || !values.email.trim() || !values.telefone.trim()) {
+    throw new Error("Nome, e-mail e telefone são obrigatórios.");
   }
 
-  return entries;
+  const payload: AlpinistaPayload = {
+    nome: values.nome.trim(),
+    email: values.email.trim(),
+    telefone: values.telefone.trim(),
+    is_neurodivergente: values.is_neurodivergente,
+  };
+
+  for (const field of NULLABLE_TEXT_FIELDS) {
+    const value = values[field].trim();
+    if (value) payload[field] = value;
+    else if (mode === "update") payload[field] = null;
+  }
+
+  if (values.dataNascimento) payload.dataNascimento = values.dataNascimento;
+  else if (mode === "update") payload.dataNascimento = null;
+
+  if (values.is_neurodivergente && values.tipo_neurodivergente.trim()) {
+    payload.tipo_neurodivergente = values.tipo_neurodivergente.trim();
+  } else if (mode === "update") {
+    payload.tipo_neurodivergente = null;
+  }
+
+  for (const field of SACRAMENT_FIELDS) {
+    const value = values[field];
+    if (value) payload[field] = value === "true";
+    else if (mode === "update") payload[field] = null;
+  }
+
+  if (mode === "update") payload.status = values.status;
+  return payload;
+}
+
+export function buildAlpinistaCreatePayload(values: AlpinistaFormValues) {
+  return buildAlpinistaPayload(values, "create");
+}
+
+export function buildAlpinistaUpdatePayload(values: AlpinistaFormValues) {
+  return buildAlpinistaPayload(values, "update");
 }

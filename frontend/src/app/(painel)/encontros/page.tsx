@@ -10,6 +10,13 @@ import {
   paginationControls,
   type PaginatedResponse,
 } from "../../../lib/integration-contracts";
+import {
+  buildEncontroCreatePayload,
+  ENCONTRO_STATUS_CHOICES,
+  ENCONTRO_TIPO_CHOICES,
+  type EncontroFormValues,
+} from "../../../lib/encontro-form-contract";
+import { readDrfFormError } from "../../../lib/form-api-error";
 
 interface EncontroItem {
   id: number;
@@ -19,10 +26,17 @@ interface EncontroItem {
   status: string;
 }
 
-const MAPA_STATUS: Record<string, string> = {
-  agendado: "Agendado",
-  em_agendamento: "Em agendamento",
-  cancelado: "Cancelado"
+const MAPA_STATUS: Record<string, string> = Object.fromEntries(
+  ENCONTRO_STATUS_CHOICES.map(({ value, label }) => [value, label]),
+);
+
+const INITIAL_ENCONTRO_FORM: EncontroFormValues = {
+  encontro: "",
+  tipo: "Escalada",
+  data_referencia: "",
+  data_exato: "",
+  local: "Nova Betânia",
+  status: "em_agendamento",
 };
 
 export default function Encontros() {
@@ -37,13 +51,7 @@ export default function Encontros() {
   const [isModalOpen, setIsModalOpen] = useState(false); 
   const [salvando, setSalvando] = useState(false); 
   
-  const [formData, setFormData] = useState({
-    encontro: "",
-    data_referencia: "", // O dia lógico
-    data_exato: "", // Dias do retiro
-    local: "Nova Betânia",
-    status: "em_agendamento"
-  });
+  const [formData, setFormData] = useState<EncontroFormValues>(INITIAL_ENCONTRO_FORM);
 
   const carregarEncontros = useCallback(async (pagina: number) => {
     try {
@@ -92,7 +100,7 @@ export default function Encontros() {
 
   // Prepara a tela para um NOVO cadastro
   const abrirModalNovo = () => {
-    setFormData({ encontro: "", data_referencia: "", data_exato: "", local: "Nova Betânia", status: "em_agendamento" });
+    setFormData({ ...INITIAL_ENCONTRO_FORM });
     setIsModalOpen(true);
   };
 
@@ -106,7 +114,7 @@ export default function Encontros() {
         headers: {
           "Content-Type": "application/json"
         },
-        body: JSON.stringify(formData)
+        body: JSON.stringify(buildEncontroCreatePayload(formData)),
       });
 
       if (resposta.ok) {
@@ -117,7 +125,7 @@ export default function Encontros() {
         // Mensagem dinâmica: avisa se criou ou se atualizou
         toast.success("Encontro agendado com sucesso!"); 
       } else {
-        toast.error("Não foi possível salvar o encontro.");
+        toast.error(await readDrfFormError(resposta, "Não foi possível salvar o encontro."));
       }
     } catch (error) {
       toast.error("Erro ao tentar conectar com o servidor.");
@@ -282,6 +290,20 @@ export default function Encontros() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 
                 <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Tipo do Encontro</label>
+                  <select
+                    name="tipo"
+                    value={formData.tipo}
+                    onChange={handleInputChange}
+                    className="w-full border border-gray-300 rounded-lg px-4 py-2"
+                  >
+                    {ENCONTRO_TIPO_CHOICES.map(({ value, label }) => (
+                      <option key={value} value={value}>{label}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Data de Início
                   </label>
@@ -332,9 +354,9 @@ export default function Encontros() {
                   onChange={handleInputChange}
                   className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-escalada-azul/20 focus:border-escalada-azul outline-none transition-all"
                 >
-                  <option value="em_agendamento">Em agendamento</option>
-                  <option value="agendado">Agendado</option>
-                  <option value="cancelado">Cancelado</option>
+                  {ENCONTRO_STATUS_CHOICES.map(({ value, label }) => (
+                    <option key={value} value={value}>{label}</option>
+                  ))}
                 </select>
               </div>
 
