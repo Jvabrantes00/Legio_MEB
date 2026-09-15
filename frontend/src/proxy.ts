@@ -1,35 +1,43 @@
-import { NextResponse } from 'next/server'
-import type { NextRequest } from 'next/server'
+import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
 
-// Esta função roda toda vez que alguém tenta abrir qualquer página do seu site
-export function proxy(request: NextRequest) {
-    // 1. O guarda olha se existe um crachá (Cookie) válido
-    const hasSession = Boolean(
-        request.cookies.get('sia_access')?.value ||
-        request.cookies.get('sia_refresh')?.value
-    )
-    const urlAtual = request.nextUrl.pathname
+import {
+  applyAuthenticationResult,
+  resolveSession,
+} from "./lib/server/django-auth";
 
-    // 2. Se a pessoa já tem o crachá e tenta abrir a tela de Login, o sistema joga ela pro Dashboard
-    if (urlAtual === '/login') {
-        if (hasSession) {
-            return NextResponse.redirect(new URL('/', request.url))
-        }
-        return NextResponse.next()
-    }
+export async function proxy(request: NextRequest) {
+  const isLogin = request.nextUrl.pathname === "/login";
 
-    // 3. Se a pessoa NÃO tem o crachá e tenta abrir qualquer página de dentro do sistema, é expulsa pro Login
-    if (!hasSession && request.nextUrl.pathname !== '/login') {
-        return NextResponse.redirect(new URL('/login', request.url))
-    }
+  let result;
+  try {
+    result = await resolveSession(request);
+  } catch {
+    // Sem resposta do Django, rotas privadas permanecem fechadas. Os cookies
+    // não são apagados porque a indisponibilidade não prova sessão inválida.
+    return isLogin
+      ? NextResponse.next()
+      : NextResponse.redirect(new URL("/login", request.url));
+  }
 
-    // 4. Se chegou até aqui, está tudo certo. Pode passar!
-    return NextResponse.next()
+  const sessionIsValid = result.upstream.status === 200;
+  const identityIsValidButForbidden = result.upstream.status === 403;
+
+  if (isLogin) {
+    const response = sessionIsValid || identityIsValidButForbidden
+      ? NextResponse.redirect(new URL("/", request.url))
+      : NextResponse.next();
+    applyAuthenticationResult(response, result);
+    return response;
+  }
+
+  const response = sessionIsValid || identityIsValidButForbidden
+    ? NextResponse.next()
+    : NextResponse.redirect(new URL("/login", request.url));
+  applyAuthenticationResult(response, result);
+  return response;
 }
 
-// Configuração de onde o guarda deve ficar vigiando (ignoramos apenas imagens e arquivos do sistema)
 export const config = {
-    matcher: [
-        '/', '/login', '/alpinistas/:path*', '/encontros/:path*'
-    ],
+  matcher: ["/", "/login", "/alpinistas/:path*", "/encontros/:path*"],
 };

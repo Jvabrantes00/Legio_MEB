@@ -2,19 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 
 import {
   applyAuthenticationResult,
-  authenticatedDjangoRequest,
+  resolveSession,
 } from "../../../../lib/server/django-auth";
-import { backendApiUrl } from "../../../../lib/server/sia-config";
 
 export async function GET(request: NextRequest) {
   try {
-    const result = await authenticatedDjangoRequest(request, (access) =>
-      fetch(backendApiUrl(["auth", "me"]), {
-        headers: { Authorization: `Bearer ${access}`, Accept: "application/json" },
-        cache: "no-store",
-        redirect: "manual",
-      }),
-    );
+    const result = await resolveSession(request);
     const text = result.upstream.status === 204 ? null : await result.upstream.text();
     const headers = new Headers({ "Cache-Control": "private, no-store" });
     const contentType = result.upstream.headers.get("content-type");

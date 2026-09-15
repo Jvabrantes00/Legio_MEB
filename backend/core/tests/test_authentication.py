@@ -8,6 +8,10 @@ from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 from rest_framework_simplejwt.backends import TokenBackend
+from rest_framework_simplejwt.token_blacklist.models import (
+    BlacklistedToken,
+    OutstandingToken,
+)
 from rest_framework_simplejwt.tokens import AccessToken, RefreshToken
 
 from core.roles import SiaRole
@@ -17,10 +21,14 @@ class SimpleJWTConfigurationTests(SimpleTestCase):
     def test_contrato_simplejwt_e_explicito(self):
         jwt_settings = settings.SIMPLE_JWT
 
+        self.assertIn(
+            'rest_framework_simplejwt.token_blacklist',
+            settings.INSTALLED_APPS,
+        )
         self.assertEqual(jwt_settings['ACCESS_TOKEN_LIFETIME'], timedelta(minutes=15))
         self.assertEqual(jwt_settings['REFRESH_TOKEN_LIFETIME'], timedelta(days=7))
-        self.assertIs(jwt_settings['ROTATE_REFRESH_TOKENS'], False)
-        self.assertIs(jwt_settings['BLACKLIST_AFTER_ROTATION'], False)
+        self.assertIs(jwt_settings['ROTATE_REFRESH_TOKENS'], True)
+        self.assertIs(jwt_settings['BLACKLIST_AFTER_ROTATION'], True)
         self.assertIs(jwt_settings['UPDATE_LAST_LOGIN'], False)
         self.assertEqual(jwt_settings['ALGORITHM'], 'HS256')
         self.assertEqual(jwt_settings['SIGNING_KEY'], settings.JWT_SIGNING_KEY)
@@ -38,6 +46,7 @@ class SimpleJWTConfigurationTests(SimpleTestCase):
 class JWTTestHelpers:
     token_url = '/api/token/'
     refresh_url = '/api/token/refresh/'
+    blacklist_url = '/api/token/blacklist/'
     protected_url = '/api/alpinistas/'
     password = 'senha-exclusiva-de-teste'
 
@@ -209,17 +218,116 @@ class JWTAuthenticationContractTests(JWTTestHelpers, APITestCase):
 
         self.assert_unauthorized_get(access)
 
-    def test_refresh_valido_emite_novo_access_sem_rotacao(self):
+    def test_refresh_rotaciona_o_par_e_invalida_o_refresh_anterior(self):
         user = self.make_user()
         refresh = self.obtain_pair(user)['refresh']
+        old_jti = RefreshToken(refresh)['jti']
 
         first = self.client.post(self.refresh_url, {'refresh': refresh}, format='json')
-        second = self.client.post(self.refresh_url, {'refresh': refresh}, format='json')
+        replay = self.client.post(self.refresh_url, {'refresh': refresh}, format='json')
 
         self.assertEqual(first.status_code, status.HTTP_200_OK)
-        self.assertEqual(second.status_code, status.HTTP_200_OK)
-        self.assertEqual(set(first.json()), {'access'})
+        self.assertEqual(set(first.json()), {'access', 'refresh'})
         self.assertEqual(AccessToken(first.json()['access'])['user_id'], str(user.pk))
+        self.assertEqual(RefreshToken(first.json()['refresh'])['user_id'], str(user.pk))
+        self.assertTrue(
+            BlacklistedToken.objects.filter(token__jti=old_jti).exists()
+        )
+        self.assertEqual(replay.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_refresh_rotacionado_novo_permanece_utilizavel(self):
+        user = self.make_user('refresh-novo-valido')
+        original = self.obtain_pair(user)['refresh']
+        rotated = self.client.post(
+            self.refresh_url,
+            {'refresh': original},
+            format='json',
+        ).json()['refresh']
+
+        response = self.client.post(
+            self.refresh_url,
+            {'refresh': rotated},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(set(response.json()), {'access', 'refresh'})
+
+    def test_blacklist_app_registra_tokens_emitidos(self):
+        user = self.make_user('outstanding-token')
+        refresh = self.obtain_pair(user)['refresh']
+        jti = RefreshToken(refresh)['jti']
+
+        outstanding = OutstandingToken.objects.get(jti=jti)
+
+        self.assertEqual(outstanding.user, user)
+        self.assertFalse(
+            BlacklistedToken.objects.filter(token=outstanding).exists()
+        )
+
+    def test_refresh_valido_pode_ser_revogado_e_nao_pode_ser_reutilizado(self):
+        user = self.make_user('refresh-revogado')
+        refresh = self.obtain_pair(user)['refresh']
+
+        revoked = self.client.post(
+            self.blacklist_url,
+            {'refresh': refresh},
+            format='json',
+        )
+        replay = self.client.post(
+            self.refresh_url,
+            {'refresh': refresh},
+            format='json',
+        )
+
+        self.assertEqual(revoked.status_code, status.HTTP_200_OK)
+        self.assertEqual(replay.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_blacklist_rejeita_token_invalido_e_access_token(self):
+        user = self.make_user('blacklist-invalida')
+        access = self.obtain_pair(user)['access']
+
+        for token_kind, token in {
+            'malformed': 'token-invalido',
+            'access': access,
+        }.items():
+            with self.subTest(token_kind=token_kind):
+                response = self.client.post(
+                    self.blacklist_url,
+                    {'refresh': token},
+                    format='json',
+                )
+                self.assertEqual(
+                    response.status_code,
+                    status.HTTP_401_UNAUTHORIZED,
+                )
+
+    def test_refresh_emitido_deixa_de_funcionar_para_usuario_inativo(self):
+        user = self.make_user('refresh-usuario-inativo')
+        refresh = self.obtain_pair(user)['refresh']
+        user.is_active = False
+        user.save(update_fields=['is_active'])
+
+        response = self.client.post(
+            self.refresh_url,
+            {'refresh': refresh},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_refresh_emitido_deixa_de_funcionar_para_usuario_removido(self):
+        user = self.make_user('refresh-usuario-removido')
+        refresh = self.obtain_pair(user)['refresh']
+        user.delete()
+
+        response = self.client.post(
+            self.refresh_url,
+            {'refresh': refresh},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
     def test_refresh_rejeita_access_malformado_expirado_e_assinatura_incorreta(self):
         user = self.make_user()

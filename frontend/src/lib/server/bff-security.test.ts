@@ -5,6 +5,7 @@ import { POST as login } from "../../app/api/auth/login/route";
 import { POST as logout } from "../../app/api/auth/logout/route";
 import { GET as csrf } from "../../app/api/auth/csrf/route";
 import { GET as me } from "../../app/api/auth/me/route";
+import { proxy as pageGuard } from "../../proxy";
 import { siaFetch } from "../sia-api";
 import {
   ACCESS_COOKIE,
@@ -23,6 +24,8 @@ const APP_ORIGIN = "http://localhost:3000";
 const BACKEND_ORIGIN = "http://localhost:8000";
 const JWT_ACCESS = "access.payload.signature";
 const JWT_REFRESH = "refresh.payload.signature";
+const JWT_ACCESS_2 = "new-access.payload.signature";
+const JWT_REFRESH_2 = "new-refresh.payload.signature";
 
 function request(
   path: string,
@@ -168,15 +171,62 @@ describe("login e logout", () => {
     expect(await response.json()).toEqual({ detail: "Usuário ou senha incorretos." });
   });
 
-  it("logout local expira autenticação, legado e CSRF", async () => {
-    const response = logout(mutationRequest("/api/auth/logout", { method: "POST" }));
+  it("logout revoga o refresh e expira autenticação, legado e CSRF", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(null, { status: 200 }),
+    );
+    const response = await logout(mutationRequest("/api/auth/logout", { method: "POST" }));
     const cookies = setCookies(response);
     expect(response.status).toBe(204);
+    expect(response.headers.get("x-sia-refresh-revocation")).toBe("confirmed");
     expect(cookies).toContain("sia_access=");
     expect(cookies).toContain("sia_refresh=");
     expect(cookies).toContain("sia_token=");
     expect(cookies).toContain("sia_csrf=");
     expect(cookies).toContain("Max-Age=0");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(String(fetchMock.mock.calls[0][0])).toBe(`${BACKEND_ORIGIN}/api/token/blacklist/`);
+    expect(await new Response(fetchMock.mock.calls[0][1]?.body).json())
+      .toEqual({ refresh: JWT_REFRESH });
+  });
+
+  it("logout repetido sem refresh é seguro e não chama o Django", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+    const response = await logout(request("/api/auth/logout", {
+      method: "POST",
+      headers: {
+        origin: APP_ORIGIN,
+        "x-csrf-token": "csrf-token",
+        cookie: "sia_csrf=csrf-token",
+      },
+    }, ""));
+
+    expect(response.status).toBe(204);
+    expect(response.headers.get("x-sia-refresh-revocation")).toBe("not-present");
+    expect(setCookies(response)).toContain("Max-Age=0");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("falha de revogação não preserva cookies nem afirma sucesso remoto", async () => {
+    vi.spyOn(globalThis, "fetch").mockRejectedValueOnce(new Error("Django indisponível"));
+    const response = await logout(mutationRequest("/api/auth/logout", { method: "POST" }));
+
+    expect(response.status).toBe(204);
+    expect(response.headers.get("x-sia-refresh-revocation")).toBe("unavailable");
+    expect(setCookies(response)).toContain("sia_refresh=");
+    expect(setCookies(response)).toContain("Max-Age=0");
+  });
+
+  it("refresh inválido ou já revogado mantém logout idempotente sem confirmação falsa", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      Response.json({ detail: "Token inválido." }, { status: 401 }),
+    );
+    const response = await logout(mutationRequest("/api/auth/logout", { method: "POST" }));
+
+    expect(response.status).toBe(204);
+    expect(response.headers.get("x-sia-refresh-revocation")).toBe("not-confirmed");
+    expect(setCookies(response)).toContain("sia_refresh=");
+    expect(setCookies(response)).toContain("Max-Age=0");
   });
 
   it("/me retorna somente a sessão segura usando autenticação server-side", async () => {
@@ -188,6 +238,29 @@ describe("login e logout", () => {
     expect(await response.json()).toEqual({ id: 7, username: "teste", roles: ["Fichas"], superuser: false });
     expect(new Headers(fetchMock.mock.calls[0][1]?.headers).get("authorization"))
       .toBe(`Bearer ${JWT_ACCESS}`);
+  });
+
+  it("/me renova a sessão uma vez e nunca devolve os JWTs no corpo", async () => {
+    vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(Response.json({}, { status: 401 }))
+      .mockResolvedValueOnce(Response.json({ access: JWT_ACCESS_2, refresh: JWT_REFRESH_2 }))
+      .mockResolvedValueOnce(
+        Response.json({ id: 7, username: "teste", roles: [], superuser: false }),
+      );
+
+    const response = await me(request(
+      "/api/auth/me",
+      {},
+      `${ACCESS_COOKIE}=${JWT_ACCESS}; ${REFRESH_COOKIE}=me-refresh.payload.signature`,
+    ));
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(payload).toEqual({ id: 7, username: "teste", roles: [], superuser: false });
+    expect(JSON.stringify(payload)).not.toContain(JWT_ACCESS_2);
+    expect(JSON.stringify(payload)).not.toContain(JWT_REFRESH_2);
+    expect(setCookies(response)).toContain(`sia_access=${JWT_ACCESS_2}`);
+    expect(setCookies(response)).toContain(`sia_refresh=${JWT_REFRESH_2}`);
   });
 });
 
@@ -272,20 +345,30 @@ describe("proxy controlado", () => {
   it("em 401 faz um refresh e repete exatamente uma vez", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch")
       .mockResolvedValueOnce(Response.json({}, { status: 401 }))
-      .mockResolvedValueOnce(Response.json({ access: "novo.payload.signature" }))
+      .mockResolvedValueOnce(Response.json({ access: JWT_ACCESS_2, refresh: JWT_REFRESH_2 }))
       .mockResolvedValueOnce(Response.json({ results: [] }, { status: 200 }));
-    const response = await proxySiaRequest(request("/api/sia/alpinistas/"), ["alpinistas"]);
+    const response = await proxySiaRequest(request(
+      "/api/sia/alpinistas/",
+      {},
+      `${ACCESS_COOKIE}=${JWT_ACCESS}; ${REFRESH_COOKIE}=proxy-refresh.payload.signature`,
+    ), ["alpinistas"]);
     expect(response.status).toBe(200);
     expect(fetchMock).toHaveBeenCalledTimes(3);
-    expect(setCookies(response)).toContain("sia_access=novo.payload.signature");
+    expect(setCookies(response)).toContain(`sia_access=${JWT_ACCESS_2}`);
+    expect(setCookies(response)).toContain(`sia_refresh=${JWT_REFRESH_2}`);
+    expect(setCookies(response)).toContain("HttpOnly");
   });
 
   it("não entra em loop se o retry também retornar 401", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch")
       .mockResolvedValueOnce(Response.json({}, { status: 401 }))
-      .mockResolvedValueOnce(Response.json({ access: "novo.payload.signature" }))
+      .mockResolvedValueOnce(Response.json({ access: JWT_ACCESS_2, refresh: JWT_REFRESH_2 }))
       .mockResolvedValueOnce(Response.json({}, { status: 401 }));
-    const response = await proxySiaRequest(request("/api/sia/alpinistas/"), ["alpinistas"]);
+    const response = await proxySiaRequest(request(
+      "/api/sia/alpinistas/",
+      {},
+      `${ACCESS_COOKIE}=${JWT_ACCESS}; ${REFRESH_COOKIE}=retry-refresh.payload.signature`,
+    ), ["alpinistas"]);
     expect(response.status).toBe(401);
     expect(fetchMock).toHaveBeenCalledTimes(3);
     expect(setCookies(response)).toContain("Max-Age=0");
@@ -295,11 +378,133 @@ describe("proxy controlado", () => {
     const fetchMock = vi.spyOn(globalThis, "fetch")
       .mockResolvedValueOnce(Response.json({}, { status: 401 }))
       .mockResolvedValueOnce(Response.json({}, { status: 401 }));
-    const response = await proxySiaRequest(request("/api/sia/alpinistas/"), ["alpinistas"]);
+    const response = await proxySiaRequest(request(
+      "/api/sia/alpinistas/",
+      {},
+      `${ACCESS_COOKIE}=${JWT_ACCESS}; ${REFRESH_COOKIE}=invalid-refresh.payload.signature`,
+    ), ["alpinistas"]);
     expect(response.status).toBe(401);
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(setCookies(response)).toContain("sia_access=");
     expect(setCookies(response)).toContain("sia_refresh=");
+  });
+});
+
+describe("rotação concorrente no mesmo processo", () => {
+  it("compartilha uma rotação e aplica o mesmo par novo em todas as respostas", async () => {
+    const oldAccess = "old-concurrent.payload.signature";
+    const oldRefresh = "old-concurrent-refresh.payload.signature";
+    let refreshCalls = 0;
+
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (target, init) => {
+      const url = String(target);
+      if (url.endsWith("/api/token/refresh/")) {
+        refreshCalls += 1;
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        return Response.json({ access: JWT_ACCESS_2, refresh: JWT_REFRESH_2 });
+      }
+      const authorization = new Headers(init?.headers).get("authorization");
+      if (authorization === `Bearer ${oldAccess}`) {
+        return Response.json({}, { status: 401 });
+      }
+      if (authorization === `Bearer ${JWT_ACCESS_2}`) {
+        return Response.json({ results: [] });
+      }
+      return Response.json({}, { status: 500 });
+    });
+
+    const cookies = `${ACCESS_COOKIE}=${oldAccess}; ${REFRESH_COOKIE}=${oldRefresh}`;
+    const responses = await Promise.all(
+      Array.from({ length: 3 }, () =>
+        proxySiaRequest(request("/api/sia/alpinistas/", {}, cookies), ["alpinistas"]),
+      ),
+    );
+
+    expect(refreshCalls).toBe(1);
+    expect(responses.map((response) => response.status)).toEqual([200, 200, 200]);
+    for (const response of responses) {
+      expect(setCookies(response)).toContain(`sia_access=${JWT_ACCESS_2}`);
+      expect(setCookies(response)).toContain(`sia_refresh=${JWT_REFRESH_2}`);
+      expect(setCookies(response)).toContain("HttpOnly");
+    }
+  });
+});
+
+describe("guarda real de páginas", () => {
+  it("redireciona sessão ausente para login e limpa cookies obsoletos", async () => {
+    const response = await pageGuard(request("/", {}, ""));
+
+    expect(response.status).toBe(307);
+    expect(response.headers.get("location")).toBe(`${APP_ORIGIN}/login`);
+    expect(setCookies(response)).toContain("Max-Age=0");
+  });
+
+  it("aceita sessão validada pelo Django", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      Response.json({ id: 7, username: "teste", roles: [], superuser: false }),
+    );
+
+    const response = await pageGuard(request("/alpinistas"));
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("x-middleware-next")).toBe("1");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("rotaciona sessão antes de liberar a página e grava access e refresh", async () => {
+    const cookies = `${ACCESS_COOKIE}=invalid-page.payload.signature; ${REFRESH_COOKIE}=page-refresh.payload.signature`;
+    vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(Response.json({}, { status: 401 }))
+      .mockResolvedValueOnce(Response.json({ access: JWT_ACCESS_2, refresh: JWT_REFRESH_2 }))
+      .mockResolvedValueOnce(
+        Response.json({ id: 7, username: "teste", roles: [], superuser: false }),
+      );
+
+    const response = await pageGuard(request("/encontros", {}, cookies));
+
+    expect(response.status).toBe(200);
+    expect(setCookies(response)).toContain(`sia_access=${JWT_ACCESS_2}`);
+    expect(setCookies(response)).toContain(`sia_refresh=${JWT_REFRESH_2}`);
+  });
+
+  it("redireciona refresh inválido e não entra em loop", async () => {
+    const cookies = `${ACCESS_COOKIE}=invalid-revoked.payload.signature; ${REFRESH_COOKIE}=revoked.payload.signature`;
+    const fetchMock = vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(Response.json({}, { status: 401 }))
+      .mockResolvedValueOnce(Response.json({}, { status: 401 }));
+
+    const response = await pageGuard(request("/", {}, cookies));
+
+    expect(response.status).toBe(307);
+    expect(response.headers.get("location")).toBe(`${APP_ORIGIN}/login`);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(setCookies(response)).toContain("Max-Age=0");
+  });
+
+  it("não transforma 403 em refresh ou logout", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      Response.json({ detail: "Sem permissão." }, { status: 403 }),
+    );
+
+    const response = await pageGuard(request("/"));
+
+    expect(response.status).toBe(200);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(setCookies(response)).not.toContain("Max-Age=0");
+  });
+
+  it("redireciona sessão válida para fora do login sem criar loop", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      Response.json({ id: 7, username: "teste", roles: [], superuser: false }),
+    );
+
+    const valid = await pageGuard(request("/login"));
+    const invalid = await pageGuard(request("/login", {}, ""));
+
+    expect(valid.status).toBe(307);
+    expect(valid.headers.get("location")).toBe(`${APP_ORIGIN}/`);
+    expect(invalid.status).toBe(200);
+    expect(invalid.headers.get("x-middleware-next")).toBe("1");
   });
 });
 

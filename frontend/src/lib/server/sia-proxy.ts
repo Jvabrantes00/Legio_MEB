@@ -23,10 +23,6 @@ const MEDIA_PATHS = [
   /^\/api\/encontros\/\d+\/fotos\/\d+\/arquivo\/$/,
 ];
 
-interface StreamRequestInit extends RequestInit {
-  duplex?: "half";
-}
-
 function invalidPathPart(part: string): boolean {
   return !part || part === "." || part === ".." || /[\\/\0]/.test(part);
 }
@@ -150,19 +146,17 @@ export async function proxySiaRequest(
 
   const target = backendApiUrl(path, request.nextUrl.search);
   const canHaveBody = BODY_METHODS.has(request.method);
-  const retryRequest = canHaveBody ? request.clone() : null;
+  const requestBody = canHaveBody ? await request.arrayBuffer() : undefined;
 
   try {
-    const result = await authenticatedDjangoRequest(request, (access, attempt) => {
-      const source = attempt === 0 ? request : retryRequest;
-      const init: StreamRequestInit = {
+    const result = await authenticatedDjangoRequest(request, (access) => {
+      const init: RequestInit = {
         method: request.method,
         headers: forwardedHeaders(request, access),
-        body: canHaveBody ? source?.body : undefined,
+        body: requestBody?.slice(0),
         cache: "no-store",
         redirect: "manual",
       };
-      if (canHaveBody) init.duplex = "half";
       return fetch(target, init);
     });
     const response = await createClientResponse(result.upstream);

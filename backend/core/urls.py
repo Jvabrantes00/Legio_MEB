@@ -1,6 +1,10 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView # <-- Importamos as rotas de login
+from rest_framework_simplejwt.views import (
+    TokenBlacklistView,
+    TokenObtainPairView,
+    TokenRefreshView,
+)
 from .views import (
     AlpinistaViewSet, EncontroViewSet, EventoViewSet, 
     EntregaMaterialViewSet, FuncaoEncontroViewSet, MaterialViewSet,
@@ -8,7 +12,12 @@ from .views import (
 )
 from .views import dashboard_stats
 from .views import current_user
+from .authentication import SiaTokenRefreshSerializer
 from .permissions import IsSiaSuperuser
+
+
+class SiaTokenRefreshView(TokenRefreshView):
+    serializer_class = SiaTokenRefreshSerializer
 
 
 class SiaApiRootView(DefaultRouter.APIRootView):
@@ -42,5 +51,6 @@ urlpatterns = [
     # --- ROTAS DE AUTENTICAÇÃO ---
     # É aqui que o Next.js vai bater para fazer o login
     path('token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
-    path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
+    path('token/refresh/', SiaTokenRefreshView.as_view(), name='token_refresh'),
+    path('token/blacklist/', TokenBlacklistView.as_view(), name='token_blacklist'),
 ]
