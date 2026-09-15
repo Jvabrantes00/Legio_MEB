@@ -7,6 +7,10 @@ import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { Plus, Search, MoreHorizontal, X, Pencil, Trash2, Filter, ChevronLeft, ChevronRight, Calendar, Briefcase, Camera, Key, Maximize2, Ticket, ArrowUpDown  } from "lucide-react";
 import { siaFetch } from "../../../lib/sia-api";
+import {
+    buildAlpinistaFormEntries,
+    buildPaginatedPath,
+} from "../../../lib/integration-contracts";
 
 // ============================================================================
 // INTERFACE (CONTRATO DE DADOS)
@@ -98,7 +102,7 @@ export default function AlpinistasPage() {
         nome: '', email: '', telefone: '', dataNascimento: '',
         endereco: '', nomePai: '', telefonePai: '', nomeMae: '',
         telefoneMae: '', restricaoSaude: '', medicacao: '',
-        grupo: '', status: 'ativo', is_neurodivergente: false, tipo_neurodivergente: ''
+        grupo: '', status: 'pendente', is_neurodivergente: false, tipo_neurodivergente: ''
     });
 
     // ============================================================================
@@ -117,11 +121,12 @@ export default function AlpinistasPage() {
     // ============================================================================
     // INTEGRAÇÃO COM A API (DEBOUCE)
     // ============================================================================
-    const buscarAlpinistas = async (url: string = "/alpinistas/") => {
+    const buscarAlpinistas = async (
+        url: string = buildPaginatedPath("/alpinistas/", {}, 1),
+    ) => {
         try {
             setCarregando(true);
-            const urlAtualizada = url + (url.includes('?') ? '&' : '?') + 't=' + new Date().getTime();
-            const resposta = await siaFetch(urlAtualizada);
+            const resposta = await siaFetch(url);
 
             if (!resposta.ok) throw new Error("Não foi possível carregar a lista de alpinistas.");
 
@@ -141,10 +146,11 @@ export default function AlpinistasPage() {
 
     useEffect(()=> {
         const timer = setTimeout(() => {
-            const baseUrl = "/alpinistas/";
-            const url = busca.trim() !== ""
-                ? `${ baseUrl}?search=${encodeURIComponent(busca)}`
-                : baseUrl;
+            const url = buildPaginatedPath(
+                "/alpinistas/",
+                { search: busca.trim() },
+                1,
+            );
         
             buscarAlpinistas(url);
         }, 500);
@@ -152,10 +158,11 @@ export default function AlpinistasPage() {
     }, [busca]);
 
     const irParaPrimeiraPagina = () => {
-        const baseUrl = "/alpinistas/";
-        const url = busca.trim() !==""
-            ? `${ baseUrl}?search=${encodeURIComponent(busca)}`
-            : baseUrl;
+        const url = buildPaginatedPath(
+            "/alpinistas/",
+            { search: busca.trim() },
+            1,
+        );
         buscarAlpinistas(url);
     }
 
@@ -177,14 +184,9 @@ export default function AlpinistasPage() {
         try {
             const formDataToSend = new FormData();
 
-            Object.entries(formData).forEach(([key, value]) => {
-                if (key === 'tipo_neurodivergente' && !formData.is_neurodivergente) {
-                    return;
-                }
-
-                if (value !== '' && value !== null) {
-                    formDataToSend.append(key, value as string);
-                }
+            const mode = idEdicao ? "update" : "create";
+            buildAlpinistaFormEntries(formData, mode).forEach(([key, value]) => {
+                formDataToSend.append(key, value);
             });
 
             if (fotoArquivo) {
@@ -228,10 +230,11 @@ export default function AlpinistasPage() {
             setIsDeleteModalOpen(false);
             setAlpinistaParaDeletar(null);
 
-            const baseUrl = "/alpinistas/";
-            const url = busca.trim() !== ""
-                ? `${ baseUrl}?search=${encodeURIComponent(busca)}`
-                : baseUrl;
+            const url = buildPaginatedPath(
+                "/alpinistas/",
+                { search: busca.trim() },
+                1,
+            );
             buscarAlpinistas(url);
 
         } catch (error: any) {
@@ -255,7 +258,7 @@ export default function AlpinistasPage() {
             nome: '', email: '', telefone: '', dataNascimento: '',
             endereco: '', nomePai: '', telefonePai: '', nomeMae: '',
             telefoneMae: '', restricaoSaude: '', medicacao: '',
-            grupo: '', status: 'ativo', is_neurodivergente: false, tipo_neurodivergente: ''
+            grupo: '', status: 'pendente', is_neurodivergente: false, tipo_neurodivergente: ''
         });
         setIsModalOpen(true);
     };

@@ -1,10 +1,23 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import toast from "react-hot-toast"; 
 import Link from "next/link";
 import { Settings, Trash2 } from "lucide-react";
 import { siaFetch } from "../../../lib/sia-api";
+import {
+  buildPaginatedPath,
+  paginationControls,
+  type PaginatedResponse,
+} from "../../../lib/integration-contracts";
+
+interface EncontroItem {
+  id: number;
+  encontro: string;
+  data_referencia: string;
+  data_exato: string;
+  status: string;
+}
 
 const MAPA_STATUS: Record<string, string> = {
   agendado: "Agendado",
@@ -14,8 +27,12 @@ const MAPA_STATUS: Record<string, string> = {
 
 export default function Encontros() {
 
-  const [encontros, setEncontros] = useState([]);
+  const [encontros, setEncontros] = useState<EncontroItem[]>([]);
   const [carregando, setCarregando] = useState(true);
+  const [paginaAtual, setPaginaAtual] = useState(1);
+  const [totalEncontros, setTotalEncontros] = useState(0);
+  const [temPaginaAnterior, setTemPaginaAnterior] = useState(false);
+  const [temProximaPagina, setTemProximaPagina] = useState(false);
   const [ordemMaisRecente, setOrdemMaisRecente] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false); 
   const [salvando, setSalvando] = useState(false); 
@@ -28,15 +45,20 @@ export default function Encontros() {
     status: "em_agendamento"
   });
 
-  async function carregarEncontros() {
+  const carregarEncontros = useCallback(async (pagina: number) => {
     try {
-      const resposta = await siaFetch("/encontros/", {
+      const resposta = await siaFetch(buildPaginatedPath("/encontros/", {}, pagina), {
         method: "GET",
       });
 
       if (resposta.ok) {
-        const dados = await resposta.json();
-        setEncontros(dados.results || []);
+        const dados: PaginatedResponse<EncontroItem> = await resposta.json();
+        const controls = paginationControls(dados);
+        setEncontros(dados.results);
+        setTotalEncontros(controls.total);
+        setTemPaginaAnterior(controls.hasPrevious);
+        setTemProximaPagina(controls.hasNext);
+        setPaginaAtual(pagina);
       } else {
         toast.error("Falha ao buscar os encontros do servidor.");
       }
@@ -45,11 +67,17 @@ export default function Encontros() {
     } finally {
       setCarregando(false);
     }
-  }
+  }, []);
 
   useEffect(() => {
-    carregarEncontros();
-  }, []);
+    carregarEncontros(1);
+  }, [carregarEncontros]);
+
+  const mudarPagina = (pagina: number) => {
+    if (pagina < 1 || carregando) return;
+    setCarregando(true);
+    carregarEncontros(pagina);
+  };
 
   const encontrosOrdenados = [...encontros].sort((a, b) => {
     const dataA = new Date(a.data_referencia).getTime();
@@ -83,7 +111,8 @@ export default function Encontros() {
 
       if (resposta.ok) {
         setIsModalOpen(false); // Fecha a janelinha
-        carregarEncontros();   // Atualiza a tabela com os novos dados
+        setPaginaAtual(1);
+        carregarEncontros(1);   // Atualiza a tabela com os novos dados
         
         // Mensagem dinâmica: avisa se criou ou se atualizou
         toast.success("Encontro agendado com sucesso!"); 
@@ -107,7 +136,10 @@ export default function Encontros() {
 
       if (resposta.ok) {
         toast.success("Encontro excluído com sucesso!");
-        carregarEncontros(); // Recarrega a lista, que agora virá sem o item deletado
+        const paginaDestino = encontros.length === 1 && paginaAtual > 1
+          ? paginaAtual - 1
+          : paginaAtual;
+        carregarEncontros(paginaDestino); // Evita permanecer em uma página vazia
       } else {
         toast.error("Erro ao excluir encontro.");
       }
@@ -202,6 +234,29 @@ export default function Encontros() {
               </table>
             </div>
           )}
+          <div className="flex items-center justify-between border-t border-gray-100 px-6 py-4">
+            <p className="text-sm text-gray-500">
+              Página {paginaAtual} · {totalEncontros} encontro(s) no total
+            </p>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => mudarPagina(paginaAtual - 1)}
+                disabled={!temPaginaAnterior || carregando}
+                className="px-4 py-2 text-sm font-medium border border-gray-200 rounded-lg disabled:opacity-50"
+              >
+                Anterior
+              </button>
+              <button
+                type="button"
+                onClick={() => mudarPagina(paginaAtual + 1)}
+                disabled={!temProximaPagina || carregando}
+                className="px-4 py-2 text-sm font-medium border border-gray-200 rounded-lg disabled:opacity-50"
+              >
+                Próxima
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

@@ -6,6 +6,13 @@ import toast from "react-hot-toast";
 import { ArrowLeft, Edit, Users, Briefcase } from "lucide-react";
 import { useParams } from "next/navigation";
 import { siaFetch } from "../../../../lib/sia-api";
+import {
+    appendUniqueById,
+    buildPaginatedPath,
+    paginationControls,
+    startPaginatedSearch,
+    type PaginatedResponse,
+} from "../../../../lib/integration-contracts";
 
 export default function DetalhesEncontro() {
     const params = useParams();
@@ -19,19 +26,36 @@ export default function DetalhesEncontro() {
     const [modoLista, setModoLista] = useState<"pendentes" | "confirmados">("pendentes");
 
     const [pendentes, setPendentes] = useState<any[]>([]);
+    const [paginaPendentes, setPaginaPendentes] = useState(1);
+    const [temMaisPendentes, setTemMaisPendentes] = useState(false);
+    const [carregandoMaisPendentes, setCarregandoMaisPendentes] = useState(false);
     const [confirmados, setConfirmados] = useState<any[]>([]);
     const [selecionados, setSelecionados] = useState<number[]>([]);
     const [efetivando, setEfetivando] = useState(false);
 
-    async function buscarPendentes() {
+    async function buscarPendentes(pagina = 1, acrescentar = false) {
         try {
-            const resposta = await siaFetch("/alpinistas/?status=pendente");
+            if (acrescentar) setCarregandoMaisPendentes(true);
+            const path = buildPaginatedPath(
+                "/alpinistas/",
+                { status: "pendente" },
+                pagina,
+            );
+            const resposta = await siaFetch(path);
             if (resposta.ok) {
-                const dados = await resposta.json();
-                setPendentes(dados.results || []);
+                const dados: PaginatedResponse<any> = await resposta.json();
+                const controls = paginationControls(dados);
+                setPendentes((atuais) => acrescentar
+                    ? appendUniqueById(atuais, dados.results)
+                    : dados.results
+                );
+                setPaginaPendentes(pagina);
+                setTemMaisPendentes(controls.hasNext);
             }
         } catch (error) {
             toast.error("Erro ao buscar alpinistas pendentes.", error);
+        } finally {
+            setCarregandoMaisPendentes(false);
         }
     }
 
@@ -159,6 +183,9 @@ export default function DetalhesEncontro() {
     const [termoBusca, setTermoBusca] = useState("");
     const [resultadosBusca, setResultadosBusca] = useState<any[]>([]);
     const [buscando, setBuscando] = useState(false);
+    const [paginaBuscaEquipe, setPaginaBuscaEquipe] = useState(1);
+    const [buscaTemAnterior, setBuscaTemAnterior] = useState(false);
+    const [buscaTemProxima, setBuscaTemProxima] = useState(false);
 
     async function buscarFuncoes() {
         try {
@@ -196,10 +223,18 @@ export default function DetalhesEncontro() {
             if(termoBusca.length >= 2){
                 setBuscando(true);
                 try {
-                    const resposta = await siaFetch(`/alpinistas/?search=${encodeURIComponent(termoBusca)}&status=ativo`);
+                    const path = buildPaginatedPath(
+                        "/alpinistas/",
+                        { search: termoBusca, status: "ativo" },
+                        paginaBuscaEquipe,
+                    );
+                    const resposta = await siaFetch(path);
                     if (resposta.ok) {
-                        const dados = await resposta.json();
-                        setResultadosBusca(dados.results || []);
+                        const dados: PaginatedResponse<any> = await resposta.json();
+                        const controls = paginationControls(dados);
+                        setResultadosBusca(dados.results);
+                        setBuscaTemAnterior(controls.hasPrevious);
+                        setBuscaTemProxima(controls.hasNext);
                     }
                 } catch (error) {
                     toast.error("Erro na busca.", error);
@@ -212,7 +247,7 @@ export default function DetalhesEncontro() {
         }, 500);
         
         return () => clearTimeout(delayDebouceFn);
-    }, [termoBusca]);
+    }, [termoBusca, paginaBuscaEquipe]);
 
     const adicionarNaEquipe = async (alpinistaId: number) => {
         try {
@@ -428,6 +463,9 @@ export default function DetalhesEncontro() {
                                                         setFuncaoAtual(funcao);
                                                         setTermoBusca("");
                                                         setResultadosBusca([]);
+                                                        setPaginaBuscaEquipe(1);
+                                                        setBuscaTemAnterior(false);
+                                                        setBuscaTemProxima(false);
                                                         setIsModalEquipeOpen(true);
                                                     }}
                                                     className="w-full py-2 text-sm font-semibold text-escalada-azul hover:bg-blue-50 rounded-lg transition-colors flex items-center justify-center gap-1"
@@ -460,7 +498,11 @@ export default function DetalhesEncontro() {
                                             type="text" 
                                             placeholder="Digite o nome..." 
                                             value={termoBusca}
-                                            onChange={(e) => setTermoBusca(e.target.value)}
+                                            onChange={(e) => {
+                                                const next = startPaginatedSearch(e.target.value);
+                                                setTermoBusca(next.search);
+                                                setPaginaBuscaEquipe(next.page);
+                                            }}
                                             className="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-escalada-azul focus:outline-none"
                                             autoFocus
                                         />
@@ -482,6 +524,27 @@ export default function DetalhesEncontro() {
                                                 </button>
                                             </div>
                                         ))}
+                                        {termoBusca.length >= 2 && (buscaTemAnterior || buscaTemProxima) && (
+                                            <div className="sticky bottom-0 flex items-center justify-between gap-2 border-t border-gray-100 bg-white p-3">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setPaginaBuscaEquipe((pagina) => pagina - 1)}
+                                                    disabled={!buscaTemAnterior || buscando}
+                                                    className="px-3 py-1 text-xs font-semibold border rounded disabled:opacity-50"
+                                                >
+                                                    Anterior
+                                                </button>
+                                                <span className="text-xs text-gray-500">Página {paginaBuscaEquipe}</span>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setPaginaBuscaEquipe((pagina) => pagina + 1)}
+                                                    disabled={!buscaTemProxima || buscando}
+                                                    className="px-3 py-1 text-xs font-semibold border rounded disabled:opacity-50"
+                                                >
+                                                    Próxima
+                                                </button>
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                             </div>
@@ -566,7 +629,19 @@ export default function DetalhesEncontro() {
                                         </table>
                                     </div>
                                 )}
-                            </> 
+                                {temMaisPendentes && (
+                                    <div className="mt-4 flex justify-center">
+                                        <button
+                                            type="button"
+                                            onClick={() => buscarPendentes(paginaPendentes + 1, true)}
+                                            disabled={carregandoMaisPendentes}
+                                            className="px-4 py-2 text-sm font-semibold border border-gray-200 rounded-lg disabled:opacity-50"
+                                        >
+                                            {carregandoMaisPendentes ? "Carregando..." : "Carregar mais pendentes"}
+                                        </button>
+                                    </div>
+                                )}
+                            </>
                         )}
 
                         {modoLista === "confirmados" && (
