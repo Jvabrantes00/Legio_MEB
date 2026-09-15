@@ -7,20 +7,18 @@
 import Link from 'next/link';
 // 1. Importamos o useRouter para podermos navegar o usuário via código
 import { usePathname, useRouter } from 'next/navigation'; 
-import { LayoutDashboard, Users, Calendar, Settings, LogOut } from 'lucide-react';
+import { LayoutDashboard, Users, Calendar, LogOut } from 'lucide-react';
 import { authMutation } from '../lib/sia-api';
+import { useSiaSession } from './SiaSessionProvider';
+import { siaNavigation } from '../lib/sia-navigation';
 
 export default function Sidebar() {
     const pathname = usePathname();
     const router = useRouter(); // 2. Inicializamos o router
+    const { session, loading, error } = useSiaSession();
 
-    const menuItems = [
-        { nome: 'Dashboard', rota: '/', icone: LayoutDashboard },
-        { nome: 'Alpinistas', rota: '/alpinistas', icone: Users },
-        { nome: 'Encontros', rota: '/encontros', icone: Calendar },
-        { nome: 'Eventos', rota: '/eventos', icone: Calendar },
-        { nome: 'Configurações', rota: '/configuracoes', icone: Settings },
-    ];
+    const menuItems = siaNavigation(session);
+    const icons = { '/': LayoutDashboard, '/alpinistas': Users, '/encontros': Calendar };
 
     const handleLogout = async () => {
         const response = await authMutation('/api/auth/logout');
@@ -40,8 +38,11 @@ export default function Sidebar() {
             </div>
 
             <nav className="flex-1 px-4 py-6 space-y-2">
+                {!loading && !error && menuItems.length === 0 && (
+                    <p className="px-4 text-sm text-blue-100">Nenhum módulo disponível para seu papel.</p>
+                )}
                 {menuItems.map((item) => {
-                    const Icone = item.icone;
+                    const Icone = icons[item.rota];
                     const isAtivo = item.rota === '/'
                         ? pathname === '/'
                         : pathname.startsWith(item.rota);

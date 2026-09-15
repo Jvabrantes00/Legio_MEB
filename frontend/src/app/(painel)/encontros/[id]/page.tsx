@@ -6,6 +6,15 @@ import toast from "react-hot-toast";
 import { ArrowLeft, Edit, Users, Briefcase } from "lucide-react";
 import { useParams } from "next/navigation";
 import { siaFetch } from "../../../../lib/sia-api";
+import { useSiaSession } from "../../../../components/SiaSessionProvider";
+import { EncontroSummaryPanel } from "../../../../components/EncontroSummaryPanel";
+import { ConfirmedAlpinistasTable } from "../../../../components/ConfirmedAlpinistasTable";
+import { canManageEncontros, canViewEncontros } from "../../../../lib/sia-capabilities";
+import {
+    confirmedAlpinistas, isEncontroFull,
+    type AlpinistaFull, type ConfirmedAlpinista, type EncounterParticipation,
+    type EncontroFull, type EncontroSummary,
+} from "../../../../lib/sia-profile-contracts";
 import {
     appendUniqueById,
     buildPaginatedPath,
@@ -15,21 +24,61 @@ import {
 } from "../../../../lib/integration-contracts";
 
 export default function DetalhesEncontro() {
+    const { session, loading, error } = useSiaSession();
+    if (loading) return <p className="p-10 text-gray-500">Carregando sessão...</p>;
+    if (error) return <p className="p-10 text-red-600">{error}</p>;
+    if (!canViewEncontros(session)) return <p className="p-10 text-gray-600">Seu papel não permite acessar Encontros.</p>;
+    return canManageEncontros(session) ? <ManagedEncounterDetails /> : <EncounterSummaryDetails />;
+}
+
+function EncounterSummaryDetails() {
+    const params = useParams();
+    const encontroId = params.id;
+    const [encontro, setEncontro] = useState<EncontroSummary | null>(null);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        const controller = new AbortController();
+        async function load() {
+            try {
+                const response = await siaFetch(`/encontros/${encontroId}/`, { signal: controller.signal });
+                if (!response.ok) throw new Error("Não foi possível carregar o encontro.");
+                const body: EncontroSummary = await response.json();
+                if (!controller.signal.aborted) setEncontro(body);
+            } catch {
+                if (!controller.signal.aborted) setEncontro(null);
+            } finally {
+                if (!controller.signal.aborted) setLoading(false);
+            }
+        }
+        if (encontroId) void load();
+        return () => controller.abort();
+    }, [encontroId]);
+
+    if (loading) return <p className="p-10 text-gray-500">Carregando resumo do encontro...</p>;
+    if (!encontro) return <p className="p-10 text-red-600">Encontro não encontrado.</p>;
+    return <div className="space-y-4">
+        <Link href="/encontros" className="text-escalada-azul hover:underline">← Voltar aos encontros</Link>
+        <EncontroSummaryPanel encontro={encontro} />
+    </div>;
+}
+
+function ManagedEncounterDetails() {
     const params = useParams();
     const encontroId = params.id;
 
-    const [encontro, setEncontro] = useState<any>(null);
+    const [encontro, setEncontro] = useState<EncontroFull | null>(null);
     const [carregando, setCarregando] = useState(true);
 
     const [abaAtiva, setAbaAtiva] = useState<"geral" | "equipes" | "encontristas">("encontristas");
 
     const [modoLista, setModoLista] = useState<"pendentes" | "confirmados">("pendentes");
 
-    const [pendentes, setPendentes] = useState<any[]>([]);
+    const [pendentes, setPendentes] = useState<AlpinistaFull[]>([]);
     const [paginaPendentes, setPaginaPendentes] = useState(1);
     const [temMaisPendentes, setTemMaisPendentes] = useState(false);
     const [carregandoMaisPendentes, setCarregandoMaisPendentes] = useState(false);
-    const [confirmados, setConfirmados] = useState<any[]>([]);
+    const [confirmados, setConfirmados] = useState<ConfirmedAlpinista[]>([]);
     const [selecionados, setSelecionados] = useState<number[]>([]);
     const [efetivando, setEfetivando] = useState(false);
 
@@ -43,7 +92,7 @@ export default function DetalhesEncontro() {
             );
             const resposta = await siaFetch(path);
             if (resposta.ok) {
-                const dados: PaginatedResponse<any> = await resposta.json();
+                const dados: PaginatedResponse<AlpinistaFull> = await resposta.json();
                 const controls = paginationControls(dados);
                 setPendentes((atuais) => acrescentar
                     ? appendUniqueById(atuais, dados.results)
@@ -63,11 +112,8 @@ export default function DetalhesEncontro() {
         try {
             const resposta = await siaFetch(`/participacoes-encontros/?encontro=${encontroId}`);
             if (resposta.ok) {
-                const dados = await resposta.json();    
-                const listaConfirmados = (dados.results || dados)
-                    .filter((p: any) => p.funcao?.tipo === 'encontrista')
-                    .map((p: any) => p.alpinista);
-                setConfirmados(listaConfirmados);
+                const dados: PaginatedResponse<EncounterParticipation> = await resposta.json();
+                setConfirmados(confirmedAlpinistas(dados.results));
             }
         } catch (error) {
             console.error("Erro ao buscar confirmados", error);
@@ -304,7 +350,8 @@ export default function DetalhesEncontro() {
                 });
                 if (resposta.ok) {
                     const dados = await resposta.json();
-                    setEncontro(dados);
+                    if (isEncontroFull(dados)) setEncontro(dados);
+                    else toast.error("Contrato do encontro completo indisponível.");
                 } else {
                     toast.error("Erro ao carregar detalhes do encontro.");
                 }
@@ -388,13 +435,7 @@ export default function DetalhesEncontro() {
                                 <p className="text-sm text-gray-500 mt-1">Pré-selecione os alpinistas para cada função deste encontro.</p>
                             </div>
                             
-                            {/* O BOTÃO QUE VAI PARA A NOVA PÁGINA (A MATRIZ DA SUA IMAGEM) */}
-                            <Link 
-                                href={`/encontros/${encontroId}/matriz-aptidoes`}
-                                className="px-5 py-2.5 bg-blue-50 text-blue-700 hover:bg-blue-100 hover:text-blue-800 rounded-lg font-bold transition-colors flex items-center gap-2 border border-blue-200 shadow-sm"
-                            >
-                            Consultar Aptos à trabalhar
-                            </Link>
+                            <span className="text-sm text-gray-400">Matriz de aptidões: em breve</span>
                         </div>
 
                         {/* GRID DOS CARDS DE FUNÇÃO (Opção B) */}
@@ -604,7 +645,7 @@ export default function DetalhesEncontro() {
                                                 </tr>
                                             </thead>
                                             <tbody className="divide-y divide-gray-100">
-                                                {pendentes.map((alpinista: any) => (
+                                                {pendentes.map((alpinista) => (
                                                     <tr key={alpinista.id} className="hover:bg-green-50/50 transition-colors cursor-pointer" onClick={() => toggleSelecao(alpinista.id)}>
                                                         <td className="px-4 py-4 text-center">
                                                             <input 
@@ -661,41 +702,7 @@ export default function DetalhesEncontro() {
                                         <p className="text-gray-500">Nenhum alpinista pré-selecionado para este encontro ainda.</p>
                                     </div>
                                 ) : (
-                                    <div className="overflow-x-auto border border-gray-200 rounded-xl">
-                                        <table className="w-full text-left">
-                                            <thead className="bg-gray-50 border-b border-gray-200 text-sm text-gray-500 uppercase">
-                                                <tr>
-                                                    <th className="px-4 py-3 w-10 text-center"> <Users size={16} className="mx-auto" /> </th>
-                                                    <th className="px-4 py-3 font-semibold">Nome</th>
-                                                    <th className="px-4 py-3 font-semibold">Contato</th>
-                                                    <th className="px-6 py-3 font-semibold">Idade / Nasc</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody className="divide-y divide-gray-100">
-                                                {confirmados.map((alpinista: any) => (
-                                                    <tr key={alpinista.id} className="hover:bg-red-50/50 transition-colors cursor-pointer" onClick={() => toggleSelecao(alpinista.id)}>
-                                                        <td className="px-4 py-4 text-center">
-                                                            <input 
-                                                                type="checkbox"
-                                                                checked={selecionados.includes(alpinista.id)}
-                                                                onChange={() => toggleSelecao(alpinista.id)}
-                                                                className="w-5 h-5 text-red-600 rounded border-gray-300 focus:ring-red-500 cursor-pointer"
-                                                                onClick={ (e) => e.stopPropagation() }
-                                                            />
-                                                        </td>
-                                                        <td className="px-4 py-4 font-medium text-gray-900">{alpinista.nome}</td>
-                                                        <td className="px-4 py-4 text-sm text-gray-600">
-                                                            {alpinista.telefone} <br />
-                                                            <span className="text-xs text-gray-400">{alpinista.email}</span>
-                                                        </td>
-                                                        <td className="px-4 py-4 text-sm text-gray-600">
-                                                            {alpinista.dataNascimento || "-"}
-                                                        </td>
-                                                    </tr>
-                                                ))}
-                                            </tbody>
-                                        </table>
-                                    </div>
+                                    <ConfirmedAlpinistasTable people={confirmados} selected={selecionados} toggle={toggleSelecao} />
                                 )}
                             </div>
                         )}

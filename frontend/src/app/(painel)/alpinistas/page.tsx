@@ -15,59 +15,10 @@ import {
     type SacramentValue,
 } from "../../../lib/integration-contracts";
 import { readDrfFormError } from "../../../lib/form-api-error";
-
-// ============================================================================
-// INTERFACE (CONTRATO DE DADOS)
-// ============================================================================
-interface EncontroRealizado {
-    tipo: string;
-    nome_encontro: string;
-    data: string | null;
-    cor_grupo?: string | null;
-}
-
-interface HistoricoEquipe {
-    nome_encontro: string;
-    equipe: string;
-    tipo_encontro: string;
-    data: string | null;
-    cor_grupo?: string | null;
-}
-
-interface HistoricoEvento {
-    nome_evento: string;
-    data: string | null;
-}
-
-interface Alpinista {
-    id: number;
-    nome: string;
-    email: string;
-    telefone: string;
-    cpf: string | null;
-    dataNascimento: string | null;
-    endereco: string | null;
-    nomePai: string | null;
-    telefonePai: string | null;
-    nomeMae: string | null;
-    telefoneMae: string | null;
-    restricaoSaude: string | null;
-    medicacao: string | null;
-    conheciaEscalada: string | null;
-    grupo: string | null;
-    status: string;
-    foto: string | null;
-    batizado: boolean | null;
-    primeira_comunhao: boolean | null;
-    crismado: boolean | null;
-
-    is_neurodivergente: boolean;
-    tipo_neurodivergente: string | null;
-
-    encontros_realizados?: EncontroRealizado[];
-    historico_eventos?: HistoricoEvento[];
-    historico_equipes?: HistoricoEquipe[];
-}
+import { useSiaSession } from "../../../components/SiaSessionProvider";
+import { AlpinistaSummaryPanel } from "../../../components/AlpinistaSummaryPanel";
+import { canManageAlpinistas, canViewAlpinistas } from "../../../lib/sia-capabilities";
+import { isAlpinistaFull, type AlpinistaFull, type AlpinistaProfile } from "../../../lib/sia-profile-contracts";
 
 const EMPTY_ALPINISTA_FORM: AlpinistaFormValues = {
     nome: '', email: '', telefone: '', cpf: '', dataNascimento: '',
@@ -82,6 +33,8 @@ function sacramentFromApi(value: boolean | null): SacramentValue {
 }
 
 export default function AlpinistasPage() {
+    const { session, loading: sessionLoading, error: sessionError } = useSiaSession();
+    const canManage = canManageAlpinistas(session);
     
     // ============================================================================
     // ESTADOS GERAIS E FILTROS DA LISTA
@@ -93,7 +46,7 @@ export default function AlpinistasPage() {
         setIsMounted(true);
     }, []);
 
-    const [alpinistas, setAlpinistas] = useState<Alpinista[]>([]);
+    const [alpinistas, setAlpinistas] = useState<AlpinistaProfile[]>([]);
     const [carregando, setCarregando] = useState(true);
     const [erro, setErro] = useState("");
 
@@ -123,10 +76,10 @@ export default function AlpinistasPage() {
     // ESTADOS DA FICHA DETALHADA (READ) E EXCLUSÃO (DELETE)
     // ============================================================================
     const [isFichaOpen, setIsFichaOpen] = useState(false);
-    const [alpinistaSelecionado, setAlpinistaSelecionado] = useState<Alpinista | null>(null);
+    const [alpinistaSelecionado, setAlpinistaSelecionado] = useState<AlpinistaProfile | null>(null);
 
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
-    const [alpinistaParaDeletar, setAlpinistaParaDeletar] = useState<Alpinista | null>(null);
+    const [alpinistaParaDeletar, setAlpinistaParaDeletar] = useState<AlpinistaFull | null>(null);
     const [deletando, setDeletando] = useState(false);
 
     const [isHistoricoGeralOpen, setIsHistoricoGeralOpen] = useState(false);
@@ -159,6 +112,7 @@ export default function AlpinistasPage() {
     };
 
     useEffect(()=> {
+        if (sessionLoading || !canViewAlpinistas(session)) return;
         const timer = setTimeout(() => {
             const url = buildPaginatedPath(
                 "/alpinistas/",
@@ -169,7 +123,7 @@ export default function AlpinistasPage() {
             buscarAlpinistas(url);
         }, 500);
         return () => clearTimeout(timer);
-    }, [busca]);
+    }, [busca, sessionLoading, session]);
 
     const irParaPrimeiraPagina = () => {
         const url = buildPaginatedPath(
@@ -267,7 +221,7 @@ export default function AlpinistasPage() {
         setIsModalOpen(true);
     };
 
-    const abrirModalEdicao = (alpinista: Alpinista) => {
+    const abrirModalEdicao = (alpinista: AlpinistaFull) => {
         setIdEdicao(alpinista.id); 
         setFormData({
             nome: alpinista.nome, email: alpinista.email, telefone: alpinista.telefone,
@@ -291,12 +245,12 @@ export default function AlpinistasPage() {
         setIsModalOpen(true);  
     };
 
-    const abrirFicha = (alpinista: Alpinista) => {
+    const abrirFicha = (alpinista: AlpinistaProfile) => {
         setAlpinistaSelecionado(alpinista);
         setIsFichaOpen(true);
     };
 
-    const confirmarDelecao = (alpinista: Alpinista) => {
+    const confirmarDelecao = (alpinista: AlpinistaFull) => {
         setAlpinistaParaDeletar(alpinista);
         setMenuAberto(null); 
         setIsDeleteModalOpen(true); 
@@ -304,7 +258,8 @@ export default function AlpinistasPage() {
 
     const alpinistasFiltrados = alpinistas
         .filter((alpinista) => {
-            return filtroStatus === "TODOS" || (alpinista.status || 'ativo').toLowerCase() === filtroStatus.toLowerCase();
+            return filtroStatus === "TODOS" ||
+                (isAlpinistaFull(alpinista) && alpinista.status === filtroStatus);
     })
         .sort((a,b) =>{
             if (filtroOrdem === "A-Z") {
@@ -316,9 +271,15 @@ export default function AlpinistasPage() {
         });
 
    
-    const encontrosSeguros = alpinistaSelecionado?.encontros_realizados || [];
-    const equipesSeguras = alpinistaSelecionado?.historico_equipes || [];
-    const eventosSeguros = alpinistaSelecionado?.historico_eventos || [];
+    const selectedFull = alpinistaSelecionado && isAlpinistaFull(alpinistaSelecionado)
+        ? alpinistaSelecionado : null;
+    const encontrosSeguros = selectedFull?.encontros_realizados || [];
+    const equipesSeguras = selectedFull?.historico_equipes || [];
+    const eventosSeguros = selectedFull?.historico_eventos || [];
+
+    if (sessionLoading) return <p className="p-10 text-gray-500">Carregando sessão...</p>;
+    if (sessionError) return <p className="p-10 text-red-600">{sessionError}</p>;
+    if (!canViewAlpinistas(session)) return <p className="p-10 text-gray-600">Seu papel não permite acessar Alpinistas.</p>;
 
     // ============================================================================
     // RENDERIZAÇÃO DA INTERFACE (JSX / HTML)
@@ -330,15 +291,15 @@ export default function AlpinistasPage() {
             <div className="flex justify-between items-center bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
                 <div>
                     <h1 className="text-2xl font-bold text-gray-800">Alpinistas</h1>
-                    <p className="text-sm text-gray-500 mt-1">Gerencie os membros do Movimento Escalada.</p>
+                    <p className="text-sm text-gray-500 mt-1">{canManage ? "Gerencie" : "Consulte"} os membros do Movimento Escalada.</p>
                 </div>
-                <button 
+                {canManage && <button
                     onClick={abrirModalNovo}
                     className="bg-escalada-azul hover:bg-blue-800 text-white px-5 py-2.5 rounded-lg font-medium flex items-center gap-2 transition-colors shadow-sm"
                 >
                     <Plus size={20} />
                     Novo Alpinista
-                </button>
+                </button>}
             </div>
 
             {/* ÁREA DE FILTROS E BUSCA AVANÇADA */}
@@ -351,7 +312,7 @@ export default function AlpinistasPage() {
                     </div>
                     <input 
                         type="text" 
-                        placeholder="Buscar por nome, email ou telefone..." 
+                        placeholder={canManage ? "Buscar por nome, e-mail ou telefone..." : "Buscar por nome, WhatsApp ou grupo..."}
                         value={busca} 
                         onChange={(e) => setBusca(e.target.value)} 
                         className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-escalada-azul/20 focus:border-escalada-azul transition-all"
@@ -359,7 +320,7 @@ export default function AlpinistasPage() {
                 </div>
 
                 {/* NOVO: Filtro Avançado de Status (Direita) */}
-                <div className="relative md:w-64">
+                {canManage && <div className="relative md:w-64">
                     <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                         <Filter className="h-4 w-4 text-gray-400" />
                     </div>
@@ -378,7 +339,7 @@ export default function AlpinistasPage() {
                     <div className="absolute inset-y-0 right-0 flex items-center px-3 pointer-events-none">
                         <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
                     </div>
-                </div>
+                </div>}
 
                 <div className="relative w-full md:w-48">
                         <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -391,7 +352,7 @@ export default function AlpinistasPage() {
                         >
                             <option value="A-Z">Ordem: A - Z</option>
                             <option value="Z-A">Ordem: Z - A</option>
-                            <option value="PADRAO">Mais Recentes</option>
+                            <option value="PADRAO">Ordem padrão (nome)</option>
                         </select>
                         <div className="absolute inset-y-0 right-0 flex items-center px-3 pointer-events-none">
                             <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
@@ -421,10 +382,9 @@ export default function AlpinistasPage() {
                             <thead>
                                 <tr className="bg-gray-50 border-b border-gray-100 text-sm text-gray-500 uppercase tracking-wider">
                                     <th className="px-6 py-4 font-medium">Nome</th>
-                                    <th className="px-6 py-4 font-medium">E-mail</th>
-                                    {/* Adicionamos a coluna Status visualmente na tabela para fazer sentido com o filtro */}
-                                    <th className="px-6 py-4 font-medium">Status</th>
-                                    <th className="px-6 py-4 font-medium text-right">Ações</th>
+                                    <th className="px-6 py-4 font-medium">{canManage ? "E-mail" : "WhatsApp"}</th>
+                                    {canManage && <th className="px-6 py-4 font-medium">Status</th>}
+                                    {canManage && <th className="px-6 py-4 font-medium text-right">Ações</th>}
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100">
@@ -445,20 +405,20 @@ export default function AlpinistasPage() {
                                             <span className="text-base font-medium text-gray-900">{alpinista.nome}</span>
                                         </td>
                                         
-                                        <td className="px-6 py-6 text-sm text-gray-500">{alpinista.email || "Não informado"}</td>
+                                        <td className="px-6 py-6 text-sm text-gray-500">{isAlpinistaFull(alpinista) ? alpinista.email : alpinista.whatsapp || "Não informado"}</td>
                                         
                                         {/* NOVA: Célula de Status com cor dependendo do estado */}
-                                        <td className="px-6 py-6">
-                                            <span className={`px-3 py-1 rounded-full text-xs font-medium 
-                                                ${(alpinista.status || '').toLowerCase() === 'ativo' ? 'bg-green-100 text-green-700' : 
-                                                  (alpinista.status || '').toLowerCase() === 'inativo' ? 'bg-gray-100 text-gray-700' : 
+                                        {canManage && isAlpinistaFull(alpinista) && <td className="px-6 py-6">
+                                            <span className={`px-3 py-1 rounded-full text-xs font-medium
+                                                ${alpinista.status === 'ativo' ? 'bg-green-100 text-green-700' :
+                                                  alpinista.status === 'inativo' ? 'bg-gray-100 text-gray-700' :
                                                   'bg-yellow-100 text-yellow-700'}`}
                                             >
-                                                {(alpinista.status || 'ativo').toUpperCase()}
+                                                {alpinista.status.toUpperCase()}
                                             </span>
-                                        </td>
+                                        </td>}
                                         
-                                        <td className="px-6 py-6 text-sm text-right relative">
+                                        {canManage && isAlpinistaFull(alpinista) && <td className="px-6 py-6 text-sm text-right relative">
                                             <button 
                                                 onClick={(e) => alternarMenu(e, alpinista.id)} 
                                                 className={`transition-colors p-2 rounded-lg relative z-20 ${menuAberto === alpinista.id ? 'bg-blue-100 text-escalada-azul' : 'text-gray-400 hover:bg-blue-50 hover:text-escalada-azul'}`}
@@ -486,7 +446,7 @@ export default function AlpinistasPage() {
                                                     </button>
                                                 </div>
                                             )}
-                                        </td>
+                                        </td>}
                                     </tr>
                                 ))}
                             </tbody>
@@ -535,7 +495,7 @@ export default function AlpinistasPage() {
             {/* ============================================================================ */}
             
             {/* Modal de Formulário (Criar/Editar) */}
-            {isMounted && isModalOpen && createPortal (
+            {isMounted && canManage && isModalOpen && createPortal (
                 <div className="fixed inset-0 bg-black/60 z-[9999] flex items-center justify-center p-4">
                     <div className="bg-white rounded-2xl shadow-xl w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden">
                         <div className="flex justify-between items-center p-6 border-b border-gray-100 bg-white">
@@ -642,17 +602,18 @@ export default function AlpinistasPage() {
                                 )}
                                 <div>
                                     <h2 className="text-2xl font-bold">{alpinistaSelecionado.nome}</h2>
-                                    <span className="inline-block px-3 py-1 bg-white/20 rounded-full text-xs font-medium mt-2">Status: {alpinistaSelecionado.status.toUpperCase()}</span>
+                                    {selectedFull && <span className="inline-block px-3 py-1 bg-white/20 rounded-full text-xs font-medium mt-2">Status: {selectedFull.status.toUpperCase()}</span>}
                                 </div>
                             </div>
                             <div className="flex gap-2">
-                                <button onClick={() => abrirModalEdicao(alpinistaSelecionado)} className="flex items-center gap-2 bg-white/20 hover:bg-white/30 text-white px-3 py-2 rounded-lg text-sm font-medium transition-colors"><Pencil size={16} />Editar</button>
+                                {canManage && selectedFull && <button onClick={() => abrirModalEdicao(selectedFull)} className="flex items-center gap-2 bg-white/20 hover:bg-white/30 text-white px-3 py-2 rounded-lg text-sm font-medium transition-colors"><Pencil size={16} />Editar</button>}
                                 <button onClick={() => setIsFichaOpen(false)} className="text-blue-200 hover:text-white transition-colors bg-white/10 p-2 rounded-full h-fit"><X size={24} /></button>
                             </div>
                         </div>
 
 
                         <div className="overflow-y-auto p-6 flex-1 bg-gray-50">
+                            {isAlpinistaFull(alpinistaSelecionado) ? (
                             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                                 
                                 {/* COLUNA 1: DADOS PESSOAIS */}
@@ -795,6 +756,7 @@ export default function AlpinistasPage() {
 
                                 </div>
                             </div>
+                            ) : <AlpinistaSummaryPanel profile={alpinistaSelecionado} />}
                         </div>
                     </div>
                 </div>,
@@ -802,7 +764,7 @@ export default function AlpinistasPage() {
                 
             )}
             
-            {isMounted && isHistoricoGeralOpen && alpinistaSelecionado && createPortal (
+            {isMounted && isHistoricoGeralOpen && selectedFull && createPortal (
                 <div className="fixed inset-0 bg-black/70 z-[9999] flex items-center justify-center p-4 backdrop-blur-sm">
                     <div className="bg-gray-50 rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden border border-gray-200">
                         
@@ -915,7 +877,7 @@ export default function AlpinistasPage() {
             )}
 
             {/* Modal de Confirmação de Exclusão (Delete) */}
-            {isMounted && isDeleteModalOpen && alpinistaParaDeletar && createPortal (
+            {isMounted && canManage && isDeleteModalOpen && alpinistaParaDeletar && createPortal (
                 <div className="fixed inset-0 bg-black/60 z-[9999] flex items-center justify-center p-4">
                     <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
                         <div className="p-6 text-center">

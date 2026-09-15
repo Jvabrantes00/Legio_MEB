@@ -1,8 +1,9 @@
 import Sidebar from "../../components/Sidebar";
+import { SiaSessionProvider } from "../../components/SiaSessionProvider";
 
 export default function PainelLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-screen bg-escalada-fundo">
+    <SiaSessionProvider><div className="min-h-screen bg-escalada-fundo">
       
       {/* 1. O Menu Fixo */}
       <Sidebar />
@@ -21,6 +22,6 @@ export default function PainelLayout({ children }: { children: React.ReactNode }
         
       </div>
 
-    </div>
+    </div></SiaSessionProvider>
   );
 }

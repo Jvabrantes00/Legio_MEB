@@ -17,14 +17,9 @@ import {
   type EncontroFormValues,
 } from "../../../lib/encontro-form-contract";
 import { readDrfFormError } from "../../../lib/form-api-error";
-
-interface EncontroItem {
-  id: number;
-  encontro: string;
-  data_referencia: string;
-  data_exato: string;
-  status: string;
-}
+import { useSiaSession } from "../../../components/SiaSessionProvider";
+import { canManageEncontros, canViewEncontros } from "../../../lib/sia-capabilities";
+import { isEncontroFull, type EncontroProfile } from "../../../lib/sia-profile-contracts";
 
 const MAPA_STATUS: Record<string, string> = Object.fromEntries(
   ENCONTRO_STATUS_CHOICES.map(({ value, label }) => [value, label]),
@@ -40,8 +35,10 @@ const INITIAL_ENCONTRO_FORM: EncontroFormValues = {
 };
 
 export default function Encontros() {
+  const { session, loading: sessionLoading, error: sessionError } = useSiaSession();
+  const canManage = canManageEncontros(session);
 
-  const [encontros, setEncontros] = useState<EncontroItem[]>([]);
+  const [encontros, setEncontros] = useState<EncontroProfile[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [paginaAtual, setPaginaAtual] = useState(1);
   const [totalEncontros, setTotalEncontros] = useState(0);
@@ -60,7 +57,7 @@ export default function Encontros() {
       });
 
       if (resposta.ok) {
-        const dados: PaginatedResponse<EncontroItem> = await resposta.json();
+        const dados: PaginatedResponse<EncontroProfile> = await resposta.json();
         const controls = paginationControls(dados);
         setEncontros(dados.results);
         setTotalEncontros(controls.total);
@@ -78,8 +75,9 @@ export default function Encontros() {
   }, []);
 
   useEffect(() => {
+    if (sessionLoading || !canViewEncontros(session)) return;
     carregarEncontros(1);
-  }, [carregarEncontros]);
+  }, [carregarEncontros, sessionLoading, session]);
 
   const mudarPagina = (pagina: number) => {
     if (pagina < 1 || carregando) return;
@@ -135,6 +133,7 @@ export default function Encontros() {
   };
 
   const deletarEncontro = async (id: number) => {
+    if (!canManage) return;
     if (!window.confirm("Tem certeza que deseja excluir este encontro definitivamente?")) return;
 
     try {
@@ -156,6 +155,10 @@ export default function Encontros() {
     }
   };
 
+  if (sessionLoading) return <p className="p-10 text-gray-500">Carregando sessão...</p>;
+  if (sessionError) return <p className="p-10 text-red-600">{sessionError}</p>;
+  if (!canViewEncontros(session)) return <p className="p-10 text-gray-600">Seu papel não permite acessar Encontros.</p>;
+
   return (
     <div className="space-y-6 relative">
       
@@ -163,14 +166,14 @@ export default function Encontros() {
       <div className="flex justify-between items-center bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
         <div>
           <h1 className="text-3xl font-bold text-gray-800">Encontros</h1>
-          <p className="text-gray-500 mt-1">Gerencie os encontros do Movimento Escalada</p>
+          <p className="text-gray-500 mt-1">{canManage ? "Gerencie" : "Consulte"} os encontros do Movimento Escalada</p>
         </div>
-        <button 
+        {canManage && <button
           onClick={abrirModalNovo}
           className="bg-escalada-azul hover:bg-blue-800 text-white px-5 py-2.5 rounded-lg font-medium transition-colors shadow-sm"
         >
           + Novo Encontro
-        </button>
+        </button>}
       </div>
 
       {carregando ? (
@@ -180,7 +183,7 @@ export default function Encontros() {
           
           {encontros.length === 0 ? (
             <div className="p-10 text-center text-gray-500">
-              Nenhum encontro agendado ainda. Clique no botão acima para criar o primeiro!
+              Nenhum encontro cadastrado.
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -197,14 +200,15 @@ export default function Encontros() {
                       Data (Referência) {ordemMaisRecente ? "↓" : "↑"}
                     </th>
                     
-                    <th className="px-6 py-4 font-medium">Data do Encontro</th>
-                    <th className="px-6 py-4 font-medium">Status</th>
-                    <th className="px-6 py-4 font-medium text-right">Ações</th>
+                    <th className="px-6 py-4 font-medium">Tipo</th>
+                    {canManage && <th className="px-6 py-4 font-medium">Data do Encontro</th>}
+                    {canManage && <th className="px-6 py-4 font-medium">Status</th>}
+                    <th className="px-6 py-4 font-medium text-right">{canManage ? "Ações" : "Resumo"}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
 
-                  {encontrosOrdenados.map((encontro: any) => (
+                  {encontrosOrdenados.map((encontro) => (
                     <tr key={encontro.id} className="hover:bg-gray-50 transition-colors">
                       <td className="px-6 py-4 font-medium text-gray-800">{encontro.encontro}</td>
                       
@@ -212,29 +216,30 @@ export default function Encontros() {
                         {new Date(encontro.data_referencia).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}
                       </td>
                       
-                      <td className="px-6 py-4 text-gray-600">{encontro.data_exato}</td>
+                      <td className="px-6 py-4 text-gray-600">{encontro.tipo}</td>
+                      {canManage && isEncontroFull(encontro) && <td className="px-6 py-4 text-gray-600">{encontro.data_exato}</td>}
                       
-                      <td className="px-6 py-4">
-                        <span className="px-3 py-1 rounded-full text-sm font-medium ${encontro.status === 'agendado' ? 'bg-green-100 text-green-700' : encontro.status === 'em_agendamento' ? 'bg-blue-100 text-blue-700' : 'bg-red-100 text-red-700'}`}" >
+                      {canManage && isEncontroFull(encontro) && <td className="px-6 py-4">
+                        <span className={`px-3 py-1 rounded-full text-sm font-medium ${encontro.status === "agendado" ? "bg-green-100 text-green-700" : "bg-blue-100 text-blue-700"}`}>
                           {MAPA_STATUS[encontro.status] || encontro.status}
                         </span>
-                      </td>
+                      </td>}
                       
                       <td className="px-6 py-4 flex gap-3 justify-end items-center">
                         <Link 
-                          href={`encontros/${encontro.id}`}
+                          href={`/encontros/${encontro.id}`}
                           className="flex items-center gap-1 px-4 py-2 bg-escalada-azul/10 hover:bg-escalada-azul/20 text-escalada-azul rounded-lg text-sm font-semibold transition-colors"
                         >
-                          <Settings size={16} /> Gerenciar
+                          {canManage ? <Settings size={16} /> : null} {canManage ? "Gerenciar" : "Ver resumo"}
                         </Link>
 
-                        <button 
+                        {canManage && <button
                           onClick={() => deletarEncontro(encontro.id)}
                           className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                           title="Excluir Encontro"
                         >
                           < Trash2 size={20} />
-                        </button>
+                        </button>}
                       </td>
                     </tr>
                   ))}
@@ -269,7 +274,7 @@ export default function Encontros() {
       )}
 
       
-      {isModalOpen && (
+      {canManage && isModalOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl p-8 w-full max-w-md shadow-2xl">
             <h2 className="text-2xl font-bold mb-6 text-gray-800">Novo Encontro</h2>
