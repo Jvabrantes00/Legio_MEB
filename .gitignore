@@ -36,3 +36,6 @@ next-env.d.ts
 .DS_Store
 Thumbs.db
 .vscode/
+
+# Local Dev Tunnels state / credentials
+DevTunnels/
