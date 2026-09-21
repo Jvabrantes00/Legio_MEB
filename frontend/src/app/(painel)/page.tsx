@@ -7,6 +7,7 @@ import { useSiaSession } from "../../components/SiaSessionProvider";
 import { canViewDashboard } from "../../lib/sia-capabilities";
 import { dashboardCards, type DashboardStats } from "../../lib/dashboard-contract";
 import { siaFetch } from "../../lib/sia-api";
+import { readApiError } from "../../lib/form-api-error";
 
 export default function Dashboard() {
   const { session, loading: sessionLoading, error: sessionError } = useSiaSession();
@@ -20,7 +21,7 @@ export default function Dashboard() {
     async function load() {
       try {
         const response = await siaFetch("/dashboard-stats/", { signal: controller.signal });
-        if (!response.ok) throw new Error("Não foi possível carregar o panorama do sistema.");
+        if (!response.ok) throw new Error(await readApiError(response, "Não foi possível carregar o panorama do sistema."));
         const body: DashboardStats = await response.json();
         if (!controller.signal.aborted) setStats(body);
       } catch (failure) {

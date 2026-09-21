@@ -5,7 +5,7 @@
 // ============================================================================
 import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
-import { Plus, Search, MoreHorizontal, X, Pencil, Trash2, Filter, ChevronLeft, ChevronRight, Calendar, Briefcase, Camera, Key, Maximize2, Ticket, ArrowUpDown  } from "lucide-react";
+import { Plus, Search, MoreHorizontal, X, Pencil, Trash2, Filter, ChevronLeft, ChevronRight, Calendar, Briefcase, Maximize2, Ticket, ArrowUpDown  } from "lucide-react";
 import { siaFetch } from "../../../lib/sia-api";
 import {
     buildAlpinistaCreatePayload,
@@ -14,7 +14,7 @@ import {
     type AlpinistaFormValues,
     type SacramentValue,
 } from "../../../lib/integration-contracts";
-import { readDrfFormError } from "../../../lib/form-api-error";
+import { errorMessage, readApiError, readDrfFormError } from "../../../lib/form-api-error";
 import { useSiaSession } from "../../../components/SiaSessionProvider";
 import { AlpinistaSummaryPanel } from "../../../components/AlpinistaSummaryPanel";
 import { canManageAlpinistas, canViewAlpinistas } from "../../../lib/sia-capabilities";
@@ -39,12 +39,6 @@ export default function AlpinistasPage() {
     // ============================================================================
     // ESTADOS GERAIS E FILTROS DA LISTA
     // ============================================================================
-
-    const [isMounted, setIsMounted] = useState(false);
-
-    useEffect(() => {
-        setIsMounted(true);
-    }, []);
 
     const [alpinistas, setAlpinistas] = useState<AlpinistaProfile[]>([]);
     const [carregando, setCarregando] = useState(true);
@@ -93,9 +87,10 @@ export default function AlpinistasPage() {
     ) => {
         try {
             setCarregando(true);
+            setErro("");
             const resposta = await siaFetch(url);
 
-            if (!resposta.ok) throw new Error("Não foi possível carregar a lista de alpinistas.");
+            if (!resposta.ok) throw new Error(await readApiError(resposta, "Não foi possível carregar a lista de alpinistas."));
 
             const dados = await resposta.json();
             setAlpinistas(dados.results || []);
@@ -104,8 +99,8 @@ export default function AlpinistasPage() {
 
             setTotalAlpinistas(dados.count || 0);
 
-        } catch (error: any) {
-            setErro(error.message);
+        } catch (error: unknown) {
+            setErro(errorMessage(error, "Não foi possível carregar a lista de alpinistas."));
         } finally {
             setCarregando(false);
         }
@@ -172,8 +167,8 @@ export default function AlpinistasPage() {
             setIsModalOpen(false); 
             buscarAlpinistas("/alpinistas/");
 
-        } catch (error: any) {
-            alert(error.message);
+        } catch (error: unknown) {
+            alert(errorMessage(error, "Não foi possível salvar o alpinista."));
         } finally {
             setSalvando(false);
         }
@@ -188,7 +183,7 @@ export default function AlpinistasPage() {
                 method: "DELETE"
             });
 
-            if (!resposta.ok) throw new Error("Não foi possível excluir o alpinista.");
+            if (!resposta.ok) throw new Error(await readApiError(resposta, "Não foi possível excluir o alpinista."));
 
             setIsDeleteModalOpen(false);
             setAlpinistaParaDeletar(null);
@@ -200,8 +195,8 @@ export default function AlpinistasPage() {
             );
             buscarAlpinistas(url);
 
-        } catch (error: any) {
-            alert(error.message);
+        } catch (error: unknown) {
+            alert(errorMessage(error, "Não foi possível excluir o alpinista."));
         } finally {
             setDeletando(false);
         }
@@ -495,7 +490,7 @@ export default function AlpinistasPage() {
             {/* ============================================================================ */}
             
             {/* Modal de Formulário (Criar/Editar) */}
-            {isMounted && canManage && isModalOpen && createPortal (
+            {canManage && isModalOpen && createPortal (
                 <div className="fixed inset-0 bg-black/60 z-[9999] flex items-center justify-center p-4">
                     <div className="bg-white rounded-2xl shadow-xl w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden">
                         <div className="flex justify-between items-center p-6 border-b border-gray-100 bg-white">
@@ -588,7 +583,7 @@ export default function AlpinistasPage() {
             )}
 
             {/* Modal de Leitura Detalhada (Ficha) */}
-            {isMounted && isFichaOpen && alpinistaSelecionado && createPortal (
+            {isFichaOpen && alpinistaSelecionado && createPortal (
                 <div className="fixed inset-0 bg-black/60 z-[9999] flex items-center justify-center p-4">
                     <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden">
                         <div className="flex justify-between items-start p-6 border-b border-gray-100 bg-escalada-azul text-white relative">
@@ -764,7 +759,7 @@ export default function AlpinistasPage() {
                 
             )}
             
-            {isMounted && isHistoricoGeralOpen && selectedFull && createPortal (
+            {isHistoricoGeralOpen && selectedFull && createPortal (
                 <div className="fixed inset-0 bg-black/70 z-[9999] flex items-center justify-center p-4 backdrop-blur-sm">
                     <div className="bg-gray-50 rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden border border-gray-200">
                         
@@ -877,7 +872,7 @@ export default function AlpinistasPage() {
             )}
 
             {/* Modal de Confirmação de Exclusão (Delete) */}
-            {isMounted && canManage && isDeleteModalOpen && alpinistaParaDeletar && createPortal (
+            {canManage && isDeleteModalOpen && alpinistaParaDeletar && createPortal (
                 <div className="fixed inset-0 bg-black/60 z-[9999] flex items-center justify-center p-4">
                     <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
                         <div className="p-6 text-center">

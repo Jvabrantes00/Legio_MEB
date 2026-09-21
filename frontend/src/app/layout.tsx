@@ -3,7 +3,6 @@ import {Inter} from "next/font/google";
 import {Toaster} from 'react-hot-toast';
 import "./globals.css";
 import React from "react";
-import { Tornado } from "lucide-react";
 
 const inter = Inter({ subsets: ["latin"]});
 

@@ -3,6 +3,7 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { isSiaSession, type SiaSession } from "../lib/sia-capabilities";
+import { readApiError } from "../lib/form-api-error";
 
 interface SessionState {
   session: SiaSession | null;
@@ -37,7 +38,7 @@ export function SiaSessionProvider({ children }: { children: React.ReactNode }) 
           router.replace("/login");
           return;
         }
-        if (!response.ok) throw new Error("Não foi possível carregar sua sessão.");
+        if (!response.ok) throw new Error(await readApiError(response, "Não foi possível carregar sua sessão."));
         const body: unknown = await response.json();
         if (!isSiaSession(body)) throw new Error("Resposta de sessão inválida.");
         setState({ session: body, loading: false, error: null });

@@ -1,3 +1,5 @@
+import type { AlpinistaStatus } from "./sia-profile-contracts";
+
 export type PaginatedResponse<T> = {
   count: number;
   next: string | null;
@@ -63,7 +65,7 @@ export interface AlpinistaFormValues {
   medicacao: string;
   conheciaEscalada: string;
   grupo: string;
-  status: string;
+  status: AlpinistaStatus;
   is_neurodivergente: boolean;
   tipo_neurodivergente: string;
   batizado: SacramentValue;

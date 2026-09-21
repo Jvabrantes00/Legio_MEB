@@ -39,3 +39,6 @@ Thumbs.db
 
 # Local Dev Tunnels state / credentials
 DevTunnels/
+
+# TypeScript incremental build cache
+*.tsbuildinfo

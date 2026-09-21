@@ -1,7 +1,14 @@
-export interface AlpinistaSummary {
+export type AlpinistaStatus = "ativo" | "pendente" | "confirmado" | "inativo";
+import type { EncontroStatus, EncontroTipo } from "./encontro-form-contract";
+export type FuncaoTipo = "encontrista" | "equipe";
+
+interface AlpinistaIdentity {
   id: number;
   nome: string;
   foto: string | null;
+}
+
+export interface AlpinistaSummary extends AlpinistaIdentity {
   idade: number | null;
   grupo: string | null;
   whatsapp: string;
@@ -12,10 +19,7 @@ export interface AlpinistaSummary {
   responsaveis?: Array<{ nome: string | null; telefone: string | null }>;
 }
 
-export interface AlpinistaFull {
-  id: number;
-  nome: string;
-  foto: string | null;
+export interface AlpinistaFull extends AlpinistaIdentity {
   cpf: string | null;
   email: string;
   telefone: string;
@@ -29,7 +33,7 @@ export interface AlpinistaFull {
   medicacao: string | null;
   conheciaEscalada: string | null;
   grupo: string | null;
-  status: string;
+  status: AlpinistaStatus;
   batizado: boolean | null;
   primeira_comunhao: boolean | null;
   crismado: boolean | null;
@@ -55,14 +59,14 @@ export function isAlpinistaFull(value: unknown): value is AlpinistaFull {
 export interface EncontroSummary {
   id: number;
   encontro: string;
-  tipo: string;
+  tipo: EncontroTipo;
   data_referencia: string;
 }
 
 export interface EncontroFull extends EncontroSummary {
   data_exato: string;
   local: string;
-  status: string;
+  status: EncontroStatus;
   status_encontro: string;
   criado_em: string;
 }
@@ -81,10 +85,21 @@ export interface ConfirmedAlpinista {
   nome: string;
 }
 
+export interface FuncaoEncontro {
+  id: number;
+  nome: string;
+  tipo: FuncaoTipo;
+  descricao_faq: string;
+  ordem: number;
+  eh_violeiro: boolean;
+}
+
 export interface EncounterParticipation {
   id: number;
   alpinista: ConfirmedAlpinista;
-  funcao: { id: number; nome: string; tipo: string };
+  funcao: FuncaoEncontro;
+  cor_grupo: string | null;
+  coordenador: boolean;
 }
 
 export function confirmedAlpinistas(participacoes: EncounterParticipation[]): ConfirmedAlpinista[] {

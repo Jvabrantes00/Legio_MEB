@@ -16,7 +16,7 @@ import {
   ENCONTRO_TIPO_CHOICES,
   type EncontroFormValues,
 } from "../../../lib/encontro-form-contract";
-import { readDrfFormError } from "../../../lib/form-api-error";
+import { errorMessage, readApiError } from "../../../lib/form-api-error";
 import { useSiaSession } from "../../../components/SiaSessionProvider";
 import { canManageEncontros, canViewEncontros } from "../../../lib/sia-capabilities";
 import { isEncontroFull, type EncontroProfile } from "../../../lib/sia-profile-contracts";
@@ -65,10 +65,10 @@ export default function Encontros() {
         setTemProximaPagina(controls.hasNext);
         setPaginaAtual(pagina);
       } else {
-        toast.error("Falha ao buscar os encontros do servidor.");
+        toast.error(await readApiError(resposta, "Falha ao buscar os encontros do servidor."));
       }
-    } catch (error) {
-      toast.error("Erro de conexão com o servidor.");
+    } catch (error: unknown) {
+      toast.error(errorMessage(error, "Erro de conexão com o servidor."));
     } finally {
       setCarregando(false);
     }
@@ -76,7 +76,8 @@ export default function Encontros() {
 
   useEffect(() => {
     if (sessionLoading || !canViewEncontros(session)) return;
-    carregarEncontros(1);
+    const timer = window.setTimeout(() => void carregarEncontros(1), 0);
+    return () => window.clearTimeout(timer);
   }, [carregarEncontros, sessionLoading, session]);
 
   const mudarPagina = (pagina: number) => {
@@ -123,10 +124,10 @@ export default function Encontros() {
         // Mensagem dinâmica: avisa se criou ou se atualizou
         toast.success("Encontro agendado com sucesso!"); 
       } else {
-        toast.error(await readDrfFormError(resposta, "Não foi possível salvar o encontro."));
+        toast.error(await readApiError(resposta, "Não foi possível salvar o encontro."));
       }
-    } catch (error) {
-      toast.error("Erro ao tentar conectar com o servidor.");
+    } catch (error: unknown) {
+      toast.error(errorMessage(error, "Erro ao tentar conectar com o servidor."));
     } finally {
       setSalvando(false); 
     }
@@ -148,10 +149,10 @@ export default function Encontros() {
           : paginaAtual;
         carregarEncontros(paginaDestino); // Evita permanecer em uma página vazia
       } else {
-        toast.error("Erro ao excluir encontro.");
+        toast.error(await readApiError(resposta, "Erro ao excluir encontro."));
       }
-    } catch (error) {
-      toast.error("Erro de conexão.");
+    } catch (error: unknown) {
+      toast.error(errorMessage(error, "Erro de conexão."));
     }
   };
 

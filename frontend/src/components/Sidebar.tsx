@@ -1,30 +1,33 @@
-// 1. A DIRETIVA 'USE CLIENT'
-// No Next.js, os componentes nascem no "Servidor" por padrão.
-// Usamos "use client" no topo para avisar: "Ei, este componente precisa interagir
-// com o navegador (neste caso, ler a URL atual onde o usuário está)".
 "use client";
 
 import Link from 'next/link';
-// 1. Importamos o useRouter para podermos navegar o usuário via código
 import { usePathname, useRouter } from 'next/navigation'; 
 import { LayoutDashboard, Users, Calendar, LogOut } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { authMutation } from '../lib/sia-api';
 import { useSiaSession } from './SiaSessionProvider';
 import { siaNavigation } from '../lib/sia-navigation';
+import { errorMessage, readApiError } from '../lib/form-api-error';
 
 export default function Sidebar() {
     const pathname = usePathname();
-    const router = useRouter(); // 2. Inicializamos o router
+    const router = useRouter();
     const { session, loading, error } = useSiaSession();
 
     const menuItems = siaNavigation(session);
     const icons = { '/': LayoutDashboard, '/alpinistas': Users, '/encontros': Calendar };
 
     const handleLogout = async () => {
-        const response = await authMutation('/api/auth/logout');
-        if (response.ok) {
+        try {
+            const response = await authMutation('/api/auth/logout');
+            if (!response.ok) {
+                toast.error(await readApiError(response, 'Não foi possível encerrar a sessão.'));
+                return;
+            }
             router.push('/login');
             router.refresh();
+        } catch (error: unknown) {
+            toast.error(errorMessage(error, 'Não foi possível encerrar a sessão.'));
         }
     };
 
@@ -64,7 +67,6 @@ export default function Sidebar() {
             </nav>
 
             <div className="p-4 border-t border-blue-400/30">
-                {/* 4. Substituímos o console.log pela nossa nova função */}
                 <button 
                     onClick={handleLogout}
                     className="flex items-center gap-3 px-4 py-3 w-full rounded-lg hover:bg-red-500 transition-colors duration-200 text-sm font-medium"

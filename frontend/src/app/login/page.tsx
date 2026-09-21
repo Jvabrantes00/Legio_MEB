@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Lock, User } from 'lucide-react';
 import { authMutation } from '../../lib/sia-api';
+import { errorMessage, readApiError } from '../../lib/form-api-error';
 
 interface SessionData {
     id: number;
@@ -56,8 +57,7 @@ export default function Login() {
             });
 
             if (!resposta.ok) {
-                const erroData = await resposta.json().catch(() => null);
-                throw new Error(erroData?.detail || 'Usuário ou senha incorretos.');
+                throw new Error(await readApiError(resposta, 'Usuário ou senha incorretos.'));
             }
 
             const dados: unknown = await resposta.json();
@@ -67,8 +67,8 @@ export default function Login() {
 
             router.push('/'); 
 
-        } catch (error: any) {
-            setErro(error.message || 'Ocorreu um erro ao conectar com o servidor.');
+        } catch (error: unknown) {
+            setErro(errorMessage(error, 'Ocorreu um erro ao conectar com o servidor.'));
         } finally {
             setCarregando(false);
         }
@@ -120,11 +120,6 @@ export default function Login() {
                                     placeholder="••••••••"
                                     disabled={carregando}
                                 />
-                            </div>
-                            <div className="flex justify-end mt-2">
-                                <a href="#" className="text-sm text-escalada-azul hover:underline font-medium">
-                                    Esqueceu a Senha?
-                                </a>
                             </div>
                         </div>
 

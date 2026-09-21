@@ -68,8 +68,8 @@ describe("Encontro da Comunicação e participações", () => {
 
   it("confirmados usam somente id/nome, sem contato ou nascimento inventados", () => {
     const participacoes: EncounterParticipation[] = [
-      { id: 1, alpinista: { id: 10, nome: "Confirmado" }, funcao: { id: 1, nome: "Encontrista", tipo: "encontrista" } },
-      { id: 2, alpinista: { id: 11, nome: "Equipe" }, funcao: { id: 2, nome: "Equipe", tipo: "equipe" } },
+      { id: 1, alpinista: { id: 10, nome: "Confirmado" }, funcao: { id: 1, nome: "Encontrista", tipo: "encontrista", descricao_faq: "", ordem: 1, eh_violeiro: false } , cor_grupo: null, coordenador: false },
+      { id: 2, alpinista: { id: 11, nome: "Equipe" }, funcao: { id: 2, nome: "Equipe", tipo: "equipe", descricao_faq: "", ordem: 2, eh_violeiro: false } , cor_grupo: null, coordenador: false },
     ];
     expect(confirmedAlpinistas(participacoes)).toEqual([{ id: 10, nome: "Confirmado" }]);
     const html = renderToStaticMarkup(<ConfirmedAlpinistasTable

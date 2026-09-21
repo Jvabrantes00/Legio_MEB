@@ -1,9 +1,9 @@
 "use client"
 
-import { useState, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import toast from "react-hot-toast";
-import { ArrowLeft, Edit, Users, Briefcase } from "lucide-react";
+import { ArrowLeft, Users, Briefcase } from "lucide-react";
 import { useParams } from "next/navigation";
 import { siaFetch } from "../../../../lib/sia-api";
 import { useSiaSession } from "../../../../components/SiaSessionProvider";
@@ -13,7 +13,7 @@ import { canManageEncontros, canViewEncontros } from "../../../../lib/sia-capabi
 import {
     confirmedAlpinistas, isEncontroFull,
     type AlpinistaFull, type ConfirmedAlpinista, type EncounterParticipation,
-    type EncontroFull, type EncontroSummary,
+    type EncontroFull, type EncontroSummary, type FuncaoEncontro,
 } from "../../../../lib/sia-profile-contracts";
 import {
     appendUniqueById,
@@ -22,6 +22,7 @@ import {
     startPaginatedSearch,
     type PaginatedResponse,
 } from "../../../../lib/integration-contracts";
+import { errorMessage, readApiError } from "../../../../lib/form-api-error";
 
 export default function DetalhesEncontro() {
     const { session, loading, error } = useSiaSession();
@@ -32,21 +33,25 @@ export default function DetalhesEncontro() {
 }
 
 function EncounterSummaryDetails() {
-    const params = useParams();
+    const params = useParams<{ id: string }>();
     const encontroId = params.id;
     const [encontro, setEncontro] = useState<EncontroSummary | null>(null);
     const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState<string | null>(null);
 
     useEffect(() => {
         const controller = new AbortController();
         async function load() {
             try {
                 const response = await siaFetch(`/encontros/${encontroId}/`, { signal: controller.signal });
-                if (!response.ok) throw new Error("Não foi possível carregar o encontro.");
+                if (!response.ok) throw new Error(await readApiError(response, "Não foi possível carregar o encontro."));
                 const body: EncontroSummary = await response.json();
                 if (!controller.signal.aborted) setEncontro(body);
-            } catch {
-                if (!controller.signal.aborted) setEncontro(null);
+            } catch (error: unknown) {
+                if (!controller.signal.aborted) {
+                    setEncontro(null);
+                    setLoadError(errorMessage(error, "Não foi possível carregar o encontro."));
+                }
             } finally {
                 if (!controller.signal.aborted) setLoading(false);
             }
@@ -56,7 +61,7 @@ function EncounterSummaryDetails() {
     }, [encontroId]);
 
     if (loading) return <p className="p-10 text-gray-500">Carregando resumo do encontro...</p>;
-    if (!encontro) return <p className="p-10 text-red-600">Encontro não encontrado.</p>;
+    if (loadError || !encontro) return <p className="p-10 text-red-600">{loadError || "Encontro indisponível."}</p>;
     return <div className="space-y-4">
         <Link href="/encontros" className="text-escalada-azul hover:underline">← Voltar aos encontros</Link>
         <EncontroSummaryPanel encontro={encontro} />
@@ -64,13 +69,13 @@ function EncounterSummaryDetails() {
 }
 
 function ManagedEncounterDetails() {
-    const params = useParams();
+    const params = useParams<{ id: string }>();
     const encontroId = params.id;
 
     const [encontro, setEncontro] = useState<EncontroFull | null>(null);
     const [carregando, setCarregando] = useState(true);
 
-    const [abaAtiva, setAbaAtiva] = useState<"geral" | "equipes" | "encontristas">("encontristas");
+    const [abaAtiva, setAbaAtiva] = useState<"equipes" | "encontristas">("encontristas");
 
     const [modoLista, setModoLista] = useState<"pendentes" | "confirmados">("pendentes");
 
@@ -82,7 +87,7 @@ function ManagedEncounterDetails() {
     const [selecionados, setSelecionados] = useState<number[]>([]);
     const [efetivando, setEfetivando] = useState(false);
 
-    async function buscarPendentes(pagina = 1, acrescentar = false) {
+    const buscarPendentes = useCallback(async (pagina = 1, acrescentar = false) => {
         try {
             if (acrescentar) setCarregandoMaisPendentes(true);
             const path = buildPaginatedPath(
@@ -91,7 +96,8 @@ function ManagedEncounterDetails() {
                 pagina,
             );
             const resposta = await siaFetch(path);
-            if (resposta.ok) {
+            if (!resposta.ok) throw new Error(await readApiError(resposta, "Erro ao buscar alpinistas pendentes."));
+            {
                 const dados: PaginatedResponse<AlpinistaFull> = await resposta.json();
                 const controls = paginationControls(dados);
                 setPendentes((atuais) => acrescentar
@@ -101,32 +107,35 @@ function ManagedEncounterDetails() {
                 setPaginaPendentes(pagina);
                 setTemMaisPendentes(controls.hasNext);
             }
-        } catch (error) {
-            toast.error("Erro ao buscar alpinistas pendentes.", error);
+        } catch (error: unknown) {
+            toast.error(errorMessage(error, "Erro ao buscar alpinistas pendentes."));
         } finally {
             setCarregandoMaisPendentes(false);
         }
-    }
+    }, []);
 
-    async function buscarConfirmados() {
+    const buscarConfirmados = useCallback(async () => {
         try {
             const resposta = await siaFetch(`/participacoes-encontros/?encontro=${encontroId}`);
-            if (resposta.ok) {
+            if (!resposta.ok) throw new Error(await readApiError(resposta, "Erro ao buscar alpinistas confirmados."));
+            {
                 const dados: PaginatedResponse<EncounterParticipation> = await resposta.json();
                 setConfirmados(confirmedAlpinistas(dados.results));
             }
-        } catch (error) {
-            console.error("Erro ao buscar confirmados", error);
+        } catch (error: unknown) {
+            toast.error(errorMessage(error, "Erro ao buscar alpinistas confirmados."));
         }
-    }
+    }, [encontroId]);
 
     useEffect(() => {
-        if(abaAtiva === "encontristas") {
-            buscarPendentes();
-            buscarConfirmados();
+        if (abaAtiva !== "encontristas") return;
+        const timer = window.setTimeout(() => {
+            void buscarPendentes();
+            void buscarConfirmados();
             setSelecionados([]);
-        }
-    }, [abaAtiva]);
+        }, 0);
+        return () => window.clearTimeout(timer);
+    }, [abaAtiva, buscarConfirmados, buscarPendentes]);
 
     const toggleSelecao = (id: number) => {
         if (selecionados.includes(id)) {
@@ -155,10 +164,10 @@ function ManagedEncounterDetails() {
                 buscarConfirmados();
                 setModoLista("confirmados");
             } else {
-                toast.error("Erro ao efetivar alpinistas.");
+                toast.error(await readApiError(resposta, "Erro ao efetivar alpinistas."));
             }
-        } catch (error) {
-            toast.error("Falha de conexão..");
+        } catch (error: unknown) {
+            toast.error(errorMessage(error, "Falha de conexão."));
         } finally {
             setEfetivando(false);
         }
@@ -178,10 +187,10 @@ function ManagedEncounterDetails() {
             if (resposta.ok) {
                 buscarEquipeTrabalho(); // Recarrega os cards para pintar a coroa
             } else {
-                toast.error("Erro ao atualizar coordenador.");
+                toast.error(await readApiError(resposta, "Erro ao atualizar coordenador."));
             }
-        } catch (error) {
-            toast.error("Falha de conexão.");
+        } catch (error: unknown) {
+            toast.error(errorMessage(error, "Falha de conexão."));
         }
     };
 
@@ -204,65 +213,65 @@ function ManagedEncounterDetails() {
                 buscarPendentes(); 
                 buscarConfirmados(); 
             } else {
-                toast.error("Erro ao remover alpinistas.");
+                toast.error(await readApiError(resposta, "Erro ao remover alpinistas."));
             }
-        } catch (error) {
-            toast.error("Falha de conexão.");
+        } catch (error: unknown) {
+            toast.error(errorMessage(error, "Falha de conexão."));
         } finally {
             setEfetivando(false);
         }
     };
 
-    useEffect(() => {
-        setSelecionados([]);
-    }, [modoLista]);
-
     // ==========================================
     // ESTADOS: EQUIPES DE TRABALHO
     // ==========================================
 
-    const [funcoes, setFuncoes] = useState<any[]>([]);
-    const [equipeTrabalho, setEquipeTrabalho] = useState<any[]>([]);
+    const [funcoes, setFuncoes] = useState<FuncaoEncontro[]>([]);
+    const [equipeTrabalho, setEquipeTrabalho] = useState<EncounterParticipation[]>([]);
 
     const [isModalEquipeOpen, setIsModalEquipeOpen] = useState(false);
-    const [funcaoAtual, setFuncaoAtual] = useState<any>(null);
+    const [funcaoAtual, setFuncaoAtual] = useState<FuncaoEncontro | null>(null);
     const [termoBusca, setTermoBusca] = useState("");
-    const [resultadosBusca, setResultadosBusca] = useState<any[]>([]);
+    const [resultadosBusca, setResultadosBusca] = useState<AlpinistaFull[]>([]);
     const [buscando, setBuscando] = useState(false);
     const [paginaBuscaEquipe, setPaginaBuscaEquipe] = useState(1);
     const [buscaTemAnterior, setBuscaTemAnterior] = useState(false);
     const [buscaTemProxima, setBuscaTemProxima] = useState(false);
 
-    async function buscarFuncoes() {
+    const buscarFuncoes = useCallback(async () => {
         try {
             const resposta = await siaFetch("/funcoes/");
-            if (resposta.ok) {
-                const dados = await resposta.json();
-                setFuncoes((dados.results || dados).filter((f: any) => f.tipo !== "encontrista"));
+            if (!resposta.ok) throw new Error(await readApiError(resposta, "Erro ao buscar funções."));
+            {
+                const dados: PaginatedResponse<FuncaoEncontro> = await resposta.json();
+                setFuncoes(dados.results.filter((funcao) => funcao.tipo !== "encontrista"));
             }
-        } catch (error) {
-            toast.error("Erro ao buscar funções.", error);
+        } catch (error: unknown) {
+            toast.error(errorMessage(error, "Erro ao buscar funções."));
         }
-    }
+    }, []);
 
-    async function buscarEquipeTrabalho() {
+    const buscarEquipeTrabalho = useCallback(async () => {
         try {
             const resposta = await siaFetch(`/participacoes-encontros/?encontro=${encontroId}`);
-            if (resposta.ok) {
-                const dados = await resposta.json();
-                setEquipeTrabalho((dados.results || dados).filter((p: any) => p.funcao?.tipo !== "encontrista"));
+            if (!resposta.ok) throw new Error(await readApiError(resposta, "Erro ao buscar equipe de trabalho."));
+            {
+                const dados: PaginatedResponse<EncounterParticipation> = await resposta.json();
+                setEquipeTrabalho(dados.results.filter((participacao) => participacao.funcao.tipo !== "encontrista"));
             }
-        } catch (error) {
-            toast.error("Erro ao buscar equipe de trabalho.", error);
+        } catch (error: unknown) {
+            toast.error(errorMessage(error, "Erro ao buscar equipe de trabalho."));
         }
-    }
+    }, [encontroId]);
 
     useEffect(() => {
-        if (abaAtiva === "equipes") {
-            buscarFuncoes();
-            buscarEquipeTrabalho();
-        }
-    }, [abaAtiva]);
+        if (abaAtiva !== "equipes") return;
+        const timer = window.setTimeout(() => {
+            void buscarFuncoes();
+            void buscarEquipeTrabalho();
+        }, 0);
+        return () => window.clearTimeout(timer);
+    }, [abaAtiva, buscarEquipeTrabalho, buscarFuncoes]);
 
     useEffect(() => {
         const delayDebouceFn = setTimeout(async () => {
@@ -275,15 +284,16 @@ function ManagedEncounterDetails() {
                         paginaBuscaEquipe,
                     );
                     const resposta = await siaFetch(path);
-                    if (resposta.ok) {
-                        const dados: PaginatedResponse<any> = await resposta.json();
+                    if (!resposta.ok) throw new Error(await readApiError(resposta, "Erro na busca."));
+                    {
+                        const dados: PaginatedResponse<AlpinistaFull> = await resposta.json();
                         const controls = paginationControls(dados);
                         setResultadosBusca(dados.results);
                         setBuscaTemAnterior(controls.hasPrevious);
                         setBuscaTemProxima(controls.hasNext);
                     }
-                } catch (error) {
-                    toast.error("Erro na busca.", error);
+                } catch (error: unknown) {
+                    toast.error(errorMessage(error, "Erro na busca."));
                 } finally {
                     setBuscando(false);
                 }
@@ -296,6 +306,7 @@ function ManagedEncounterDetails() {
     }, [termoBusca, paginaBuscaEquipe]);
 
     const adicionarNaEquipe = async (alpinistaId: number) => {
+        if (!funcaoAtual) return;
         try {
             const payload = {
                 encontro_id: encontroId,
@@ -317,10 +328,10 @@ function ManagedEncounterDetails() {
                 setIsModalEquipeOpen(false);
                 setTermoBusca("");
             } else {
-                toast.error("Erro ao adicionar na equipe");
+                toast.error(await readApiError(resposta, "Erro ao adicionar na equipe."));
             }
-        } catch (error) {
-            toast.error("Falha de conexão.");
+        } catch (error: unknown) {
+            toast.error(errorMessage(error, "Falha de conexão."));
         }
     };
 
@@ -335,10 +346,10 @@ function ManagedEncounterDetails() {
                 toast.success("Alpinista removido da equipe.");
                 buscarEquipeTrabalho();
             } else {
-                toast.error("Erro ao remover.");
+                toast.error(await readApiError(resposta, "Erro ao remover da equipe."));
             }
-        } catch (error) {
-            toast.error("Falha de conexão.");
+        } catch (error: unknown) {
+            toast.error(errorMessage(error, "Falha de conexão."));
         }
     };
 
@@ -353,10 +364,10 @@ function ManagedEncounterDetails() {
                     if (isEncontroFull(dados)) setEncontro(dados);
                     else toast.error("Contrato do encontro completo indisponível.");
                 } else {
-                    toast.error("Erro ao carregar detalhes do encontro.");
+                    toast.error(await readApiError(resposta, "Erro ao carregar detalhes do encontro."));
                 }
-            } catch (erro) {
-                toast.error("Erro ao carregar detalhes do encontro.");
+            } catch (error: unknown) {
+                toast.error(errorMessage(error, "Erro ao carregar detalhes do encontro."));
             } finally {
                 setCarregando(false);
             }
@@ -408,23 +419,9 @@ function ManagedEncounterDetails() {
                     <Briefcase size={18} /> Equipes de Trabalho
                 </button>
 
-                <button
-                    onClick={() => setAbaAtiva("geral")}
-                    className={`flex-1 py-4 flex items-center justify-center gap-2 font-semibold transition-colors ${abaAtiva === "geral" ? "bg-escalada-azul text-white" : "text-gray-600 hover:bg-gray-50"}`}
-                >
-                    <Edit size={18} /> Dados Gerais
-                </button>
-
             </div>
 
             <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 min-h-[400px]">
-                {abaAtiva === "geral" && (
-                    <div>
-                        <h2 className="text-xl font-bold text-gray-800 mb-4">Informações Básicas</h2>
-                        <p className="text-gray-600">Aqui no futuro podemos colocar o formulário de edição para alterar o nome, data e status do encontro.</p>
-                    </div>
-                )}
-
                 {abaAtiva === "equipes" && (
                     <div className="animate-in fade-in duration-300 relative">
                         
@@ -435,7 +432,6 @@ function ManagedEncounterDetails() {
                                 <p className="text-sm text-gray-500 mt-1">Pré-selecione os alpinistas para cada função deste encontro.</p>
                             </div>
                             
-                            <span className="text-sm text-gray-400">Matriz de aptidões: em breve</span>
                         </div>
 
                         {/* GRID DOS CARDS DE FUNÇÃO (Opção B) */}
@@ -445,7 +441,7 @@ function ManagedEncounterDetails() {
                             </div>
                         ) : (
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                                {funcoes.map((funcao: any) => {
+                                {funcoes.map((funcao) => {
                                     // Filtra os trabalhadores específicos deste card
                                     const trabalhadores = equipeTrabalho.filter(p => p.funcao?.id === funcao.id);
                                     
@@ -465,7 +461,7 @@ function ManagedEncounterDetails() {
                                                     <p className="text-sm text-gray-400 text-center py-4">Equipe vazia</p>
                                                 ) : (
                                                     <ul className="space-y-3">
-                                                        {trabalhadores.map((trab: any) => (
+                                                        {trabalhadores.map((trab) => (
                                                             <li key={trab.id} className="flex justify-between items-center group p-1 -mx-1 hover:bg-gray-50 rounded transition-colors">
                                                                 <div className="flex items-center gap-2">
                                                                     {/* BOTÃO DA COROA */}
@@ -603,13 +599,13 @@ function ManagedEncounterDetails() {
 
                             <div className="flex gap-2">
                                 <button
-                                    onClick={() => setModoLista("pendentes")}
+                                    onClick={() => { setModoLista("pendentes"); setSelecionados([]); }}
                                     className={`px-4 py-2 rounded-lg font-bold transition-colors shadow-sm ${modoLista === "pendentes" ? "bg-gray-800 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
                                 >   
                                     Fila de Espera
                                 </button>
                                 <button
-                                    onClick={() => setModoLista("confirmados")}
+                                    onClick={() => { setModoLista("confirmados"); setSelecionados([]); }}
                                     className={`px-4 py-2 rounded-lg font-bold transition-colors shadow-sm ${modoLista === "confirmados" ? "bg-gray-600 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
                                 >
                                     Confirmados ({confirmados.length})

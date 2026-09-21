@@ -37,3 +37,18 @@ export async function readDrfFormError(response: Response, fallback: string) {
   }
   return formatDrfFormError(body, fallback);
 }
+
+const HTTP_ERROR_MESSAGES: Partial<Record<number, string>> = {
+  401: "Sua sessão expirou. Entre novamente.",
+  403: "Você não tem permissão para realizar esta ação.",
+  404: "O recurso solicitado não foi encontrado.",
+};
+
+export async function readApiError(response: Response, fallback: string): Promise<string> {
+  const statusFallback = HTTP_ERROR_MESSAGES[response.status] ?? fallback;
+  return readDrfFormError(response, statusFallback);
+}
+
+export function errorMessage(error: unknown, fallback: string): string {
+  return error instanceof Error && error.message ? error.message : fallback;
+}
