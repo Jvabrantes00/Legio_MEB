@@ -6,6 +6,7 @@ import {
   buildAlpinistaUpdatePayload,
   buildPaginatedPath,
   paginationControls,
+  readUnpaginatedCollection,
   startPaginatedSearch,
   type AlpinistaFormValues,
   type PaginatedResponse,
@@ -179,5 +180,20 @@ describe("paginação DRF", () => {
     );
     expect(results).toEqual([{ id: 1 }, { id: 2 }, { id: 3 }]);
     expect(selectedIds).toEqual([1]);
+  });
+});
+
+describe("coleções não paginadas do DRF", () => {
+  it("consome funções e participações como lista direta", async () => {
+    const items = [{ id: 1 }, { id: 2 }];
+    await expect(readUnpaginatedCollection<{ id: number }>(
+      Response.json(items),
+    )).resolves.toEqual(items);
+  });
+
+  it("rejeita envelope paginado em endpoint não paginado", async () => {
+    await expect(readUnpaginatedCollection(
+      Response.json({ count: 1, next: null, previous: null, results: [{ id: 1 }] }),
+    )).rejects.toThrow(/lista direta/);
   });
 });

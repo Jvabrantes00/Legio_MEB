@@ -19,6 +19,7 @@ import {
     appendUniqueById,
     buildPaginatedPath,
     paginationControls,
+    readUnpaginatedCollection,
     startPaginatedSearch,
     type PaginatedResponse,
 } from "../../../../lib/integration-contracts";
@@ -119,8 +120,8 @@ function ManagedEncounterDetails() {
             const resposta = await siaFetch(`/participacoes-encontros/?encontro=${encontroId}`);
             if (!resposta.ok) throw new Error(await readApiError(resposta, "Erro ao buscar alpinistas confirmados."));
             {
-                const dados: PaginatedResponse<EncounterParticipation> = await resposta.json();
-                setConfirmados(confirmedAlpinistas(dados.results));
+                const dados = await readUnpaginatedCollection<EncounterParticipation>(resposta);
+                setConfirmados(confirmedAlpinistas(dados));
             }
         } catch (error: unknown) {
             toast.error(errorMessage(error, "Erro ao buscar alpinistas confirmados."));
@@ -243,8 +244,8 @@ function ManagedEncounterDetails() {
             const resposta = await siaFetch("/funcoes/");
             if (!resposta.ok) throw new Error(await readApiError(resposta, "Erro ao buscar funções."));
             {
-                const dados: PaginatedResponse<FuncaoEncontro> = await resposta.json();
-                setFuncoes(dados.results.filter((funcao) => funcao.tipo !== "encontrista"));
+                const dados = await readUnpaginatedCollection<FuncaoEncontro>(resposta);
+                setFuncoes(dados.filter((funcao) => funcao.tipo !== "encontrista"));
             }
         } catch (error: unknown) {
             toast.error(errorMessage(error, "Erro ao buscar funções."));
@@ -256,8 +257,8 @@ function ManagedEncounterDetails() {
             const resposta = await siaFetch(`/participacoes-encontros/?encontro=${encontroId}`);
             if (!resposta.ok) throw new Error(await readApiError(resposta, "Erro ao buscar equipe de trabalho."));
             {
-                const dados: PaginatedResponse<EncounterParticipation> = await resposta.json();
-                setEquipeTrabalho(dados.results.filter((participacao) => participacao.funcao.tipo !== "encontrista"));
+                const dados = await readUnpaginatedCollection<EncounterParticipation>(resposta);
+                setEquipeTrabalho(dados.filter((participacao) => participacao.funcao.tipo !== "encontrista"));
             }
         } catch (error: unknown) {
             toast.error(errorMessage(error, "Erro ao buscar equipe de trabalho."));

@@ -35,6 +35,14 @@ export function paginationControls<T>(response: PaginatedResponse<T>) {
   };
 }
 
+export async function readUnpaginatedCollection<T>(response: Response): Promise<T[]> {
+  const payload: unknown = await response.json();
+  if (!Array.isArray(payload)) {
+    throw new Error("A API retornou um contrato paginado onde era esperada uma lista direta.");
+  }
+  return payload as T[];
+}
+
 export function appendUniqueById<T extends { id: number }>(
   current: T[],
   incoming: T[],
