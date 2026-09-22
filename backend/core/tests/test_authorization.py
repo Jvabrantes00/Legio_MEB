@@ -1,10 +1,13 @@
 from datetime import date, timedelta
 from io import BytesIO
+from pathlib import Path
+from unittest.mock import patch
 import shutil
 import tempfile
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
+from django.db import IntegrityError
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import override_settings
 from django.utils import timezone
@@ -1791,3 +1794,81 @@ class ComunicacaoFotosAuthorizationTests(SiaAuthorizationTestCase):
             self.client.get(url).status_code,
             status.HTTP_403_FORBIDDEN,
         )
+
+
+    def test_falha_de_auditoria_reverte_foto_de_perfil_e_remove_novo_arquivo(self):
+        alpinista = make_alpinista(foto=self.make_image('perfil-original.png'))
+        storage = alpinista.foto.storage
+        nome_original = alpinista.foto.name
+        arquivos_antes = {
+            path.name for path in Path(self.media_root, 'fotos').glob('*')
+        }
+        self.authenticate(
+            self.make_user('comunicacao-foto-rollback', SiaRole.COMUNICACAO)
+        )
+
+        with patch(
+            'core.views.LogSistema.objects.create',
+            side_effect=IntegrityError,
+        ), self.assertRaises(IntegrityError):
+            self.client.patch(
+                f'/api/alpinistas/{alpinista.pk}/foto/',
+                {'foto': self.make_image('perfil-novo.png', 'red')},
+                format='multipart',
+            )
+
+        alpinista.refresh_from_db()
+        arquivos_depois = {
+            path.name for path in Path(self.media_root, 'fotos').glob('*')
+        }
+        self.assertEqual(alpinista.foto.name, nome_original)
+        self.assertTrue(storage.exists(nome_original))
+        self.assertEqual(arquivos_depois, arquivos_antes)
+
+    def test_falha_de_auditoria_reverte_nova_foto_de_encontro(self):
+        encontro = make_encontro()
+        self.authenticate(
+            self.make_user('comunicacao-galeria-rollback', SiaRole.COMUNICACAO)
+        )
+        diretorio = Path(self.media_root, 'encontros')
+        arquivos_antes = {path.name for path in diretorio.glob('*')}
+
+        with patch(
+            'core.views.LogSistema.objects.create',
+            side_effect=IntegrityError,
+        ), self.assertRaises(IntegrityError):
+            self.client.post(
+                f'/api/encontros/{encontro.pk}/fotos/',
+                {'imagem': self.make_image('galeria-nova.png')},
+                format='multipart',
+            )
+
+        self.assertFalse(FotoEncontro.objects.filter(encontro=encontro).exists())
+        self.assertEqual(
+            {path.name for path in diretorio.glob('*')},
+            arquivos_antes,
+        )
+
+    def test_falha_de_auditoria_preserva_foto_de_encontro_removida(self):
+        encontro = make_encontro()
+        foto = FotoEncontro.objects.create(
+            encontro=encontro,
+            imagem=self.make_image('galeria-preservada.png'),
+        )
+        storage = foto.imagem.storage
+        nome_original = foto.imagem.name
+        self.authenticate(
+            self.make_user('comunicacao-delete-rollback', SiaRole.COMUNICACAO)
+        )
+
+        with patch(
+            'core.views.LogSistema.objects.create',
+            side_effect=IntegrityError,
+        ), self.assertRaises(IntegrityError):
+            self.client.delete(
+                f'/api/encontros/{encontro.pk}/fotos/{foto.pk}/'
+            )
+
+        foto.refresh_from_db()
+        self.assertEqual(foto.imagem.name, nome_original)
+        self.assertTrue(storage.exists(nome_original))

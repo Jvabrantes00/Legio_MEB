@@ -141,6 +141,6 @@ desenvolvimento precisa iniciar com `NODE_ENV=development` para aplicar
 - A coordenação de refresh em memória funciona por processo; múltiplas
   instâncias exigiriam coordenação compartilhada.
 - Banco, storage de arquivos e auditoria não formam uma transação distribuída.
+- Falhas externas de storage ainda exigem reconciliação periódica de órfãos.
 - A sessão não possui ainda uma política adicional de duração absoluta.
-- Alguns serializers ainda dependem de seleção ampla de campos.
 - A camada legada transforma dados, mas ainda não possui loader produtivo.

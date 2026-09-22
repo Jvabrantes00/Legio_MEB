@@ -247,7 +247,6 @@ def alpinista_ativo_automatico(sender, instance, created, **kwargs):
         if alpinista.status != Alpinista.Status.ATIVO:
             alpinista.status = Alpinista.Status.ATIVO
             alpinista.save(update_fields=['status'])
-            print(f"Sistema: Status de {alpinista.nome} atualizado para ativo!")
 
 
 class LogSistema(models.Model):

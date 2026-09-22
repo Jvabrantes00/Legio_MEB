@@ -180,32 +180,43 @@ class AlpinistaViewSet(viewsets.ModelViewSet):
 
         if request.method == 'DELETE':
             if nome_anterior:
-                alpinista.foto = None
-                alpinista.save(update_fields=['foto'])
+                with transaction.atomic():
+                    alpinista.foto = None
+                    alpinista.save(update_fields=['foto'])
+                    LogSistema.objects.create(
+                        usuario=request.user,
+                        acao='DELETE',
+                        modulo='Alpinista',
+                        descricao=f'Foto do Alpinista {alpinista.pk} removida.',
+                    )
                 storage.delete(nome_anterior)
-                LogSistema.objects.create(
-                    usuario=request.user,
-                    acao='DELETE',
-                    modulo='Alpinista',
-                    descricao=f'Foto do Alpinista {alpinista.pk} removida.',
-                )
             return Response({'id': alpinista.pk, 'foto': None})
 
         serializer = self.get_serializer(alpinista, data=request.data)
         serializer.is_valid(raise_exception=True)
-        alpinista = serializer.save()
-        nome_novo = alpinista.foto.name
+        nome_novo = None
+        novo_storage = None
+        try:
+            with transaction.atomic():
+                alpinista = serializer.save()
+                nome_novo = alpinista.foto.name
+                novo_storage = alpinista.foto.storage
+                LogSistema.objects.create(
+                    usuario=request.user,
+                    acao='UPDATE',
+                    modulo='Alpinista',
+                    descricao=(
+                        f'Foto do Alpinista {alpinista.pk} '
+                        f'{"substituída" if nome_anterior else "adicionada"}.'
+                    ),
+                )
+        except Exception:
+            if novo_storage and nome_novo and nome_novo != nome_anterior:
+                novo_storage.delete(nome_novo)
+            raise
+
         if nome_anterior and nome_anterior != nome_novo:
             storage.delete(nome_anterior)
-        LogSistema.objects.create(
-            usuario=request.user,
-            acao='UPDATE',
-            modulo='Alpinista',
-            descricao=(
-                f'Foto do Alpinista {alpinista.pk} '
-                f'{"substituída" if nome_anterior else "adicionada"}.'
-            ),
-        )
         return Response({
             'id': alpinista.pk,
             'foto': serializer.data['foto'],
@@ -378,13 +389,20 @@ class EncontroViewSet(viewsets.ModelViewSet):
 
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        foto = serializer.save(encontro=encontro)
-        LogSistema.objects.create(
-            usuario=request.user,
-            acao='CREATE',
-            modulo='FotoEncontro',
-            descricao=f'Foto {foto.pk} adicionada ao Encontro {encontro.pk}.',
-        )
+        foto = None
+        try:
+            with transaction.atomic():
+                foto = serializer.save(encontro=encontro)
+                LogSistema.objects.create(
+                    usuario=request.user,
+                    acao='CREATE',
+                    modulo='FotoEncontro',
+                    descricao=f'Foto {foto.pk} adicionada ao Encontro {encontro.pk}.',
+                )
+        except Exception:
+            if foto and foto.imagem:
+                foto.imagem.storage.delete(foto.imagem.name)
+            raise
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
     @action(
@@ -404,27 +422,39 @@ class EncontroViewSet(viewsets.ModelViewSet):
 
         if request.method == 'DELETE':
             foto_pk = foto.pk
-            foto.delete()
+            with transaction.atomic():
+                foto.delete()
+                LogSistema.objects.create(
+                    usuario=request.user,
+                    acao='DELETE',
+                    modulo='FotoEncontro',
+                    descricao=f'Foto {foto_pk} removida do Encontro {encontro.pk}.',
+                )
             storage.delete(nome_anterior)
-            LogSistema.objects.create(
-                usuario=request.user,
-                acao='DELETE',
-                modulo='FotoEncontro',
-                descricao=f'Foto {foto_pk} removida do Encontro {encontro.pk}.',
-            )
             return Response(status=status.HTTP_204_NO_CONTENT)
 
         serializer = self.get_serializer(foto, data=request.data)
         serializer.is_valid(raise_exception=True)
-        foto = serializer.save()
-        if nome_anterior != foto.imagem.name:
+        nome_novo = None
+        novo_storage = None
+        try:
+            with transaction.atomic():
+                foto = serializer.save()
+                nome_novo = foto.imagem.name
+                novo_storage = foto.imagem.storage
+                LogSistema.objects.create(
+                    usuario=request.user,
+                    acao='UPDATE',
+                    modulo='FotoEncontro',
+                    descricao=f'Foto {foto.pk} substituída no Encontro {encontro.pk}.',
+                )
+        except Exception:
+            if novo_storage and nome_novo and nome_novo != nome_anterior:
+                novo_storage.delete(nome_novo)
+            raise
+
+        if nome_anterior != nome_novo:
             storage.delete(nome_anterior)
-        LogSistema.objects.create(
-            usuario=request.user,
-            acao='UPDATE',
-            modulo='FotoEncontro',
-            descricao=f'Foto {foto.pk} substituída no Encontro {encontro.pk}.',
-        )
         return Response(serializer.data)
 
     @action(
@@ -483,10 +513,17 @@ class EncontroViewSet(viewsets.ModelViewSet):
 
         try:
             with transaction.atomic():
-                funcao, _ = FuncaoEncontro.objects.get_or_create(
-                    tipo='encontrista',
-                    defaults={'nome': 'Encontrista'}
+                funcao = (
+                    FuncaoEncontro.objects
+                    .filter(tipo='encontrista')
+                    .order_by('pk')
+                    .first()
                 )
+                if funcao is None:
+                    funcao = FuncaoEncontro.objects.create(
+                        nome='Encontrista',
+                        tipo='encontrista',
+                    )
 
                 sucessos = 0
                 for alp_id in alpinistas_ids:
@@ -536,44 +573,54 @@ class EncontroViewSet(viewsets.ModelViewSet):
         if not alpinistas_ids:
             return Response({"erro": "Nenhum alpinista selecionado."}, status=status.HTTP_400_BAD_REQUEST)
         
-        sucessos = 0
-        removidos_ids = []
-        for alp_id in alpinistas_ids:
-            try:
-                alpinista = Alpinista.objects.get(id=alp_id)
-                
-                participacao = ParticipacaoEncontro.objects.filter(
-                    encontro=encontro,
-                    alpinista=alpinista,
-                    funcao__tipo='encontrista'
-                ).first()
-                
-                if participacao:
-                    participacao.delete()
-                    
-                    if (alpinista.status or '').lower() in {
-                        Alpinista.Status.CONFIRMADO,
-                        Alpinista.Status.ATIVO,
-                    }:
-                        alpinista.status = Alpinista.Status.PENDENTE
-                        alpinista.save(update_fields=['status'])
-                        
-                    sucessos += 1
-                    removidos_ids.append(alpinista.pk)
-            except Alpinista.DoesNotExist:
-                continue
+        try:
+            with transaction.atomic():
+                sucessos = 0
+                removidos_ids = []
+                for alp_id in alpinistas_ids:
+                    try:
+                        alpinista = Alpinista.objects.get(id=alp_id)
+                    except Alpinista.DoesNotExist:
+                        continue
 
-        LogSistema.objects.create(
-            usuario=request.user,
-            acao='DELETE',
-            modulo='ParticipacaoEncontro',
-            descricao=(
-                f'Remoção em lote no Encontro ID {encontro.pk}; '
-                f'Alpinistas IDs {removidos_ids}.'
-            ),
+                    participacao = ParticipacaoEncontro.objects.filter(
+                        encontro=encontro,
+                        alpinista=alpinista,
+                        funcao__tipo='encontrista',
+                    ).first()
+
+                    if participacao:
+                        participacao.delete()
+
+                        if (alpinista.status or '').lower() in {
+                            Alpinista.Status.CONFIRMADO,
+                            Alpinista.Status.ATIVO,
+                        }:
+                            alpinista.status = Alpinista.Status.PENDENTE
+                            alpinista.save(update_fields=['status'])
+
+                        sucessos += 1
+                        removidos_ids.append(alpinista.pk)
+
+                LogSistema.objects.create(
+                    usuario=request.user,
+                    acao='DELETE',
+                    modulo='ParticipacaoEncontro',
+                    descricao=(
+                        f'Remoção em lote no Encontro ID {encontro.pk}; '
+                        f'Alpinistas IDs {removidos_ids}.'
+                    ),
+                )
+        except IntegrityError:
+            return Response(
+                {"erro": "Não foi possível remover o lote."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        return Response(
+            {"mensagem": f"{sucessos} encontristas removidos com sucesso!"},
+            status=status.HTTP_200_OK,
         )
-
-        return Response({"mensagem": f"{sucessos} encontristas removidos com sucesso!"}, status=status.HTTP_200_OK)
 
 
 class EventoViewSet(viewsets.ModelViewSet):

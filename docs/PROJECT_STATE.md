@@ -18,7 +18,7 @@
 | 0F Autenticação, JWT e BFF | ✅ Concluída |
 | 0G Integração frontend/API | ✅ Concluída |
 | 0H PostgreSQL e legado | ✅ Concluída |
-| 0I Débitos técnicos restantes | ⏳ Próxima |
+| 0I Débitos técnicos restantes | ✅ Concluída |
 | 0J Gate e auditoria final | ⏳ Pendente |
 | Fase 1 Remodelagem de domínio | Depois de 0J |
 
@@ -67,11 +67,11 @@
 
 ## Baseline de testes
 
-Último baseline integral validado ao final da 0G:
+Último baseline integral validado ao final da 0I:
 
 | Verificação | Resultado |
 |---|---|
-| Backend | 184/184 testes passando |
+| Backend | 192/192 testes passando |
 | Frontend | 102/102 testes passando em 9 arquivos |
 | Lint | 0 erros; 2 warnings justificados |
 | TypeScript | PASS |
@@ -93,26 +93,41 @@ otimizador de imagens sem um contrato explícito para isso.
   hardcoded.
 - `.env`, `.env.local` e arquivos locais do tunnel permanecem fora do Git.
 
-## Débitos conhecidos para 0I
+## Resultado da 0I
 
-- Substituir `fields = '__all__'` remanescentes por allowlists explícitas,
-  priorizando serializers de dados sensíveis.
-- Introduzir logging estruturado sem registrar dados pessoais ou tokens.
-- Revisar atomicidade conjunta entre banco, arquivo físico e log de auditoria.
-- Avaliar remoção ou justificativa final de `HasRecognizedSiaRole`.
-- Revisar o fluxo `remover-encontristas`.
-- Tratar explicitamente possível `MultipleObjectsReturned` na resolução de
-  Encontrista.
-- Comparar historicamente o significado de Coordenador dos Dirigentes antes
-  de modelar equivalência.
-- Remover comentários e referências obsoletas em settings.
-- Definir rotina para detectar e limpar órfãos físicos de mídia.
-- Definir rotina operacional para tokens expirados da blacklist.
-- Avaliar coordenação distribuída de refresh caso existam múltiplas
-  instâncias do BFF.
-- Definir duração absoluta de sessão além das expirações deslizantes.
-- Manter justificados ou resolver com segurança os warnings de imagem
-  protegida.
+- Serializers remanescentes usam allowlists explícitas sem mudar contratos.
+- O signal de participação não imprime mais o nome do Alpinista em stdout.
+- `HasRecognizedSiaRole`, sem uso, foi removido.
+- Remoção em lote de encontristas é atômica e possui teste de rollback.
+- A seleção da função Encontrista é determinística mesmo diante de duplicatas.
+- O histórico reconhece “Coordenador dos Dirigentes” sem diferenciar case.
+- Comentários comprovadamente obsoletos de settings foram corrigidos.
+- Fluxos de mídia agrupam banco e auditoria em transação, preservam o arquivo
+  anterior em rollback e removem novo upload quando a transação falha.
+
+## Manutenção operacional
+
+Tokens expirados da blacklist devem ser removidos periodicamente com:
+
+```bash
+cd backend
+./.venv/bin/python manage.py flushexpiredtokens
+```
+
+A periodicidade pertence à operação do ambiente; a 0I não adiciona scheduler.
+
+## Débitos deferidos
+
+- Logging técnico estruturado: risco atual baixo na instância única; implementar
+  quando houver centralização de logs/observabilidade.
+- Reconciliação de arquivos órfãos: necessária para falha externa de storage ou
+  interrupção abrupta; implementar antes de storage remoto ou operação crítica.
+- Coordenação distribuída de refresh: desnecessária em uma única instância do
+  BFF; implementar antes de escalar horizontalmente.
+- Duração absoluta máxima de sessão: política ainda não definida; implementar
+  quando houver requisito formal de segurança/operação.
+- Dois warnings de imagem protegida: mantidos enquanto não houver loader
+  autenticado que preserve o contrato de cookies.
 
 ## Fase 1 — direção, não implementação
 

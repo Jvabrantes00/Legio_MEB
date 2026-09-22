@@ -3,7 +3,6 @@ from rest_framework.permissions import BasePermission, SAFE_METHODS
 
 from .roles import (
     FICHAS_MANAGEMENT_ROLES,
-    RECOGNIZED_ROLES,
     SiaRole,
     user_has_any_role,
 )
@@ -134,9 +133,6 @@ class HasAnySiaRole(BasePermission):
     def has_object_permission(self, request, view, obj):
         return self.has_permission(request, view)
 
-
-class HasRecognizedSiaRole(HasAnySiaRole):
-    allowed_roles = RECOGNIZED_ROLES
 
 
 class IsSiaSuperuser(BasePermission):

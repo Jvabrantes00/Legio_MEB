@@ -274,7 +274,12 @@ class AlpinistaCompletoSerializer(
                 "equipe": p.funcao.nome,
                 "tipo_encontro": p.encontro.tipo,
                 "data": p.encontro.data_referencia.strftime('%d/%m/%Y') if getattr(p.encontro, 'data_referencia', None) else None,
-                "cor_grupo": p.cor_grupo if p.funcao and 'Dirigente' and "Coordenador dos Dirigentes" in p.funcao.nome.lower() else None
+                "cor_grupo": (
+                    p.cor_grupo
+                    if p.funcao
+                    and "coordenador dos dirigentes" in p.funcao.nome.casefold()
+                    else None
+                )
             } for p in participacoes
         ]
 
@@ -297,7 +302,24 @@ class EncontroSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Encontro
-        fields = '__all__' #Diz para converter todos os campos do modelo Alpinista em JSON
+        fields = (
+            'id',
+            'status_encontro',
+            'encontro',
+            'tipo',
+            'data_referencia',
+            'data_exato',
+            'local',
+            'status',
+            'criado_em',
+            'participantes',
+        )
+        read_only_fields = (
+            'id',
+            'status_encontro',
+            'criado_em',
+            'participantes',
+        )
     
     def get_status_encontro(self, obj):
         hoje = date.today()
@@ -406,7 +428,15 @@ class EventoSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Evento
-        fields = '__all__'
+        fields = (
+            'id',
+            'status_evento',
+            'total_participantes',
+            'nome',
+            'data_evento',
+            'local',
+        )
+        read_only_fields = ('id', 'status_evento', 'total_participantes')
     
     def get_status_evento(self, obj):
         hoje = date.today()
@@ -424,7 +454,15 @@ class EventoSerializer(serializers.ModelSerializer):
 class FuncaoEncontroSerializer(serializers.ModelSerializer):
     class Meta:
         model = FuncaoEncontro
-        fields = '__all__'
+        fields = (
+            'id',
+            'nome',
+            'tipo',
+            'descricao_faq',
+            'ordem',
+            'eh_violeiro',
+        )
+        read_only_fields = ('id',)
 
 #Relacionamentos Many-to-Many
 

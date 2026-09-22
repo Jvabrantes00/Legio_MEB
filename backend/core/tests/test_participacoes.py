@@ -1,4 +1,7 @@
 from rest_framework import status
+from unittest.mock import patch
+
+from django.db import IntegrityError
 
 from core.models import ParticipacaoEncontro
 from core.tests.base import (
@@ -65,6 +68,17 @@ class ParticipacaoRegressionTests(AuthenticatedAPITestCase):
         self.assertEqual(alpinista.status, 'pendente')
 
 
+    def test_criacao_de_participacao_nao_imprime_nome_em_stdout(self):
+        with patch('builtins.print') as mocked_print:
+            ParticipacaoEncontro.objects.create(
+                alpinista=make_alpinista(),
+                encontro=make_encontro(),
+                funcao=make_funcao(nome='Encontrista', tipo='encontrista'),
+            )
+
+        mocked_print.assert_not_called()
+
+
 class ParticipacaoLoteRegressionTests(AuthenticatedAPITransactionTestCase):
     reset_sequences = True
 
@@ -123,3 +137,60 @@ class ParticipacaoLoteRegressionTests(AuthenticatedAPITransactionTestCase):
         )
         self.assertEqual(primeiro.status, 'pendente')
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+
+    def test_efetivacao_com_funcoes_encontrista_duplicadas_e_deterministica(self):
+        encontro = make_encontro()
+        alpinista = make_alpinista()
+        primeira_funcao = make_funcao(nome='Encontrista A', tipo='encontrista')
+        make_funcao(nome='Encontrista B', tipo='encontrista')
+
+        response = self.client.post(
+            f'/api/encontros/{encontro.pk}/efetivar-encontristas/',
+            {'alpinistas_ids': [alpinista.pk]},
+            format='json',
+        )
+
+        participacao = ParticipacaoEncontro.objects.get(
+            encontro=encontro,
+            alpinista=alpinista,
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(participacao.funcao, primeira_funcao)
+
+    def test_remocao_em_lote_reverte_tudo_quando_auditoria_falha(self):
+        encontro = make_encontro()
+        funcao = make_funcao(nome='Encontrista', tipo='encontrista')
+        primeiro = make_alpinista(status='confirmado')
+        segundo = make_alpinista(status='confirmado')
+        for alpinista in (primeiro, segundo):
+            ParticipacaoEncontro.objects.create(
+                encontro=encontro,
+                alpinista=alpinista,
+                funcao=funcao,
+            )
+            alpinista.status = 'confirmado'
+            alpinista.save(update_fields=['status'])
+
+        with patch(
+            'core.views.LogSistema.objects.create',
+            side_effect=IntegrityError,
+        ):
+            response = self.client.post(
+                f'/api/encontros/{encontro.pk}/remover-encontristas/',
+                {'alpinistas_ids': [primeiro.pk, segundo.pk]},
+                format='json',
+            )
+
+        primeiro.refresh_from_db()
+        segundo.refresh_from_db()
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(
+            ParticipacaoEncontro.objects.filter(
+                encontro=encontro,
+                alpinista__in=(primeiro, segundo),
+            ).count(),
+            2,
+        )
+        self.assertEqual(primeiro.status, 'confirmado')
+        self.assertEqual(segundo.status, 'confirmado')

@@ -36,7 +36,8 @@ Frontend:
 - Fase 0 em fechamento.
 - Etapas 0A a 0H concluídas.
 - 0G, integração frontend/API, concluída.
-- Próximas etapas: 0I e 0J.
+- 0I, limpeza dos débitos técnicos restantes, concluída.
+- Próxima etapa: 0J, gate e auditoria final.
 - A Fase 1 começa somente depois do gate final da Fase 0.
 - Consulte `docs/PROJECT_STATE.md`; não replique o roadmap inteiro aqui.
 

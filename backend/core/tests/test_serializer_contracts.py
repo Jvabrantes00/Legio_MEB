@@ -3,9 +3,56 @@ from datetime import date
 from rest_framework import status
 
 from core.models import ParticipacaoEncontro
-from core.serializers import AlpinistaCompletoSerializer
+from core.serializers import (
+    AlpinistaCompletoSerializer,
+    EncontroSerializer,
+    EventoSerializer,
+    FuncaoEncontroSerializer,
+)
 from core.tests.base import AuthenticatedAPITestCase
 from core.tests.factories import make_alpinista, make_encontro, make_funcao
+
+
+class RemainingSerializerAllowlistTests(AuthenticatedAPITestCase):
+    def test_serializers_restantes_possuem_allowlists_explicitas(self):
+        contracts = (
+            (
+                EncontroSerializer,
+                (
+                    'id',
+                    'status_encontro',
+                    'encontro',
+                    'tipo',
+                    'data_referencia',
+                    'data_exato',
+                    'local',
+                    'status',
+                    'criado_em',
+                    'participantes',
+                ),
+            ),
+            (
+                EventoSerializer,
+                (
+                    'id',
+                    'status_evento',
+                    'total_participantes',
+                    'nome',
+                    'data_evento',
+                    'local',
+                ),
+            ),
+            (
+                FuncaoEncontroSerializer,
+                ('id', 'nome', 'tipo', 'descricao_faq', 'ordem', 'eh_violeiro'),
+            ),
+        )
+
+        for serializer_class, expected_fields in contracts:
+            with self.subTest(serializer=serializer_class.__name__):
+                self.assertNotEqual(serializer_class.Meta.fields, '__all__')
+                self.assertEqual(serializer_class.Meta.fields, expected_fields)
+                self.assertEqual(tuple(serializer_class().fields), expected_fields)
 
 
 class AlpinistaCompletoContractTests(AuthenticatedAPITestCase):
@@ -98,3 +145,26 @@ class ParticipacaoEncontroContractTests(AuthenticatedAPITestCase):
             {'id': alpinista.pk, 'nome': alpinista.nome},
         )
         self.assertEqual(set(response.json()['alpinista']), {'id', 'nome'})
+
+
+class HistoricoEquipeContractTests(AuthenticatedAPITestCase):
+    def test_coordenador_dos_dirigentes_preserva_cor_sem_diferenciar_case(self):
+        for nome_funcao in (
+            'Coordenador dos Dirigentes',
+            'COORDENADOR DOS DIRIGENTES',
+        ):
+            with self.subTest(nome_funcao=nome_funcao):
+                alpinista = make_alpinista()
+                ParticipacaoEncontro.objects.create(
+                    alpinista=alpinista,
+                    encontro=make_encontro(),
+                    funcao=make_funcao(nome=nome_funcao, tipo='equipe'),
+                    cor_grupo='azul',
+                )
+
+                payload = AlpinistaCompletoSerializer(alpinista).data
+
+                self.assertEqual(
+                    payload['historico_equipes'][0]['cor_grupo'],
+                    'azul',
+                )

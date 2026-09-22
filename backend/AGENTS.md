@@ -34,4 +34,5 @@ Comandos usuais:
 ./.venv/bin/python manage.py check
 ./.venv/bin/python manage.py makemigrations --check --dry-run
 ./.venv/bin/python manage.py showmigrations
+./.venv/bin/python manage.py flushexpiredtokens
 ```
