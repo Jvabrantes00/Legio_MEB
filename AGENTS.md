@@ -33,12 +33,12 @@ Frontend:
 
 ## Estado atual
 
-- Fase 0 em fechamento.
-- Etapas 0A a 0H concluídas.
+- Fase 0 concluída.
+- Etapas 0A a 0J concluídas.
 - 0G, integração frontend/API, concluída.
 - 0I, limpeza dos débitos técnicos restantes, concluída.
-- Próxima etapa: 0J, gate e auditoria final.
-- A Fase 1 começa somente depois do gate final da Fase 0.
+- 0J, gate e auditoria final, concluída; Fase 1 liberada.
+- Próxima atividade: modelagem de domínio da Fase 1.
 - Consulte `docs/PROJECT_STATE.md`; não replique o roadmap inteiro aqui.
 
 ## Regras críticas
@@ -77,6 +77,9 @@ git log -1 --oneline
 - Evite refatoração ampla fora do escopo.
 - Não reabra decisões estabilizadas sem bug reproduzível ou nova evidência.
 - Não invente regras de negócio.
+- Durante a Fase 1, não modifique contratos estabilizados da Fase 0 como efeito
+  colateral da remodelagem. Se uma mudança exigir quebra de contrato, documente
+  impacto, migration, compatibilidade e testes antes de implementá-la.
 
 ## Testes
 
@@ -103,6 +106,7 @@ npm run build
 
 - Arquitetura atual: `docs/ARCHITECTURE.md`.
 - Estado, decisões e roadmap: `docs/PROJECT_STATE.md`.
+- Fechamento histórico da Fase 0: `docs/PHASE_0_CLOSURE.md`.
 - Autorização implementada: `docs/AUTHORIZATION_MATRIX.md`.
 - Regras específicas adicionais: `backend/AGENTS.md` e
   `frontend/AGENTS.md`.

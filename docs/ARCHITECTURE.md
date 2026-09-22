@@ -14,6 +14,10 @@ O browser não recebe JWT e não acessa a API Django diretamente. O Next.js é
 a fronteira web: mantém a sessão em cookies, aplica CSRF e encaminha apenas
 recursos explicitamente permitidos ao backend.
 
+A Fase 0 encerrou esse baseline arquitetural com o gate 0J aprovado. A Fase 1
+parte desta arquitetura estabilizada; não a substitui implicitamente durante a
+remodelagem de domínio.
+
 ## Backend
 
 - O projeto Django fica em `backend/setup`; o domínio atual está em
@@ -30,8 +34,8 @@ recursos explicitamente permitidos ao backend.
 - Logs de auditoria armazenam identificadores e descrições operacionais, sem
   substituir logging técnico estruturado.
 
-Os contratos completos estão nos serializers. Alguns serializers ainda usam
-`fields = '__all__'`; a migração para allowlists explícitas é débito de 0I.
+Os contratos completos estão nos serializers, que usam allowlists explícitas
+de campos.
 
 ## Frontend e BFF
 
@@ -102,8 +106,8 @@ indisponível ou a sessão é inválida.
 - O DRF usa paginação por página com tamanho padrão 10.
 - São paginados Alpinistas, Encontros, Eventos, Participações de Evento,
   Materiais, Entregas e Logs.
-- Funções e Participações de Encontro permanecem não paginadas no contrato
-  atual.
+- Os endpoints atuais de Funções e Participações de Encontro retornam listas
+  diretas, sem envelope de paginação.
 - O frontend deve seguir `next`/`previous` ou carregar páginas explicitamente;
   nunca pode tratar a primeira página como o dataset inteiro.
 
@@ -135,6 +139,14 @@ Estação de trabalho
 Configurações locais e URLs do tunnel não pertencem ao Git. O frontend em
 desenvolvimento precisa iniciar com `NODE_ENV=development` para aplicar
 `allowedDevOrigins` derivado da origem configurada.
+
+## Fronteiras para novas entidades
+
+Novas entidades da Fase 1 devem manter o fluxo Browser → Next/BFF →
+Django/DRF → PostgreSQL e respeitar autorização default deny, contratos
+summary/full, mídia protegida, atomicidade, migrations incrementais e
+compatibilidade explícita. Mudanças nessas fronteiras exigem decisão documentada
+e testes antes da implementação.
 
 ## Limitações arquiteturais atuais
 
