@@ -177,6 +177,168 @@ class PerfilAlpinista(models.Model):
     atualizado_em = models.DateTimeField(auto_now=True)
 
 
+class Paroquia(models.Model):
+    nome = models.CharField(max_length=255)
+    regiao_administrativa = models.ForeignKey(
+        RegiaoAdministrativa,
+        on_delete=models.SET_NULL,
+        related_name='paroquias',
+        null=True,
+        blank=True,
+    )
+
+    def __str__(self):
+        return self.nome
+
+
+class Grupo(models.Model):
+    nome = models.CharField(max_length=255)
+    criado_em = models.DateTimeField(auto_now_add=True)
+    atualizado_em = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return self.nome
+
+
+class ConfiguracaoGrupo(models.Model):
+    grupo = models.ForeignKey(
+        Grupo,
+        on_delete=models.CASCADE,
+        related_name='configuracoes',
+    )
+    vigente_desde = models.DateField()
+    vigente_ate = models.DateField(null=True, blank=True)
+    ativo = models.BooleanField(default=True)
+    paroquia = models.ForeignKey(
+        Paroquia,
+        on_delete=models.SET_NULL,
+        related_name='configuracoes_grupo',
+        null=True,
+        blank=True,
+    )
+    local_reuniao = models.CharField(max_length=255, blank=True, default='')
+    dia_semana = models.CharField(max_length=20, blank=True, default='')
+    horario = models.TimeField(null=True, blank=True)
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    models.Q(vigente_ate__isnull=True)
+                    | models.Q(vigente_ate__gte=models.F('vigente_desde'))
+                ),
+                name='config_grupo_periodo_valido',
+            ),
+            models.UniqueConstraint(
+                fields=['grupo'],
+                condition=models.Q(vigente_ate__isnull=True),
+                name='config_grupo_atual_unica',
+            ),
+        ]
+
+
+class VinculoGrupo(models.Model):
+    perfil_alpinista = models.ForeignKey(
+        PerfilAlpinista,
+        on_delete=models.PROTECT,
+        related_name='vinculos_grupo',
+    )
+    grupo = models.ForeignKey(
+        Grupo,
+        on_delete=models.PROTECT,
+        related_name='vinculos',
+    )
+    inicio = models.DateField()
+    fim = models.DateField(null=True, blank=True)
+    criado_em = models.DateTimeField(auto_now_add=True)
+    atualizado_em = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    models.Q(fim__isnull=True)
+                    | models.Q(fim__gte=models.F('inicio'))
+                ),
+                name='vinculo_grupo_periodo_valido',
+            ),
+            models.UniqueConstraint(
+                fields=['perfil_alpinista', 'grupo'],
+                condition=models.Q(fim__isnull=True),
+                name='vinculo_grupo_atual_unico',
+            ),
+        ]
+
+
+class CoordenacaoGrupo(models.Model):
+    class Tipo(models.TextChoices):
+        JOVEM = 'jovem', 'Jovem'
+        ADULTO = 'adulto', 'Adulto'
+
+    perfil_alpinista = models.ForeignKey(
+        PerfilAlpinista,
+        on_delete=models.PROTECT,
+        related_name='coordenacoes_grupo',
+    )
+    grupo = models.ForeignKey(
+        Grupo,
+        on_delete=models.PROTECT,
+        related_name='coordenacoes',
+    )
+    tipo = models.CharField(max_length=10, choices=Tipo.choices)
+    inicio = models.DateField()
+    fim = models.DateField(null=True, blank=True)
+    criado_em = models.DateTimeField(auto_now_add=True)
+    atualizado_em = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    models.Q(fim__isnull=True)
+                    | models.Q(fim__gte=models.F('inicio'))
+                ),
+                name='coordenacao_grupo_periodo_valido',
+            ),
+            models.UniqueConstraint(
+                fields=['perfil_alpinista'],
+                condition=models.Q(fim__isnull=True),
+                name='coordenacao_grupo_atual_unica',
+            ),
+        ]
+
+
+class Frequencia(models.Model):
+    perfil_alpinista = models.ForeignKey(
+        PerfilAlpinista,
+        on_delete=models.PROTECT,
+        related_name='frequencias',
+    )
+    data = models.DateField()
+    grupo = models.ForeignKey(
+        Grupo,
+        on_delete=models.SET_NULL,
+        related_name='frequencias',
+        null=True,
+        blank=True,
+    )
+    registrada_por = models.ForeignKey(
+        User,
+        on_delete=models.PROTECT,
+        related_name='frequencias_registradas',
+    )
+    criado_em = models.DateTimeField(auto_now_add=True)
+    atualizado_em = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['perfil_alpinista', 'data'],
+                name='frequencia_unica_perfil_data',
+            )
+        ]
+
+
 class Alpinista(models.Model):
     class Status(models.TextChoices):
         ATIVO = 'ativo', 'ativo'
