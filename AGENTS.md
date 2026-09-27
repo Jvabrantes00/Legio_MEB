@@ -37,8 +37,9 @@ Frontend:
 - Etapas 0A a 0J concluídas.
 - 0G, integração frontend/API, concluída.
 - 0I, limpeza dos débitos técnicos restantes, concluída.
-- 0J, gate e auditoria final, concluída; Fase 1 liberada.
-- Próxima atividade: modelagem de domínio da Fase 1.
+- 0J, gate e auditoria final, concluída; Fase 1 em andamento.
+- 1B.3B, fundação de Pessoa e backfill inicial, concluída.
+- Próxima implementação: 1B.3C, Grupo e Frequência.
 - Consulte `docs/PROJECT_STATE.md`; não replique o roadmap inteiro aqui.
 
 ## Regras críticas
@@ -111,13 +112,23 @@ npm run build
 - Regras específicas adicionais: `backend/AGENTS.md` e
   `frontend/AGENTS.md`.
 
-## Regra de contexto
+## Context loading
 
-Não faça varredura completa do repositório automaticamente.
+Use `docs/00_HOME.md` como roteador da documentação do projeto.
 
-Antes de ler muitos arquivos:
+- Leia e aplique sempre os `AGENTS.md` que alcançam a tarefa.
+- Não leia toda a pasta `docs/` por padrão.
+- Carregue apenas os documentos necessários para a tarefa atual.
+- Não releia documentação já suficientemente presente no contexto da sessão.
+- Para tarefas backend, aplique também `backend/AGENTS.md`.
+- Para tarefas frontend, aplique também `frontend/AGENTS.md`.
+
+Antes de ampliar a leitura:
 
 1. identifique o escopo da tarefa;
 2. consulte somente os documentos relevantes;
 3. leia os arquivos diretamente relacionados;
 4. amplie a investigação apenas diante de evidência de necessidade.
+
+Essa orientação reduz leitura desnecessária; ela não substitui nem enfraquece
+as regras de segurança, Git, testes, compatibilidade e autorização deste guia.

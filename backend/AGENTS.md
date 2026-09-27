@@ -1,6 +1,8 @@
 # Backend — Agent Guide
 
 - Aplique primeiro as regras de `../AGENTS.md`.
+- Para contexto de projeto, comece por `../docs/00_HOME.md` e carregue somente
+  a documentação relacionada ao domínio/backend da tarefa atual.
 - Stack: Python 3.12, Django 5.2, DRF, PostgreSQL e SimpleJWT.
 - O projeto/settings fica em `setup`; domínio, API e legado ficam em `core`.
 - Ambiente normal usa `setup/settings.py`; testes usam

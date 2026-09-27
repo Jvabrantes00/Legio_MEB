@@ -1,6 +1,8 @@
 # Frontend — Agent Guide
 
 - Aplique primeiro as regras de `../AGENTS.md`.
+- Para contexto de projeto, comece por `../docs/00_HOME.md` e carregue somente
+  a documentação relacionada ao frontend ou contrato afetado.
 - Stack: Next.js 16 App Router, React 19, TypeScript, Tailwind e Vitest.
 - O browser não acessa Django diretamente; use o BFF e `siaFetch`.
 - Nunca entregue JWT ao JavaScript e nunca crie autenticação em

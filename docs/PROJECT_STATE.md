@@ -2,10 +2,10 @@
 
 ## Estado atual
 
-- Data: 22 de setembro de 2026.
-- Branch: `sia/fase-0-estabilizacao`.
+- Data: 27 de setembro de 2026.
+- Branch: `sia/fase-1-modelagem-dominio`.
 - **FASE 0 — ESTABILIZAÇÃO: CONCLUÍDA**
-- **FASE 1 — REMODELAGEM DE DOMÍNIO: LIBERADA**
+- **FASE 1 — REMODELAGEM DE DOMÍNIO: EM ANDAMENTO**
 
 ## Roadmap
 
@@ -21,7 +21,17 @@
 | 0H PostgreSQL e legado | ✅ Concluída |
 | 0I Débitos técnicos restantes | ✅ Concluída |
 | 0J Gate e auditoria final | ✅ Concluída |
-| Fase 1 Remodelagem de domínio | Liberada; não iniciada |
+| Fase 1 Remodelagem de domínio | Em andamento; 1B.3B concluída |
+
+## Estado da Fase 1
+
+- 1B.3B concluiu a fundação de `Pessoa`, os modelos auxiliares e o backfill
+  inicial a partir do `Alpinista` legado.
+- O backfill preserva IDs e mantém compatibilidade incremental com o modelo
+  legado.
+- `PerfilAlpinista` existe no schema, mas não foi populado: sua criação
+  automática continua bloqueada até a reconciliação das evidências do legado.
+- Próxima implementação: 1B.3C — Grupo e Frequência.
 
 ## Histórico — Fase 0
 
@@ -187,9 +197,9 @@ Esses itens formam backlog conhecido e não bloqueiam a Fase 1.
 
 ## Fase 1 — direção de modelagem
 
-A Fase 1 começa pela modelagem do domínio e pelas decisões de migração e
-compatibilidade, não pela implementação isolada de telas. O schema definitivo
-ainda não está definido.
+A Fase 1 avança pela modelagem do domínio e por migrations incrementais, não
+pela implementação isolada de telas. O schema definitivo ainda não está
+definido.
 
 Direções conhecidas:
 
