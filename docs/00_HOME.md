@@ -13,7 +13,9 @@ substitui os documentos de referência nem os `AGENTS.md` aplicáveis.
 - Backfills de `PerfilAlpinista` e do histórico de Grupo continuam bloqueados
   até a reconciliação das fontes legadas.
 - 1B.3D.0 concluiu a decisão do Calendário Institucional como HUB.
-- Próxima implementação: 1B.3D.1 — Núcleo de Encontros.
+- 1B.3D.1 concluiu o núcleo de Encontros com lifecycle, calendários e dias,
+  preservando o contrato legado da API.
+- Próxima implementação: 1B.3D.2 — Inscrição, Convite e Participação.
 
 O estado vivo e o roadmap estão em [[PROJECT_STATE]].
 

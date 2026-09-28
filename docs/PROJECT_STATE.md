@@ -21,7 +21,7 @@
 | 0H PostgreSQL e legado | ✅ Concluída |
 | 0I Débitos técnicos restantes | ✅ Concluída |
 | 0J Gate e auditoria final | ✅ Concluída |
-| Fase 1 Remodelagem de domínio | Em andamento; 1B.3D.0 concluída; próxima etapa 1B.3D.1 |
+| Fase 1 Remodelagem de domínio | Em andamento; 1B.3D.1 concluída; próxima etapa 1B.3D.2 |
 
 ## Estado da Fase 1
 
@@ -45,7 +45,18 @@
   planejamento editável antes da confirmação e versionamento das agendas
   oficiais. A arquitetura está registrada em
   [[decisions/ADR-001-calendario-institucional]].
-- Próxima implementação: 1B.3D.1 — Núcleo de Encontros.
+- 1B.3D.1 implementou o lifecycle administrativo de `Encontro` e introduziu
+  `CalendarioEncontro` e `DiaEncontro` no commit
+  `6e786ef feat: add encounter lifecycle and calendars`.
+- O planejamento provisório pode ser editado sem criar versões. Após a
+  oficialização, reprogramações preservam a agenda anterior e criam uma nova
+  versão.
+- A API legada continua preservando seus campos e contratos anteriores.
+  `data_referencia` e `data_exato` coexistem temporariamente com o novo
+  calendário e permanecem como débito de compatibilidade.
+- `status_encontro` continua sendo uma projeção temporal legada baseada em
+  data; não representa nem substitui o novo lifecycle administrativo.
+- Próxima implementação: 1B.3D.2 — Inscrição, Convite e Participação.
 
 ## Histórico — Fase 0
 
@@ -83,15 +94,21 @@ O fechamento histórico consolidado está em `docs/PHASE_0_CLOSURE.md`.
 ### Encontro
 
 - Tipos atuais: `Escalada`, `AVC`, `Esppa` e `Acampamento`.
-- Status atuais: `em_agendamento` e `agendado`.
-- `cancelado` não faz parte do contrato atual.
+- O lifecycle administrativo inclui `em_agendamento`, `agendado`,
+  `em_preparacao`, `em_andamento`, `finalizado`, `adiado` e `cancelado`.
+- O contrato legado de escrita da API permanece limitado a `em_agendamento`
+  e `agendado`; os novos fluxos de lifecycle pertencem ao service layer.
+- `status_encontro` permanece uma projeção temporal legada e não deve ser
+  interpretado como status administrativo.
 - Suporte, Diretoria e Fichas recebem full e podem gerir Encontros.
 - Comunicação recebe summary e usa a galeria dedicada.
 - Participações e funções permanecem recursos próprios e protegidos.
 
 ### Calendário Institucional
 
-- A decisão 1B.3D.0 está aprovada, mas ainda não implementada.
+- A decisão 1B.3D.0 está aprovada; seu núcleo temporal de Encontros foi
+  implementado na 1B.3D.1, mas a interface e a projeção institucional ainda
+  não foram implementadas.
 - O calendário será uma projeção integrada dos objetos reais, não uma
   segunda base de dados.
 - Criar por Calendário ou pelo módulo de origem alcançará o mesmo objeto.
