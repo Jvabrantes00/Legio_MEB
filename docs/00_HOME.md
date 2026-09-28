@@ -12,7 +12,8 @@ substitui os documentos de referência nem os `AGENTS.md` aplicáveis.
   sustenta backfill automático.
 - Backfills de `PerfilAlpinista` e do histórico de Grupo continuam bloqueados
   até a reconciliação das fontes legadas.
-- Próxima implementação: 1B.3D — Encontros.
+- 1B.3D.0 concluiu a decisão do Calendário Institucional como HUB.
+- Próxima implementação: 1B.3D.1 — Núcleo de Encontros.
 
 O estado vivo e o roadmap estão em [[PROJECT_STATE]].
 
@@ -35,6 +36,8 @@ Para decisões ou mudanças arquiteturais, consulte:
 
 - [[ARCHITECTURE]]
 - [[PROJECT_STATE]]
+- [[decisions/ADR-001-calendario-institucional]] para o Calendário
+  Institucional e o lifecycle futuro de Encontros.
 
 ### Autorização, papéis e dados sensíveis
 
@@ -86,5 +89,7 @@ AGENTS aplicáveis.
 - [[PROJECT_STATE]] — estado vivo, decisões e roadmap.
 - [[ARCHITECTURE]] — fronteiras técnicas e arquitetura corrente.
 - [[AUTHORIZATION_MATRIX]] — autorização implementada.
+- [[decisions/ADR-001-calendario-institucional]] — decisão do Calendário
+  Institucional.
 - [[PHASE_0_CLOSURE]] — fechamento histórico da Fase 0.
 - [[AGENTS_INDEX]] — localização e alcance dos guias de agentes.

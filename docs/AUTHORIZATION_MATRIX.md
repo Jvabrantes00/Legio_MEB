@@ -12,6 +12,9 @@
 Esta matriz descreve somente o que está implementado. Capabilities do
 frontend orientam a interface, mas o backend é a autoridade final.
 
+A seção de Calendário Institucional ao final registra uma decisão futura,
+ainda não implementada, sem alterar as permissões da matriz corrente.
+
 ## Matriz
 
 | Papel | API root | Admin | Alpinista | Escrita Alpinista | Foto perfil | Música | Palestras | Encontros | Galeria | Funções / participações | Eventos / participações | Materiais / entregas | Dashboard | Logs |
@@ -66,6 +69,20 @@ frontend orientam a interface, mas o backend é a autoridade final.
 - Materiais: Suporte, Diretoria e Secretaria gerem materiais e registram
   entregas; Entrega oferece criar, listar e recuperar, não update/delete.
 - Logs: Suporte e Diretoria têm leitura; o ViewSet é read-only.
+
+### Calendário Institucional — decisão futura
+
+- Todas as roles funcionais reconhecidas poderão visualizar o calendário
+  institucional completo.
+- Somente Suporte e Diretoria poderão criar ou alterar objetos através do
+  calendário.
+- O superuser permanece como bypass técnico separado.
+- Visualizar um item no calendário não concede permissão de gestão sobre o
+  objeto de origem.
+- Encontros, Eventos, equipes e demais recursos continuarão sujeitos às
+  permissões de seus próprios módulos.
+- Esta política somente entrará na matriz implementada junto com backend,
+  frontend e testes de autorização correspondentes.
 
 ## Semântica de negação
 

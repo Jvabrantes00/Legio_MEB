@@ -21,7 +21,7 @@
 | 0H PostgreSQL e legado | ✅ Concluída |
 | 0I Débitos técnicos restantes | ✅ Concluída |
 | 0J Gate e auditoria final | ✅ Concluída |
-| Fase 1 Remodelagem de domínio | Em andamento; 1B.3C concluída; próxima etapa 1B.3D |
+| Fase 1 Remodelagem de domínio | Em andamento; 1B.3D.0 concluída; próxima etapa 1B.3D.1 |
 
 ## Estado da Fase 1
 
@@ -39,7 +39,13 @@
   reconciliação do catálogo legado real.
 - `PerfilAlpinista` existe no schema, mas sua criação automática também
   continua bloqueada até a reconciliação das evidências do legado.
-- Próxima implementação: 1B.3D — Encontros.
+- 1B.3D.0 definiu o Calendário Institucional como HUB que projeta Encontros,
+  Eventos e compromissos sem duplicar os objetos dos domínios de origem.
+- A decisão aprovou o lifecycle futuro de Encontros, dias não consecutivos,
+  planejamento editável antes da confirmação e versionamento das agendas
+  oficiais. A arquitetura está registrada em
+  [[decisions/ADR-001-calendario-institucional]].
+- Próxima implementação: 1B.3D.1 — Núcleo de Encontros.
 
 ## Histórico — Fase 0
 
@@ -82,6 +88,18 @@ O fechamento histórico consolidado está em `docs/PHASE_0_CLOSURE.md`.
 - Suporte, Diretoria e Fichas recebem full e podem gerir Encontros.
 - Comunicação recebe summary e usa a galeria dedicada.
 - Participações e funções permanecem recursos próprios e protegidos.
+
+### Calendário Institucional
+
+- A decisão 1B.3D.0 está aprovada, mas ainda não implementada.
+- O calendário será uma projeção integrada dos objetos reais, não uma
+  segunda base de dados.
+- Criar por Calendário ou pelo módulo de origem alcançará o mesmo objeto.
+- Agendas oficiais de Encontros serão versionadas após a confirmação; dias
+  poderão ser não consecutivos.
+- A visualização pelo calendário não amplia a permissão no objeto de origem.
+- Referência normativa:
+  [[decisions/ADR-001-calendario-institucional]].
 
 ### Dashboard
 
