@@ -424,38 +424,113 @@ class FuncaoEncontro(models.Model):
 
     
 class Encontro(models.Model):
-    STATUS_CHOICES = [
-        ('em_agendamento', 'Em Agendamento'),
-        ('agendado', 'Agendado'),
-    ]
+    class Status(models.TextChoices):
+        EM_AGENDAMENTO = 'em_agendamento', 'Em Agendamento'
+        AGENDADO = 'agendado', 'Agendado'
+        EM_PREPARACAO = 'em_preparacao', 'Em Preparação'
+        EM_ANDAMENTO = 'em_andamento', 'Em Andamento'
+        FINALIZADO = 'finalizado', 'Finalizado'
+        ADIADO = 'adiado', 'Adiado'
+        CANCELADO = 'cancelado', 'Cancelado'
 
-    TIPO_ENCONTRO_CHOICES = [
-        ('Escalada', 'Escalada'),
-        ('AVC', 'AVC'),
-        ('Esppa', 'Esppa'),
-        ('Acampamento', 'Acampamento'),
-    ]
+    class Tipo(models.TextChoices):
+        ESCALADA = 'Escalada', 'Escalada'
+        AVC = 'AVC', 'AVC'
+        ESPPA = 'Esppa', 'Esppa'
+        ACAMPAMENTO = 'Acampamento', 'Acampamento'
 
+    STATUS_CHOICES = Status.choices
+    TIPO_ENCONTRO_CHOICES = Tipo.choices
 
-    encontro = models.CharField(max_length=255, help_text = "Ex: Escalada 1 / AVC / Esppa")
-    tipo = models.CharField(max_length=20, choices=TIPO_ENCONTRO_CHOICES, default = 'Escalada')
-    data_referencia= models.DateField(help_text = "O 1º dia do encontro")
-    data_exato = models.CharField(max_length=150, help_text = "Ex: 19, 24, 25, 26 de Julho de XXXX")
-    local = models.CharField(max_length=255, default = "Nova Betânia")
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default = 'em_agendamento')
-
+    encontro = models.CharField(
+        max_length=255,
+        help_text='Ex: Escalada 1 / AVC / Esppa',
+    )
+    tipo = models.CharField(
+        max_length=20,
+        choices=TIPO_ENCONTRO_CHOICES,
+        default=Tipo.ESCALADA,
+    )
+    data_referencia = models.DateField(help_text='O 1º dia do encontro')
+    data_exato = models.CharField(
+        max_length=150,
+        help_text='Ex: 19, 24, 25, 26 de Julho de XXXX',
+    )
+    local = models.CharField(max_length=255, default='Nova Betânia')
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default=Status.EM_AGENDAMENTO,
+    )
     criado_em = models.DateTimeField(auto_now_add=True)
-
     participantes = models.ManyToManyField(
         'Alpinista',
         through='ParticipacaoEncontro',
         blank=True,
-        related_name='encontro_participacao'
+        related_name='encontro_participacao',
     )
 
     def __str__(self):
         return self.encontro
-    
+
+
+class CalendarioEncontro(models.Model):
+    encontro = models.ForeignKey(
+        Encontro,
+        on_delete=models.CASCADE,
+        related_name='calendarios',
+    )
+    versao = models.PositiveIntegerField()
+    vigente = models.BooleanField(default=True)
+    oficializado_em = models.DateTimeField(null=True, blank=True)
+    criado_em = models.DateTimeField(auto_now_add=True)
+    substituido_em = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(versao__gt=0),
+                name='calendario_encontro_versao_positiva',
+            ),
+            models.UniqueConstraint(
+                fields=['encontro', 'versao'],
+                name='calendario_encontro_versao_unica',
+            ),
+            models.UniqueConstraint(
+                fields=['encontro'],
+                condition=models.Q(vigente=True),
+                name='calendario_encontro_vigente_unico',
+            ),
+        ]
+
+
+class DiaEncontro(models.Model):
+    calendario = models.ForeignKey(
+        CalendarioEncontro,
+        on_delete=models.CASCADE,
+        related_name='dias',
+    )
+    ordem = models.PositiveIntegerField()
+    data = models.DateField()
+    descricao = models.CharField(max_length=255, blank=True, default='')
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(ordem__gt=0),
+                name='dia_encontro_ordem_positiva',
+            ),
+            models.UniqueConstraint(
+                fields=['calendario', 'ordem'],
+                name='dia_encontro_ordem_unica',
+            ),
+            models.UniqueConstraint(
+                fields=['calendario', 'data'],
+                name='dia_encontro_data_unica',
+            ),
+        ]
+
+
 class Evento(models.Model):
     nome = models.CharField(max_length=255)
     data_evento = models.DateField()

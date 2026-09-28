@@ -299,6 +299,13 @@ AlpinistaSerializer = AlpinistaCompletoSerializer
 
 class EncontroSerializer(serializers.ModelSerializer):
     status_encontro = serializers.SerializerMethodField()
+    status = serializers.ChoiceField(
+        required=False,
+        choices=(
+            Encontro.Status.EM_AGENDAMENTO,
+            Encontro.Status.AGENDADO,
+        )
+    )
 
     class Meta:
         model = Encontro
