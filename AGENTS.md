@@ -82,6 +82,29 @@ git log -1 --oneline
   colateral da remodelagem. Se uma mudança exigir quebra de contrato, documente
   impacto, migration, compatibilidade e testes antes de implementá-la.
 
+## Sandbox and PostgreSQL
+
+- Mantenha dentro da sandbox as operações normais do repositório: leitura,
+  edição, criação e remoção de arquivos no repo, inspeção de código, `git
+  status`, `git diff`, `git diff --check` e criação de migrations ou testes
+  enquanto não houver necessidade de acesso ao banco.
+- Não use Full Access como solução genérica.
+- O PostgreSQL local não está acessível dentro da sandbox atual. Quando um
+  comando realmente precisar desse recurso do host, solicite aprovação pontual
+  para executá-lo fora da sandbox. Isso inclui `python manage.py migrate`,
+  testes Django que exigem banco, queries explícitas de validação e comandos de
+  profiling que consultem PostgreSQL.
+- Ao pedir escalada, identifique o comando, explique que o motivo é o acesso ao
+  PostgreSQL ou a outro recurso do host, solicite o menor escopo possível, não
+  inclua comandos não relacionados e retorne à sandbox normal em seguida.
+- Nunca execute fora da sandbox operações simples de arquivo dentro do
+  repositório.
+- Se uma operação normal do workspace for bloqueada, não use Full Access
+  automaticamente: mostre o erro e investigue a causa antes de ampliar
+  permissões.
+- Não enfraqueça AppArmor, user namespaces ou outras proteções do host como
+  workaround automático.
+
 ## Testes
 
 Backend:
