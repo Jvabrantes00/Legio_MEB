@@ -2,7 +2,7 @@
 
 ## Estado atual
 
-- Data: 27 de setembro de 2026.
+- Data: 28 de setembro de 2026.
 - Branch: `sia/fase-1-modelagem-dominio`.
 - **FASE 0 — ESTABILIZAÇÃO: CONCLUÍDA**
 - **FASE 1 — REMODELAGEM DE DOMÍNIO: EM ANDAMENTO**
@@ -21,7 +21,7 @@
 | 0H PostgreSQL e legado | ✅ Concluída |
 | 0I Débitos técnicos restantes | ✅ Concluída |
 | 0J Gate e auditoria final | ✅ Concluída |
-| Fase 1 Remodelagem de domínio | Em andamento; 1B.3B concluída |
+| Fase 1 Remodelagem de domínio | Em andamento; 1B.3C concluída; próxima etapa 1B.3D |
 
 ## Estado da Fase 1
 
@@ -29,9 +29,17 @@
   inicial a partir do `Alpinista` legado.
 - O backfill preserva IDs e mantém compatibilidade incremental com o modelo
   legado.
-- `PerfilAlpinista` existe no schema, mas não foi populado: sua criação
-  automática continua bloqueada até a reconciliação das evidências do legado.
-- Próxima implementação: 1B.3C — Grupo e Frequência.
+- 1B.3C implementou e validou o domínio de `Paroquia`, `Grupo`,
+  `ConfiguracaoGrupo`, `VinculoGrupo`, `CoordenacaoGrupo` e `Frequencia` no
+  commit `3b30726 feat: add group and frequency domain`.
+- O profiling 1B.3C.2 de `Alpinista.grupo` foi concluído. O valor legado atual
+  é insuficiente para criar `Grupo` ou `VinculoGrupo` automaticamente com
+  segurança; nenhum backfill será feito neste momento.
+- O backfill histórico de Grupo permanece bloqueado até a obtenção e a
+  reconciliação do catálogo legado real.
+- `PerfilAlpinista` existe no schema, mas sua criação automática também
+  continua bloqueada até a reconciliação das evidências do legado.
+- Próxima implementação: 1B.3D — Encontros.
 
 ## Histórico — Fase 0
 

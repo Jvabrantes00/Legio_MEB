@@ -8,9 +8,11 @@ substitui os documentos de referência nem os `AGENTS.md` aplicáveis.
 - Fase 0 concluída.
 - Fase 1 em andamento.
 - 1B.3B — Pessoa e backfill inicial concluída.
-- Próxima implementação: 1B.3C — Grupo e Frequência.
-- A criação automática de `PerfilAlpinista` continua bloqueada até a
-  reconciliação das evidências do legado.
+- 1B.3C — Grupo e Frequência concluída; o profiling do grupo legado não
+  sustenta backfill automático.
+- Backfills de `PerfilAlpinista` e do histórico de Grupo continuam bloqueados
+  até a reconciliação das fontes legadas.
+- Próxima implementação: 1B.3D — Encontros.
 
 O estado vivo e o roadmap estão em [[PROJECT_STATE]].
 
