@@ -32,6 +32,27 @@ O estado vivo e o roadmap estão em [[PROJECT_STATE]].
    suficientemente disponível no contexto da sessão.
 6. Amplie a leitura apenas quando surgir evidência de dependência adicional.
 
+### Documentos de domínio e workplans
+
+- `docs/domain/*` registra regras estáveis de domínio.
+- `docs/workplans/*` registra execução, progresso, decisões técnicas, testes,
+  débitos e histórico de uma fase.
+- Não carregue documentos desses dois grupos indiscriminadamente em tarefas de
+  outros domínios.
+
+### Inscrição, convite e participação em Encontros
+
+Se a tarefa envolver inscrição em Escalada ou ESPPA, convite de Encontro,
+confirmação, participação, `CONCLUIU`, `FALTOU`, `DESISTIU` ou criação de
+`PerfilAlpinista` por conclusão, leia nesta ordem:
+
+1. `docs/domain/ENCOUNTER_PARTICIPATION.md`;
+2. `docs/workplans/PHASE_1B_D2.md`.
+
+Consulte `docs/PROJECT_STATE.md` somente quando o estado global do projeto for
+necessário. Carregue outros documentos apenas diante de dependência real da
+tarefa.
+
 ### Arquitetura
 
 Para decisões ou mudanças arquiteturais, consulte:
