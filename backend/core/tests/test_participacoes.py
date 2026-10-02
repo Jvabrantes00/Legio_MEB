@@ -3,7 +3,7 @@ from unittest.mock import patch
 
 from django.db import IntegrityError
 
-from core.models import ParticipacaoEncontro
+from core.models import VinculoEncontroLegado as ParticipacaoEncontro
 from core.tests.base import (
     AuthenticatedAPITestCase,
     AuthenticatedAPITransactionTestCase,

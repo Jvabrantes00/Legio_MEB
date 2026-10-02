@@ -2,9 +2,10 @@
 
 ## Status geral
 
-D.2A concluída em 2026-10-02 por análise estática do código, migrations,
-contratos legados, APIs e testes. Nenhum acesso ao PostgreSQL foi realizado.
-O desenho do núcleo está fechado e D.2B é o próximo bloco.
+D.2A e D.2B concluídas. A fundação estrutural foi implementada na migration
+`0029_expand_inscricao_convite_participacao`, sem acesso ou escrita no
+PostgreSQL local, sem backfill e sem cutover dos contratos legados. D.2C é o
+próximo bloco.
 
 ## Objetivo
 
@@ -35,7 +36,7 @@ Status: concluída.
 
 ### D.2B — Models, migration e constraints
 
-Status: pendente.
+Status: concluída.
 
 ### D.2C — Services e regras transacionais
 
@@ -73,7 +74,7 @@ essas regras neste relatório vivo.
 
 ### Inscricao
 
-Campos propostos:
+Campos implementados:
 
 - `pessoa`: FK obrigatória para `Pessoa`, `on_delete=PROTECT`;
 - `tipo`: choices limitadas a `Encontro.Tipo.ESCALADA` e
@@ -96,7 +97,7 @@ Invariantes de banco:
 
 ### ConviteEncontro
 
-Campos propostos:
+Campos implementados:
 
 - `pessoa`: FK obrigatória para `Pessoa`, `on_delete=PROTECT`;
 - `encontro`: FK obrigatória para `Encontro`, `on_delete=PROTECT`;
@@ -119,7 +120,7 @@ Invariantes de banco:
 
 ### ParticipacaoEncontro
 
-Campos propostos:
+Campos implementados:
 
 - `pessoa`: FK obrigatória para `Pessoa`, `on_delete=PROTECT`;
 - `encontro`: FK obrigatória para `Encontro`, `on_delete=PROTECT`;
@@ -258,11 +259,11 @@ Pertencem aos services, pois dependem de outras linhas ou de regra contextual:
 
 ### EXPAND — D.2B
 
-- Adicionar as três tabelas novas vazias e suas constraints.
-- Renomear somente no estado Django o model antigo para
+- As três tabelas novas e suas constraints foram adicionadas vazias.
+- O model antigo foi renomeado somente no estado Django para
   `VinculoEncontroLegado`, preservando sua tabela física e a API existente.
-- Não alterar payloads, rotas, históricos ou comportamento do frontend.
-- Não remover o signal legado neste bloco; documentá-lo como dívida isolada.
+- Payloads, rotas, históricos e comportamento do frontend não foram alterados.
+- O signal legado foi preservado como dívida isolada.
 
 ### Services — D.2C
 
@@ -296,34 +297,43 @@ Pertencem aos services, pois dependem de outras linhas ou de regra contextual:
 
 ## Migrations
 
-- Próxima migration proposta: `0029_expand_inscricao_convite_participacao`.
-- A migration deve usar separação de estado/banco para representar
+- Migration criada: `0029_expand_inscricao_convite_participacao`.
+- A migration usa separação de estado/banco para representar
   `VinculoEncontroLegado` sem renomear a tabela física existente.
-- Deve criar somente as tabelas novas, FKs, índices, checks e unique
+- Foram criadas somente as tabelas novas, FKs, índices, checks e unique
   constraints descritos neste workplan.
-- Não deve conter `RunPython`, alterar linhas legadas, criar
-  `PerfilAlpinista`, mudar `Alpinista.status` ou remover o signal.
+- Não há `RunPython`; a migration não altera linhas legadas, não cria
+  `PerfilAlpinista`, não muda `Alpinista.status` e não remove o signal.
 - A reversão remove apenas as tabelas novas e restaura o nome de estado do
   model legado; os dados anteriores permanecem intactos.
 - Nenhum backfill automático nesta etapa.
 
 ## Testes e validações
 
-Nenhum teste foi executado na D.2A. A estratégia dos próximos blocos inclui:
+Resultados da D.2B:
+
+- 14 testes focados de models, constraints e migration: aprovados;
+- suíte backend completa: 266 testes aprovados;
+- `manage.py check --settings=setup.test_settings`: aprovado;
+- `makemigrations --check --dry-run --settings=setup.test_settings`: nenhuma
+  mudança detectada;
+- `sqlmigrate core 0029 --settings=setup.test_settings`: somente criação de
+  tabelas e índices novos; a separação do model legado é `no-op` no banco;
+- PostgreSQL local não foi acessado e nenhum banco persistente foi alterado.
+
+Cobertura adicionada:
 
 - testes de model para choices, checks, `on_delete=PROTECT`, unicidade de
   pendência, convite, resultado por Encontro e conclusão por tipo;
 - testes de migration forward/reverse garantindo tabela legada e linhas
   intactas, tabelas novas vazias e ausência de data migration;
-- testes de service para transições, elegibilidade, aviso etário, criação
-  idempotente de `PerfilAlpinista` e ausência de `Frequencia`;
-- testes de rollback quando perfil, inscrição ou auditoria falhar;
-- testes concorrentes para inscrição pendente e conclusão única; a semântica
-  real de `select_for_update` deve ser validada em PostgreSQL com aprovação
-  pontual quando esse teste for executado;
-- regressão integral das actions, endpoint, históricos e permissões legadas;
-- testes de default deny e das roles existentes para qualquer API nova;
-- testes frontend apenas quando o fluxo entrar em COMPAT/CUTOVER.
+- confirmação estrutural de que convite/participação não criam
+  `PerfilAlpinista` nem `Frequencia` sem services;
+- regressão integral das actions, endpoint, históricos e permissões legadas
+  pela suíte backend completa.
+
+Permanecem para os próximos blocos os testes de services, concorrência real em
+PostgreSQL, APIs novas e frontend no COMPAT/CUTOVER.
 
 ## Débitos
 
@@ -342,6 +352,8 @@ Nenhum teste foi executado na D.2A. A estratégia dos próximos blocos inclui:
 - A data histórica de elegibilidade deve usar o calendário oficial vigente do
   Encontro; `data_referencia` permanece somente como fallback de
   compatibilidade enquanto o débito da D.1 existir.
+- A semântica de concorrência de `select_for_update` será validada em
+  PostgreSQL na D.2C/D.2E, quando os services transacionais existirem.
 
 ## Pendências humanas
 
@@ -367,13 +379,29 @@ própria, não pressupostos da migration expansiva.
 - `backend/core/legacy/FIELD_MAPPING.md`
 - `backend/core/tests/test_participacoes.py`
 - `backend/core/tests/test_legacy_participations.py`
+- `backend/core/migrations/0029_expand_inscricao_convite_participacao.py`
+- `backend/core/tests/test_encontro_participacao_models.py`
 - `frontend/src/app/(painel)/encontros/[id]/page.tsx`
 - `frontend/src/lib/sia-profile-contracts.ts`
 
+## Arquivos alterados na D.2B
+
+- `backend/core/models.py`
+- `backend/core/migrations/0029_expand_inscricao_convite_participacao.py`
+- `backend/core/tests/test_encontro_participacao_models.py`
+- `backend/core/admin.py`
+- `backend/core/serializers.py`
+- `backend/core/views.py`
+- `backend/core/tests/test_alpinistas.py`
+- `backend/core/tests/test_authorization.py`
+- `backend/core/tests/test_participacoes.py`
+- `backend/core/tests/test_serializer_contracts.py`
+- `docs/workplans/PHASE_1B_D2.md`
+
 ## Próximo passo
 
-Executar D.2B — models, migration expansiva e constraints, sem data migration
-e sem mudar os contratos legados.
+Executar D.2C — services e regras transacionais sobre os models novos, sem
+cutover dos contratos legados.
 
 ## Padrão de relatórios durante a D.2
 
@@ -397,3 +425,7 @@ O chat não deve repetir o conteúdo completo já registrado neste workplan.
   ativação prematura, a mistura entre encontrista/equipe no model atual e os
   consumidores do contrato legado. Fechado o desenho expansivo, sem acesso ao
   PostgreSQL e sem backfill automático.
+- 2026-10-02 — D.2B concluída. Implementados `Inscricao`, `ConviteEncontro` e
+  o novo `ParticipacaoEncontro`, com migration expansiva, constraints, índices
+  e testes. A tabela, o signal e os contratos legados foram preservados; 266
+  testes backend passaram sem acesso ao PostgreSQL.

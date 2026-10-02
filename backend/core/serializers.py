@@ -5,8 +5,8 @@ from rest_framework import serializers
 from rest_framework.reverse import reverse
 from .models import (
     Alpinista, Encontro, EntregaMaterial, Evento, FotoEncontro,
-    FuncaoEncontro, LogSistema, Material, Palestra, ParticipacaoEncontro,
-    ParticipacaoEvento,
+    FuncaoEncontro, LogSistema, Material, Palestra, ParticipacaoEvento,
+    VinculoEncontroLegado as ParticipacaoEncontro,
 )
 from .validators import normalize_cpf, validate_image_upload_size
 from .roles import recognized_user_roles

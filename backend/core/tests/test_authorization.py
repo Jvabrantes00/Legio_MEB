@@ -21,8 +21,8 @@ from core.models import (
     FuncaoEncontro,
     LogSistema,
     Palestra,
-    ParticipacaoEncontro,
     ParticipacaoEvento,
+    VinculoEncontroLegado as ParticipacaoEncontro,
 )
 from core.roles import SiaRole, user_has_any_role, user_has_role
 from core.validators import MAX_IMAGE_UPLOAD_SIZE

@@ -465,7 +465,7 @@ class Encontro(models.Model):
     criado_em = models.DateTimeField(auto_now_add=True)
     participantes = models.ManyToManyField(
         'Alpinista',
-        through='ParticipacaoEncontro',
+        through='VinculoEncontroLegado',
         blank=True,
         related_name='encontro_participacao',
     )
@@ -626,8 +626,222 @@ class EntregaMaterial(models.Model):
     def __str__(self):
         return f'Entrega {self.pk} do Material {self.material_id}'
 
-# Tabelas Intermediárias para relacionamentos Many-to-Many
+# Domínio de inscrição, convite e resultado de participação.
+class Inscricao(models.Model):
+    class Tipo(models.TextChoices):
+        ESCALADA = 'Escalada', 'Escalada'
+        ESPPA = 'Esppa', 'Esppa'
+
+    class Status(models.TextChoices):
+        PENDENTE = 'pendente', 'Pendente'
+        CUMPRIDA = 'cumprida', 'Cumprida'
+
+    pessoa = models.ForeignKey(
+        Pessoa,
+        on_delete=models.PROTECT,
+        related_name='inscricoes_encontro',
+    )
+    tipo = models.CharField(max_length=20, choices=Tipo.choices)
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.PENDENTE,
+    )
+    criada_em = models.DateTimeField(auto_now_add=True)
+    atualizada_em = models.DateTimeField(auto_now=True)
+    cumprida_em = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        indexes = [
+            models.Index(
+                fields=['tipo', 'status', 'criada_em'],
+                name='inscr_fila_idx',
+            ),
+            models.Index(
+                fields=['pessoa', 'tipo', 'status'],
+                name='inscr_pessoa_tipo_idx',
+            ),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=['pessoa', 'tipo'],
+                condition=models.Q(status='pendente'),
+                name='inscricao_pendente_unica_pessoa_tipo',
+            ),
+            models.CheckConstraint(
+                condition=models.Q(tipo__in=('Escalada', 'Esppa')),
+                name='inscricao_tipo_valido',
+            ),
+            models.CheckConstraint(
+                condition=models.Q(status__in=('pendente', 'cumprida')),
+                name='inscricao_status_valido',
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(
+                        status='pendente',
+                        cumprida_em__isnull=True,
+                    )
+                    | models.Q(
+                        status='cumprida',
+                        cumprida_em__isnull=False,
+                    )
+                ),
+                name='inscricao_cumprimento_coerente',
+            ),
+        ]
+
+
+class ConviteEncontro(models.Model):
+    class Finalidade(models.TextChoices):
+        PARTICIPAR = 'participar', 'Participar'
+        TRABALHAR = 'trabalhar', 'Trabalhar'
+
+    class Status(models.TextChoices):
+        CONVIDADO = 'convidado', 'Convidado'
+        CONFIRMADO = 'confirmado', 'Confirmado'
+        RECUSADO = 'recusado', 'Recusado'
+        SEM_RESPOSTA = 'sem_resposta', 'Sem resposta'
+
+    pessoa = models.ForeignKey(
+        Pessoa,
+        on_delete=models.PROTECT,
+        related_name='convites_encontro',
+    )
+    encontro = models.ForeignKey(
+        Encontro,
+        on_delete=models.PROTECT,
+        related_name='convites',
+    )
+    finalidade = models.CharField(
+        max_length=20,
+        choices=Finalidade.choices,
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.CONVIDADO,
+    )
+    inscricao = models.ForeignKey(
+        Inscricao,
+        on_delete=models.PROTECT,
+        related_name='convites',
+        null=True,
+        blank=True,
+    )
+    criado_em = models.DateTimeField(auto_now_add=True)
+    atualizado_em = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        indexes = [
+            models.Index(
+                fields=['encontro', 'finalidade', 'status'],
+                name='conv_encontro_status_idx',
+            ),
+            models.Index(
+                fields=['pessoa', 'status'],
+                name='conv_pessoa_status_idx',
+            ),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=['pessoa', 'encontro', 'finalidade'],
+                name='convite_unico_pessoa_encontro_finalidade',
+            ),
+            models.CheckConstraint(
+                condition=models.Q(finalidade__in=('participar', 'trabalhar')),
+                name='convite_finalidade_valida',
+            ),
+            models.CheckConstraint(
+                condition=models.Q(
+                    status__in=(
+                        'convidado',
+                        'confirmado',
+                        'recusado',
+                        'sem_resposta',
+                    )
+                ),
+                name='convite_status_valido',
+            ),
+            models.CheckConstraint(
+                condition=(
+                    ~models.Q(finalidade='trabalhar')
+                    | models.Q(inscricao__isnull=True)
+                ),
+                name='convite_trabalho_sem_inscricao',
+            ),
+        ]
+
+
 class ParticipacaoEncontro(models.Model):
+    class Resultado(models.TextChoices):
+        CONCLUIU = 'concluiu', 'Concluiu'
+        FALTOU = 'faltou', 'Faltou'
+        DESISTIU = 'desistiu', 'Desistiu'
+
+    pessoa = models.ForeignKey(
+        Pessoa,
+        on_delete=models.PROTECT,
+        related_name='participacoes_encontro',
+    )
+    encontro = models.ForeignKey(
+        Encontro,
+        on_delete=models.PROTECT,
+        related_name='resultados_participacao',
+    )
+    convite = models.OneToOneField(
+        ConviteEncontro,
+        on_delete=models.PROTECT,
+        related_name='participacao',
+        null=True,
+        blank=True,
+    )
+    resultado = models.CharField(max_length=20, choices=Resultado.choices)
+    tipo_encontro = models.CharField(
+        max_length=20,
+        choices=Encontro.Tipo.choices,
+        editable=False,
+    )
+    registrada_em = models.DateTimeField(auto_now_add=True)
+    atualizada_em = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'core_participacaoencontro_resultado'
+        indexes = [
+            models.Index(
+                fields=['encontro', 'resultado'],
+                name='part_encontro_result_idx',
+            ),
+            models.Index(
+                fields=['pessoa', 'resultado'],
+                name='part_pessoa_result_idx',
+            ),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=['pessoa', 'encontro'],
+                name='participacao_unica_pessoa_encontro',
+            ),
+            models.UniqueConstraint(
+                fields=['pessoa', 'tipo_encontro'],
+                condition=models.Q(resultado='concluiu'),
+                name='conclusao_unica_pessoa_tipo',
+            ),
+            models.CheckConstraint(
+                condition=models.Q(
+                    resultado__in=('concluiu', 'faltou', 'desistiu')
+                ),
+                name='participacao_resultado_valido',
+            ),
+            models.CheckConstraint(
+                condition=models.Q(tipo_encontro__in=Encontro.Tipo.values),
+                name='participacao_tipo_valido',
+            ),
+        ]
+
+
+# Relação legada preservada para os contratos atuais de encontristas/equipes.
+class VinculoEncontroLegado(models.Model):
 
     alpinista = models.ForeignKey('Alpinista', on_delete = models.CASCADE, related_name = 'participacoes_encontros')
     encontro = models.ForeignKey('Encontro', on_delete = models.CASCADE, related_name = 'participacoes')
@@ -639,6 +853,7 @@ class ParticipacaoEncontro(models.Model):
     coordenador = models.BooleanField(default=False, verbose_name="É Coordenador?")
 
     class Meta:
+        db_table = 'core_participacaoencontro'
         constraints = [
             models.UniqueConstraint(
                 fields=['alpinista', 'encontro'],
@@ -657,7 +872,7 @@ class ParticipacaoEvento(models.Model):
         return f"{self.alpinista.nome} - {self.evento.nome}"
 
 
-@receiver(post_save, sender=ParticipacaoEncontro)
+@receiver(post_save, sender=VinculoEncontroLegado)
 def alpinista_ativo_automatico(sender, instance, created, **kwargs):
     if created:
         alpinista = instance.alpinista

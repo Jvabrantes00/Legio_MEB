@@ -12,8 +12,8 @@ from django.shortcuts import get_object_or_404
 
 from .models import (
     Alpinista, Encontro, EntregaMaterial, Evento, FotoEncontro,
-    FuncaoEncontro, Palestra, ParticipacaoEncontro, ParticipacaoEvento,
-    LogSistema, Material,
+    FuncaoEncontro, Palestra, ParticipacaoEvento, LogSistema, Material,
+    VinculoEncontroLegado as ParticipacaoEncontro,
 )
 from .serializers import (
     AlpinistaCompletoSerializer, AlpinistaFotoSerializer, CurrentUserSerializer,

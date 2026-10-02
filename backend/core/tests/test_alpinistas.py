@@ -1,7 +1,10 @@
 from django.db import IntegrityError, transaction
 from django.test import TestCase
 
-from core.models import Alpinista, ParticipacaoEncontro
+from core.models import (
+    Alpinista,
+    VinculoEncontroLegado as ParticipacaoEncontro,
+)
 from core.serializers import AlpinistaSerializer
 from core.tests.factories import make_alpinista, make_encontro, make_funcao
 

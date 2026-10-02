@@ -2,7 +2,7 @@ from datetime import date
 
 from rest_framework import status
 
-from core.models import ParticipacaoEncontro
+from core.models import VinculoEncontroLegado as ParticipacaoEncontro
 from core.serializers import (
     AlpinistaCompletoSerializer,
     EncontroSerializer,
