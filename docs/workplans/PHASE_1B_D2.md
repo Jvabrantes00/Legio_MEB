@@ -2,10 +2,9 @@
 
 ## Status geral
 
-D.2A e D.2B concluídas. A fundação estrutural foi implementada na migration
-`0029_expand_inscricao_convite_participacao`, sem acesso ou escrita no
-PostgreSQL local, sem backfill e sem cutover dos contratos legados. D.2C é o
-próximo bloco.
+D.2A, D.2B e D.2C concluídas. A fundação estrutural e os services
+transacionais foram implementados sem backfill e sem cutover dos contratos
+legados. D.2D é o próximo bloco.
 
 ## Objetivo
 
@@ -40,7 +39,7 @@ Status: concluída.
 
 ### D.2C — Services e regras transacionais
 
-Status: pendente.
+Status: concluída.
 
 ### D.2D — Compatibilidade e cutover legado
 
@@ -267,7 +266,23 @@ Pertencem aos services, pois dependem de outras linhas ou de regra contextual:
 
 ### Services — D.2C
 
-- Implementar comandos transacionais exclusivamente sobre os models novos.
+- Foram implementados `criar_inscricao`, `criar_convite`,
+  `responder_convite` e `registrar_resultado_participacao`, exclusivamente
+  sobre os models novos.
+- Os comandos reconsultam e bloqueiam as entidades persistidas, validam as
+  transições de domínio e convertem conflitos de integridade esperados em
+  `ValidationError` estável.
+- Criação repetida do mesmo convite, repetição da mesma resposta e repetição
+  do mesmo resultado são idempotentes. Uma resposta terminal divergente ou um
+  resultado real divergente são rejeitados; `FALTOU` e `DESISTIU` ainda podem
+  ser corrigidos para `CONCLUIU`.
+- `CONFIRMADO`, `RECUSADO` e `SEM_RESPOSTA` não criam resultado. `FALTOU` e
+  `DESISTIU` preservam a inscrição pendente e permitem tentativa em edição
+  futura. Somente `CONCLUIU` em Escalada ou ESPPA cumpre a inscrição pendente
+  correspondente e cria, por `get_or_create`, o `PerfilAlpinista` ausente.
+- AVC e Acampamento continuam sem inscrição, exigem a conclusão prévia de
+  Escalada e não criam perfil; o AVC aplica também a janela anual aprovada.
+- Nenhum comando cria `Frequencia` ou escreve na relação legada.
 - Não fazer dual write a partir das actions antigas: efetivação e remoção não
   possuem semântica suficiente para inferir convite ou resultado novo.
 - Manter qualquer endpoint novo sob default deny e, enquanto não houver
@@ -276,22 +291,7 @@ Pertencem aos services, pois dependem de outras linhas ou de regra contextual:
 
 ### COMPAT e CUTOVER — D.2D
 
-- Introduzir leitura e comandos novos sem retirar o recurso legado.
-- Migrar o frontend por fluxo: inscrição, convite/confirmação e só depois
-  resultado real.
-- Trocar `encontros_realizados` para resultados `CONCLUIU` apenas quando o novo
-  histórico estiver disponível; `historico_equipes` continua no vínculo antigo
-  até o domínio de equipes ser remodelado.
-- Remover o signal de ativação prematura no cutover dos fluxos que hoje criam
-  vínculo legado. `PerfilAlpinista`, e não `Alpinista.status`, passa a ser a
-  evidência de que a Pessoa é oficialmente Alpinista.
-- Manter `VinculoEncontroLegado` e sua tabela enquanto equipes, frontend ou
-  contratos da Fase 0 ainda dependerem deles.
-
-### DEPRECATE
-
-- Só remover rota, relação M2M e tabela antigas após busca global sem
-  consumidores, regressão dos contratos e plano separado para equipes.
+- Introduzir leitura e comandos novos sem retirar o candidad
 - Não converter automaticamente status legado em frequência, perfil ou
   conclusão.
 
@@ -332,10 +332,40 @@ Cobertura adicionada:
 - regressão integral das actions, endpoint, históricos e permissões legadas
   pela suíte backend completa.
 
-Permanecem para os próximos blocos os testes de services, concorrência real em
-PostgreSQL, APIs novas e frontend no COMPAT/CUTOVER.
+Permanecem para os próximos blocos a concorrência real em PostgreSQL, APIs
+novas e frontend no COMPAT/CUTOVER.
 
-## Débitos
+Resultados da D.2C:
+
+- 21 testes focados dos services: 19 aprovados no SQLite e 2 testes de corrida
+  corretamente ignorados nesse backend por exigirem PostgreSQL;
+- suíte backend completa: 287 testes aprovados, com os mesmos 2 skips
+  PostgreSQL;
+- `manage.py check --settings=setup.test_settings`: aprovado;
+- `makemigrations --check --dry-run --settings=setup.test_settings`: nenhuma
+  mudança detectada;
+- a execução pontual dos 2 testes no PostgreSQL foi tentada fora da sandbox,
+  após aprovação, mas o usuário `sia_dev` não possui permissão para criar o
+  banco descartável `test_sia_dev`;
+- a tentativa segura de provisionar somente `test_sia_dev` com o usuário
+  administrativo não prosseguiu porque `sudo` exige senha. O banco persistente
+  `sia_dev` não foi usado nem alterado.
+
+Cobertura adicionada na D.2C:
+
+- criação e duplicidade de inscrição de Escalada/ESPPA;
+- convite associado, convite direto de AVC e respostas terminais;
+- separação entre confirmação e resultado real;
+- cumprimento ou preservação coerente da inscrição para cada resultado;
+- conclusão única, correção para conclusão e tentativa futura após falta ou
+  desistência;
+- criação idempotente de perfil apenas nos tipos elegíveis e ausência de
+  `Frequencia`;
+- rollback integral diante de falha intermediária;
+- doistestes `TransactionTestCase` com conexões independentes para inscrição
+  e conclusão concorrentes, prontos para PostgreSQL.
+
+## Débito s
 
 - Alpinistas criados depois da migration 0026 podem não possuir `pessoa_id`;
   nenhuma associação deve ser inventada. Esses casos precisam de profiling e
@@ -353,13 +383,19 @@ PostgreSQL, APIs novas e frontend no COMPAT/CUTOVER.
   Encontro; `data_referencia` permanece somente como fallback de
   compatibilidade enquanto o débito da D.1 existir.
 - A semântica de concorrência de `select_for_update` será validada em
-  PostgreSQL na D.2C/D.2E, quando os services transacionais existirem.
+  PostgreSQL na D.2E. Os testes já existem, mas o ambiente precisa provisionar
+  um banco de testes separado ou conceder `CREATEDB` ao usuário de teste; não
+  se deve executar o runner sobre `sia_dev`.
+- Avisos etários de Escalada e ESPPA permanecem responsabilidade da futura
+  camada de comando/apresentação: são consultivos e não interferem nas
+  transações implementadas.
 
 ## Pendências humanas
 
-Nenhuma decisão de produto pendente bloqueia D.2B. Profiling de dados reais e
-eventual autorização para captação anônima são trabalhos futuros com evidência
-própria, não pressupostos da migration expansiva.
+Nenhuma decisão de produto pendente bloqueia D.2C. Profiling de dados reais,
+eventual autorização para captação anônima e provisionamento do banco
+descartável de testes são trabalhos futuros com evidência própria, não
+pressupostos dos services transacionais.
 
 ## Arquivos relevantes
 
@@ -381,6 +417,8 @@ própria, não pressupostos da migration expansiva.
 - `backend/core/tests/test_legacy_participations.py`
 - `backend/core/migrations/0029_expand_inscricao_convite_participacao.py`
 - `backend/core/tests/test_encontro_participacao_models.py`
+- `backend/core/services/participacoes.py`
+- `backend/core/tests/test_encontro_participacao_services.py`
 - `frontend/src/app/(painel)/encontros/[id]/page.tsx`
 - `frontend/src/lib/sia-profile-contracts.ts`
 
@@ -398,10 +436,16 @@ própria, não pressupostos da migration expansiva.
 - `backend/core/tests/test_serializer_contracts.py`
 - `docs/workplans/PHASE_1B_D2.md`
 
+## Arquivos alterados na D.2C
+
+- `backend/core/services/participacoes.py`
+- `backend/core/tests/test_encontro_participacao_services.py`
+- `docs/workplans/PHASE_1B_D2.md`
+
 ## Próximo passo
 
-Executar D.2C — services e regras transacionais sobre os models novos, sem
-cutover dos contratos legados.
+Executar D.2D — compatibilidade e cutover legado, sem inferir resultados reais
+a partir dos vínculos antigos.
 
 ## Padrão de relatórios durante a D.2
 
@@ -429,3 +473,8 @@ O chat não deve repetir o conteúdo completo já registrado neste workplan.
   o novo `ParticipacaoEncontro`, com migration expansiva, constraints, índices
   e testes. A tabela, o signal e os contratos legados foram preservados; 266
   testes backend passaram sem acesso ao PostgreSQL.
+- 2026-10-04 — D.2C concluída. Implementados os quatro services transacionais,
+  transições, locks, idempotência, efeitos de conclusão e rollback. A suíte
+  backend passou com 287 testes; os 2 testes de concorrência real permanecem
+  para execução em PostgreSQL após provisionamento seguro de um banco de
+  testes separado.
