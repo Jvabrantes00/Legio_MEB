@@ -4,10 +4,13 @@ from django.utils import timezone
 from rest_framework import serializers
 from rest_framework.reverse import reverse
 from .models import (
-    Alpinista, Encontro, EntregaMaterial, Evento, FotoEncontro,
-    FuncaoEncontro, LogSistema, Material, Palestra, ParticipacaoEvento,
+    Alpinista, ConviteEncontro, Encontro, EntregaMaterial, Evento,
+    FotoEncontro, FuncaoEncontro, Inscricao, LogSistema, Material, Palestra,
+    ParticipacaoEncontro as ResultadoParticipacaoEncontro, ParticipacaoEvento,
+    Pessoa,
     VinculoEncontroLegado as ParticipacaoEncontro,
 )
+from .services import participacoes as participacao_services
 from .validators import normalize_cpf, validate_image_upload_size
 from .roles import recognized_user_roles
 
@@ -498,24 +501,133 @@ class ParticipacaoEncontroSerializer(serializers.ModelSerializer):
     class Meta:
         model = ParticipacaoEncontro
         fields = ['id', 'alpinista', 'alpinista_id', 'encontro', 'encontro_id', 'funcao', 'funcao_id', 'cor_grupo', 'coordenador']
-    
-    def validate(self, data):
-        alpinista = data.get('alpinista')
-        encontro = data.get('encontro')
-        funcao = data.get('funcao')
 
-        if funcao and funcao.tipo == 'encontrista':
-            ja_fez = ParticipacaoEncontro.objects.filter(
-                alpinista=alpinista,
-                funcao__tipo='encontrista',
-                encontro__tipo=encontro.tipo
-            ).exists()
 
-            if ja_fez:
-                raise serializers.ValidationError(
-                    f"Bloqueado: Este alpinista já participou de um encontro do tipo '{encontro.tipo}' como encontrista."
-                )
-        return data
+def _erro_de_dominio(error):
+    detalhe = getattr(error, 'message_dict', None) or {
+        'non_field_errors': error.messages,
+    }
+    raise serializers.ValidationError(detalhe) from error
+
+
+class InscricaoEncontroCommandSerializer(serializers.ModelSerializer):
+    pessoa_id = serializers.PrimaryKeyRelatedField(
+        source='pessoa',
+        queryset=Pessoa.objects.all(),
+    )
+
+    class Meta:
+        model = Inscricao
+        fields = (
+            'id',
+            'pessoa_id',
+            'tipo',
+            'status',
+            'criada_em',
+            'cumprida_em',
+        )
+        read_only_fields = ('id', 'status', 'criada_em', 'cumprida_em')
+
+    def create(self, validated_data):
+        try:
+            return participacao_services.criar_inscricao(**validated_data)
+        except ValidationError as error:
+            _erro_de_dominio(error)
+
+
+class ConviteEncontroCommandSerializer(serializers.ModelSerializer):
+    pessoa_id = serializers.PrimaryKeyRelatedField(
+        source='pessoa',
+        queryset=Pessoa.objects.all(),
+    )
+    encontro_id = serializers.PrimaryKeyRelatedField(
+        source='encontro',
+        queryset=Encontro.objects.all(),
+    )
+    inscricao_id = serializers.PrimaryKeyRelatedField(
+        source='inscricao',
+        queryset=Inscricao.objects.all(),
+        required=False,
+        allow_null=True,
+    )
+
+    class Meta:
+        model = ConviteEncontro
+        fields = (
+            'id',
+            'pessoa_id',
+            'encontro_id',
+            'finalidade',
+            'status',
+            'inscricao_id',
+            'criado_em',
+        )
+        read_only_fields = ('id', 'status', 'criado_em')
+
+    def create(self, validated_data):
+        try:
+            return participacao_services.criar_convite(**validated_data)
+        except ValidationError as error:
+            _erro_de_dominio(error)
+
+
+class RespostaConviteEncontroCommandSerializer(serializers.Serializer):
+    status = serializers.ChoiceField(
+        choices=(
+            ConviteEncontro.Status.CONFIRMADO,
+            ConviteEncontro.Status.RECUSADO,
+            ConviteEncontro.Status.SEM_RESPOSTA,
+        )
+    )
+
+    def create(self, validated_data):
+        convite = validated_data.pop('convite')
+        try:
+            return participacao_services.responder_convite(
+                convite,
+                **validated_data,
+            )
+        except ValidationError as error:
+            _erro_de_dominio(error)
+
+
+class ResultadoParticipacaoCommandSerializer(serializers.ModelSerializer):
+    pessoa_id = serializers.PrimaryKeyRelatedField(
+        source='pessoa',
+        queryset=Pessoa.objects.all(),
+    )
+    encontro_id = serializers.PrimaryKeyRelatedField(
+        source='encontro',
+        queryset=Encontro.objects.all(),
+    )
+    convite_id = serializers.PrimaryKeyRelatedField(
+        source='convite',
+        queryset=ConviteEncontro.objects.all(),
+        required=False,
+        allow_null=True,
+    )
+
+    class Meta:
+        model = ResultadoParticipacaoEncontro
+        fields = (
+            'id',
+            'pessoa_id',
+            'encontro_id',
+            'convite_id',
+            'resultado',
+            'tipo_encontro',
+            'registrada_em',
+        )
+        read_only_fields = ('id', 'tipo_encontro', 'registrada_em')
+
+    def create(self, validated_data):
+        try:
+            return participacao_services.registrar_resultado_participacao(
+                **validated_data,
+            )
+        except ValidationError as error:
+            _erro_de_dominio(error)
+
 
 class ParticipacaoEventoSerializer(serializers.ModelSerializer):
     alpinista_nome = serializers.CharField(source='alpinista.nome', read_only=True)

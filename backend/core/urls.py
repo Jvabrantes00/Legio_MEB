@@ -6,9 +6,11 @@ from rest_framework_simplejwt.views import (
     TokenRefreshView,
 )
 from .views import (
-    AlpinistaViewSet, EncontroViewSet, EventoViewSet, 
+    AlpinistaViewSet, EncontroViewSet, EventoViewSet,
     EntregaMaterialViewSet, FuncaoEncontroViewSet, MaterialViewSet,
     ParticipacaoEncontroViewSet, ParticipacaoEventoViewSet, LogSistemaViewSet,
+    InscricaoEncontroCommandViewSet, ConviteEncontroCommandViewSet,
+    ResultadoParticipacaoCommandViewSet,
 )
 from .views import dashboard_stats
 from .views import current_user
@@ -37,6 +39,21 @@ router.register(r'eventos', EventoViewSet)
 
 router.register(r'funcoes', FuncaoEncontroViewSet)
 router.register(r'participacoes-encontros', ParticipacaoEncontroViewSet)
+router.register(
+    r'inscricoes-encontros',
+    InscricaoEncontroCommandViewSet,
+    basename='inscricao-encontro',
+)
+router.register(
+    r'convites-encontros',
+    ConviteEncontroCommandViewSet,
+    basename='convite-encontro',
+)
+router.register(
+    r'resultados-participacoes-encontros',
+    ResultadoParticipacaoCommandViewSet,
+    basename='resultado-participacao-encontro',
+)
 router.register(r'participacoes-eventos', ParticipacaoEventoViewSet)
 router.register(r'logs', LogSistemaViewSet)
 router.register(r'materiais', MaterialViewSet)

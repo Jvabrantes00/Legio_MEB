@@ -42,7 +42,7 @@ class StatusAlpinistaRegressionTests(TestCase):
         # Assert: documenta a diferença atual entre Pendente e pendente.
         self.assertEqual(alpinista.status, 'pendente')
 
-    def test_nova_participacao_deve_usar_valor_canonico_ativo(self):
+    def test_novo_vinculo_legado_nao_deve_ativar_alpinista(self):
         # Arrange
         alpinista = make_alpinista(status='pendente')
         encontro = make_encontro()
@@ -56,8 +56,7 @@ class StatusAlpinistaRegressionTests(TestCase):
         )
         alpinista.refresh_from_db()
 
-        # Assert: hoje o signal grava Ativo em vez de ativo.
-        self.assertEqual(alpinista.status, 'ativo')
+        self.assertEqual(alpinista.status, 'pendente')
 
 
 class CPFRegressionTests(TestCase):

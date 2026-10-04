@@ -11,8 +11,10 @@ from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
 
 from .models import (
-    Alpinista, Encontro, EntregaMaterial, Evento, FotoEncontro,
-    FuncaoEncontro, Palestra, ParticipacaoEvento, LogSistema, Material,
+    Alpinista, ConviteEncontro, Encontro, EntregaMaterial, Evento,
+    FotoEncontro, FuncaoEncontro, Inscricao, Palestra,
+    ParticipacaoEncontro as ResultadoParticipacaoEncontro,
+    ParticipacaoEvento, LogSistema, Material,
     VinculoEncontroLegado as ParticipacaoEncontro,
 )
 from .serializers import (
@@ -22,8 +24,11 @@ from .serializers import (
     HistoricoVioleiroSerializer,
     EncontroComunicacaoSerializer, EncontroSerializer, EventoSerializer,
     EntregaMaterialSerializer, FotoEncontroSerializer, MaterialSerializer,
-    FuncaoEncontroSerializer, ParticipacaoEncontroSerializer, ParticipacaoEventoSerializer,
-    LogSistemaSerializer
+    FuncaoEncontroSerializer, ParticipacaoEncontroSerializer,
+    ParticipacaoEventoSerializer, LogSistemaSerializer,
+    InscricaoEncontroCommandSerializer, ConviteEncontroCommandSerializer,
+    RespostaConviteEncontroCommandSerializer,
+    ResultadoParticipacaoCommandSerializer,
     )
 from .permissions import AlpinistaQueryPolicy, HasAnySiaRole, require_sia_roles
 from .roles import (
@@ -528,17 +533,12 @@ class EncontroViewSet(viewsets.ModelViewSet):
                 sucessos = 0
                 for alp_id in alpinistas_ids:
                     alpinista = Alpinista.objects.get(id=alp_id)
-                    status_anterior = (alpinista.status or '').lower()
 
                     ParticipacaoEncontro.objects.get_or_create(
                         encontro=encontro,
                         alpinista=alpinista,
                         funcao=funcao
                     )
-
-                    if status_anterior == Alpinista.Status.PENDENTE:
-                        alpinista.status = Alpinista.Status.CONFIRMADO
-                        alpinista.save(update_fields=['status'])
 
                     sucessos += 1
 
@@ -591,13 +591,6 @@ class EncontroViewSet(viewsets.ModelViewSet):
 
                     if participacao:
                         participacao.delete()
-
-                        if (alpinista.status or '').lower() in {
-                            Alpinista.Status.CONFIRMADO,
-                            Alpinista.Status.ATIVO,
-                        }:
-                            alpinista.status = Alpinista.Status.PENDENTE
-                            alpinista.save(update_fields=['status'])
 
                         sucessos += 1
                         removidos_ids.append(alpinista.pk)
@@ -677,6 +670,94 @@ class ParticipacaoEncontroViewSet(AuditedCrudViewSetMixin, viewsets.ModelViewSet
 
     filter_backends = [DjangoFilterBackend]
     filterset_fields = ['encontro', 'alpinista', 'funcao']  # Permite filtrar por encontro, alpinista e função
+
+
+class InscricaoEncontroCommandViewSet(
+    mixins.CreateModelMixin,
+    viewsets.GenericViewSet,
+):
+    queryset = Inscricao.objects.select_related('pessoa').all()
+    serializer_class = InscricaoEncontroCommandSerializer
+    permission_classes = [require_sia_roles(*FICHAS_MANAGEMENT_ROLES)]
+
+    def perform_create(self, serializer):
+        with transaction.atomic():
+            inscricao = serializer.save()
+            LogSistema.objects.create(
+                usuario=self.request.user,
+                acao='CREATE',
+                modulo='Inscricao',
+                descricao=f'Inscrição ID {inscricao.pk} criada.',
+            )
+
+
+class ConviteEncontroCommandViewSet(
+    mixins.CreateModelMixin,
+    viewsets.GenericViewSet,
+):
+    queryset = ConviteEncontro.objects.select_related(
+        'pessoa',
+        'encontro',
+        'inscricao',
+    )
+    serializer_class = ConviteEncontroCommandSerializer
+    permission_classes = [require_sia_roles(*FICHAS_MANAGEMENT_ROLES)]
+
+    def perform_create(self, serializer):
+        with transaction.atomic():
+            convite = serializer.save()
+            LogSistema.objects.create(
+                usuario=self.request.user,
+                acao='CREATE',
+                modulo='ConviteEncontro',
+                descricao=f'ConviteEncontro ID {convite.pk} criado.',
+            )
+
+    @action(detail=True, methods=['post'], url_path='responder')
+    def responder(self, request, pk=None):
+        convite = self.get_object()
+        serializer = RespostaConviteEncontroCommandSerializer(
+            data=request.data,
+        )
+        serializer.is_valid(raise_exception=True)
+        with transaction.atomic():
+            convite = serializer.save(convite=convite)
+            LogSistema.objects.create(
+                usuario=request.user,
+                acao='UPDATE',
+                modulo='ConviteEncontro',
+                descricao=f'ConviteEncontro ID {convite.pk} respondido.',
+            )
+        return Response(
+            self.get_serializer(convite).data,
+            status=status.HTTP_200_OK,
+        )
+
+
+class ResultadoParticipacaoCommandViewSet(
+    mixins.CreateModelMixin,
+    viewsets.GenericViewSet,
+):
+    queryset = ResultadoParticipacaoEncontro.objects.select_related(
+        'pessoa',
+        'encontro',
+        'convite',
+    )
+    serializer_class = ResultadoParticipacaoCommandSerializer
+    permission_classes = [require_sia_roles(*FICHAS_MANAGEMENT_ROLES)]
+
+    def perform_create(self, serializer):
+        with transaction.atomic():
+            participacao = serializer.save()
+            LogSistema.objects.create(
+                usuario=self.request.user,
+                acao='CREATE',
+                modulo='ParticipacaoEncontroResultado',
+                descricao=(
+                    f'ParticipacaoEncontroResultado ID {participacao.pk} '
+                    'registrada.'
+                ),
+            )
 
 class ParticipacaoEventoViewSet(AuditedCrudViewSetMixin, viewsets.ModelViewSet):
     queryset = (

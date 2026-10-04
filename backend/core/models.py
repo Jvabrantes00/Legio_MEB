@@ -1,6 +1,4 @@
 from django.db import models
-from django.db.models.signals import post_save
-from django.dispatch import receiver
 from django.contrib.auth.models import User
 
 from .validators import normalize_cpf, validate_cpf, validate_image_upload_size
@@ -870,15 +868,6 @@ class ParticipacaoEvento(models.Model):
     
     def __str__(self):
         return f"{self.alpinista.nome} - {self.evento.nome}"
-
-
-@receiver(post_save, sender=VinculoEncontroLegado)
-def alpinista_ativo_automatico(sender, instance, created, **kwargs):
-    if created:
-        alpinista = instance.alpinista
-        if alpinista.status != Alpinista.Status.ATIVO:
-            alpinista.status = Alpinista.Status.ATIVO
-            alpinista.save(update_fields=['status'])
 
 
 class LogSistema(models.Model):

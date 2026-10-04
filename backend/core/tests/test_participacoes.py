@@ -3,7 +3,12 @@ from unittest.mock import patch
 
 from django.db import IntegrityError
 
-from core.models import VinculoEncontroLegado as ParticipacaoEncontro
+from core.models import (
+    Frequencia,
+    ParticipacaoEncontro as ResultadoParticipacaoEncontro,
+    PerfilAlpinista,
+    VinculoEncontroLegado as ParticipacaoEncontro,
+)
 from core.tests.base import (
     AuthenticatedAPITestCase,
     AuthenticatedAPITransactionTestCase,
@@ -12,7 +17,7 @@ from core.tests.factories import make_alpinista, make_encontro, make_funcao
 
 
 class ParticipacaoRegressionTests(AuthenticatedAPITestCase):
-    def test_efetivacao_cria_participacao_e_confirma_alpinista(self):
+    def test_efetivacao_preserva_vinculo_sem_inferir_confirmacao_ou_resultado(self):
         # Arrange
         alpinista = make_alpinista(status='pendente')
         encontro = make_encontro()
@@ -25,7 +30,6 @@ class ParticipacaoRegressionTests(AuthenticatedAPITestCase):
         )
         alpinista.refresh_from_db()
 
-        # Assert: hoje o signal troca o status para Ativo antes da confirmação.
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertTrue(
             ParticipacaoEncontro.objects.filter(
@@ -34,9 +38,12 @@ class ParticipacaoRegressionTests(AuthenticatedAPITestCase):
                 funcao__tipo='encontrista',
             ).exists()
         )
-        self.assertEqual(alpinista.status, 'confirmado')
+        self.assertEqual(alpinista.status, 'pendente')
+        self.assertFalse(ResultadoParticipacaoEncontro.objects.exists())
+        self.assertFalse(PerfilAlpinista.objects.exists())
+        self.assertFalse(Frequencia.objects.exists())
 
-    def test_remocao_exclui_participacao_e_retorna_para_pendente(self):
+    def test_remocao_exclui_vinculo_sem_rebaixar_status_legado(self):
         # Arrange
         alpinista = make_alpinista(status='confirmado')
         encontro = make_encontro()
@@ -65,7 +72,7 @@ class ParticipacaoRegressionTests(AuthenticatedAPITestCase):
                 alpinista=alpinista,
             ).exists()
         )
-        self.assertEqual(alpinista.status, 'pendente')
+        self.assertEqual(alpinista.status, 'confirmado')
 
 
     def test_criacao_de_participacao_nao_imprime_nome_em_stdout(self):
@@ -77,6 +84,58 @@ class ParticipacaoRegressionTests(AuthenticatedAPITestCase):
             )
 
         mocked_print.assert_not_called()
+
+    def test_crud_legado_preserva_payload_sem_ativar_ou_criar_resultado(self):
+        alpinista = make_alpinista(status='pendente')
+        encontro = make_encontro()
+        funcao = make_funcao(nome='Encontrista', tipo='encontrista')
+
+        response = self.client.post(
+            '/api/participacoes-encontros/',
+            {
+                'alpinista_id': alpinista.pk,
+                'encontro_id': encontro.pk,
+                'funcao_id': funcao.pk,
+                'cor_grupo': 'azul',
+                'coordenador': False,
+            },
+            format='json',
+        )
+        alpinista.refresh_from_db()
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.json()['alpinista']['id'], alpinista.pk)
+        self.assertEqual(response.json()['cor_grupo'], 'azul')
+        self.assertEqual(alpinista.status, 'pendente')
+        self.assertFalse(ResultadoParticipacaoEncontro.objects.exists())
+        self.assertFalse(PerfilAlpinista.objects.exists())
+        self.assertFalse(Frequencia.objects.exists())
+
+    def test_vinculo_legado_repetido_por_tipo_nao_e_tratado_como_conclusao(self):
+        alpinista = make_alpinista(status='pendente')
+        funcao = make_funcao(nome='Encontrista', tipo='encontrista')
+
+        respostas = [
+            self.client.post(
+                '/api/participacoes-encontros/',
+                {
+                    'alpinista_id': alpinista.pk,
+                    'encontro_id': make_encontro(tipo='Escalada').pk,
+                    'funcao_id': funcao.pk,
+                },
+                format='json',
+            )
+            for _ in range(2)
+        ]
+        alpinista.refresh_from_db()
+
+        self.assertEqual(
+            [response.status_code for response in respostas],
+            [status.HTTP_201_CREATED, status.HTTP_201_CREATED],
+        )
+        self.assertEqual(alpinista.status, 'pendente')
+        self.assertFalse(ResultadoParticipacaoEncontro.objects.exists())
+        self.assertFalse(PerfilAlpinista.objects.exists())
 
 
 class ParticipacaoLoteRegressionTests(AuthenticatedAPITransactionTestCase):
@@ -104,8 +163,8 @@ class ParticipacaoLoteRegressionTests(AuthenticatedAPITransactionTestCase):
             ).count(),
             2,
         )
-        self.assertEqual(primeiro.status, 'confirmado')
-        self.assertEqual(segundo.status, 'confirmado')
+        self.assertEqual(primeiro.status, 'pendente')
+        self.assertEqual(segundo.status, 'pendente')
 
     def test_efetivacao_em_lote_nao_deve_persistir_resultado_parcial(self):
         # Arrange

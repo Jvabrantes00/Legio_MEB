@@ -2,9 +2,9 @@
 
 ## Status geral
 
-D.2A, D.2B e D.2C concluídas. A fundação estrutural e os services
-transacionais foram implementados sem backfill e sem cutover dos contratos
-legados. D.2D é o próximo bloco.
+D.2A, D.2B, D.2C e D.2D concluídas. A fundação estrutural, os services
+transacionais e o cutover lógico foram implementados sem backfill e sem
+remoção física dos contratos legados. D.2E é o próximo bloco.
 
 ## Objetivo
 
@@ -43,7 +43,7 @@ Status: concluída.
 
 ### D.2D — Compatibilidade e cutover legado
 
-Status: pendente.
+Status: concluída.
 
 ### D.2E — Regressão, documentação e fechamento
 
@@ -291,7 +291,35 @@ Pertencem aos services, pois dependem de outras linhas ou de regra contextual:
 
 ### COMPAT e CUTOVER — D.2D
 
-- Introduzir leitura e comandos novos sem retirar o candidad
+- O signal `alpinista_ativo_automatico` foi removido. Criar um
+  `VinculoEncontroLegado`, seja de encontrista ou equipe, não altera mais
+  `Alpinista.status` e não cria perfil, resultado ou frequência.
+- `efetivar-encontristas` continua criando o vínculo legado e preserva rota,
+  payload, resposta, atomicidade e auditoria, mas não promove mais o status
+  legado para `confirmado` ou `ativo`.
+- `remover-encontristas` continua removendo somente o vínculo legado e
+  preserva rota, payload, resposta, atomicidade e auditoria, mas não rebaixa
+  mais o status do Alpinista.
+- O CRUD `/api/participacoes-encontros/` e seus contratos de leitura foram
+  preservados. Sua validação deixou de interpretar outro vínculo de mesmo tipo
+  como conclusão, pois o registro antigo não distingue confirmação, falta,
+  desistência ou conclusão.
+- Foram adicionados endpoints de comando, sem CRUD genérico de leitura, para
+  inscrição, convite, resposta e resultado:
+  - `POST /api/inscricoes-encontros/`;
+  - `POST /api/convites-encontros/`;
+  - `POST /api/convites-encontros/{id}/responder/`;
+  - `POST /api/resultados-participacoes-encontros/`.
+- Os serializers de comando limitam seus campos e delegam integralmente aos
+  quatro services da D.2C. Erros de domínio são expostos como `400`, e as
+  escritas mantêm auditoria transacional por identificador.
+- Os comandos novos reutilizam os papéis administrativos já autorizados para
+  Encontros e participações; nenhuma permissão foi ampliada.
+- Não existe dual-write entre o vínculo antigo e os models novos. Os fluxos
+  antigos não possuem evidência inequívoca para produzir inscrição, convite
+  ou resultado, e os comandos novos não fabricam vínculo legado.
+- O frontend e as leituras históricas continuam usando o contrato legado até
+  migração posterior por fluxo.
 - Não converter automaticamente status legado em frequência, perfil ou
   conclusão.
 
@@ -332,8 +360,8 @@ Cobertura adicionada:
 - regressão integral das actions, endpoint, históricos e permissões legadas
   pela suíte backend completa.
 
-Permanecem para os próximos blocos a concorrência real em PostgreSQL, APIs
-novas e frontend no COMPAT/CUTOVER.
+Permanecem para o fechamento a concorrência real em PostgreSQL e a migração
+futura dos consumidores frontend ainda apoiados no contrato legado.
 
 Resultados da D.2C:
 
@@ -362,10 +390,34 @@ Cobertura adicionada na D.2C:
 - criação idempotente de perfil apenas nos tipos elegíveis e ausência de
   `Frequencia`;
 - rollback integral diante de falha intermediária;
-- doistestes `TransactionTestCase` com conexões independentes para inscrição
+- dois testes `TransactionTestCase` com conexões independentes para inscrição
   e conclusão concorrentes, prontos para PostgreSQL.
 
-## Débito s
+Resultados da D.2D:
+
+- 9 testes novos de API e compatibilidade aprovados;
+- suíte backend completa: 296 testes aprovados, com os 2 skips PostgreSQL já
+  registrados para D.2E;
+- `manage.py check --settings=setup.test_settings`: aprovado;
+- `makemigrations --check --dry-run --settings=setup.test_settings`: nenhuma
+  mudança detectada;
+- nenhum acesso ao PostgreSQL local foi necessário e nenhuma migration foi
+  criada ou alterada.
+
+Cobertura adicionada ou ajustada na D.2D:
+
+- confirmação separada de resultado e sem criação de perfil ou frequência;
+- `CONCLUIU`, `FALTOU`, `DESISTIU`, AVC e Acampamento através da API de
+  comando;
+- comprovação por mocks de que os writes novos delegam aos services;
+- ausência da ativação prematura em criação direta, efetivação e remoção de
+  vínculo legado;
+- preservação dos payloads, rotas, respostas, atomicidade e autorização do
+  contrato antigo;
+- repetição de vínculo legado por tipo sem inferência de conclusão;
+- endpoints de comando sem listagem ou update genéricos e sob default deny.
+
+## Débitos
 
 - Alpinistas criados depois da migration 0026 podem não possuir `pessoa_id`;
   nenhuma associação deve ser inventada. Esses casos precisam de profiling e
@@ -389,13 +441,19 @@ Cobertura adicionada na D.2C:
 - Avisos etários de Escalada e ESPPA permanecem responsabilidade da futura
   camada de comando/apresentação: são consultivos e não interferem nas
   transações implementadas.
+- `Alpinista.status` e o vínculo legado continuam necessários para o frontend
+  e históricos atuais, mas ficaram isolados de confirmação, resultado e
+  criação de `PerfilAlpinista`. Sua depreciação física depende da migração dos
+  consumidores na D.2E ou em plano posterior explícito.
+- Alpinistas legados sem `pessoa_id` não podem usar os comandos novos até
+  reconciliação segura; o cutover não cria associações heurísticas.
 
 ## Pendências humanas
 
-Nenhuma decisão de produto pendente bloqueia D.2C. Profiling de dados reais,
+Nenhuma decisão de produto pendente bloqueia D.2D. Profiling de dados reais,
 eventual autorização para captação anônima e provisionamento do banco
 descartável de testes são trabalhos futuros com evidência própria, não
-pressupostos dos services transacionais.
+pressupostos do cutover lógico.
 
 ## Arquivos relevantes
 
@@ -442,10 +500,23 @@ pressupostos dos services transacionais.
 - `backend/core/tests/test_encontro_participacao_services.py`
 - `docs/workplans/PHASE_1B_D2.md`
 
+## Arquivos alterados na D.2D
+
+- `backend/core/models.py`
+- `backend/core/serializers.py`
+- `backend/core/views.py`
+- `backend/core/urls.py`
+- `backend/core/tests/test_encontro_participacao_api.py`
+- `backend/core/tests/test_participacoes.py`
+- `backend/core/tests/test_alpinistas.py`
+- `backend/core/tests/test_authorization.py`
+- `docs/workplans/PHASE_1B_D2.md`
+
 ## Próximo passo
 
-Executar D.2D — compatibilidade e cutover legado, sem inferir resultados reais
-a partir dos vínculos antigos.
+Executar D.2E — regressão final, validação PostgreSQL e fechamento da D.2,
+mantendo a estrutura legada até que todos os consumidores possam ser
+depreciados com segurança.
 
 ## Padrão de relatórios durante a D.2
 
@@ -478,3 +549,7 @@ O chat não deve repetir o conteúdo completo já registrado neste workplan.
   backend passou com 287 testes; os 2 testes de concorrência real permanecem
   para execução em PostgreSQL após provisionamento seguro de um banco de
   testes separado.
+- 2026-10-04 — D.2D concluída. Removida a ativação implícita do vínculo
+  legado, desacopladas as actions antigas de `Alpinista.status` e introduzidos
+  comandos de API que delegam aos services novos. Contratos e estrutura
+  legados foram preservados sem dual-write; 296 testes backend passaram.
