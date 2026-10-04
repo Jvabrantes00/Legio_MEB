@@ -2,9 +2,10 @@
 
 ## Status geral
 
-D.2A, D.2B, D.2C e D.2D concluídas. A fundação estrutural, os services
-transacionais e o cutover lógico foram implementados sem backfill e sem
-remoção física dos contratos legados. D.2E é o próximo bloco.
+**FASE 1B.3D.2 — CONCLUÍDA.** D.2A a D.2E foram encerradas com fundação
+estrutural, services transacionais, cutover lógico e regressão real em
+PostgreSQL. Não houve backfill heurístico nem remoção física dos contratos
+legados.
 
 ## Objetivo
 
@@ -47,7 +48,7 @@ Status: concluída.
 
 ### D.2E — Regressão, documentação e fechamento
 
-Status: pendente.
+Status: concluída.
 
 ## Decisões da fase
 
@@ -360,8 +361,8 @@ Cobertura adicionada:
 - regressão integral das actions, endpoint, históricos e permissões legadas
   pela suíte backend completa.
 
-Permanecem para o fechamento a concorrência real em PostgreSQL e a migração
-futura dos consumidores frontend ainda apoiados no contrato legado.
+A concorrência real foi fechada na D.2E. A migração dos consumidores frontend
+ainda apoiados no contrato legado permanece como trabalho futuro explícito.
 
 Resultados da D.2C:
 
@@ -417,6 +418,49 @@ Cobertura adicionada ou ajustada na D.2D:
 - repetição de vínculo legado por tipo sem inferência de conclusão;
 - endpoints de comando sem listagem ou update genéricos e sob default deny.
 
+Resultados da D.2E:
+
+- suíte backend completa no PostgreSQL 16: 296/296 testes aprovados;
+- os 2 testes de concorrência da D.2C foram executados e aprovados em conexões
+  independentes sobre PostgreSQL real;
+- suíte backend completa no SQLite: 296 testes descobertos, 294 aprovados e os
+  mesmos 2 testes PostgreSQL corretamente ignorados;
+- `manage.py check --settings=setup.test_settings`: aprovado;
+- `makemigrations --check --dry-run --settings=setup.test_settings`: nenhuma
+  mudança detectada;
+- todas as migrations aplicaram em um banco PostgreSQL limpo, inclusive
+  `core.0029_expand_inscricao_convite_participacao`, e `showmigrations`
+  confirmou o estado aplicado até `0029`;
+- `git diff --check`: aprovado no fechamento;
+- a validação usou `pg_virtualenv`, com cluster e banco descartáveis criados
+  pelo usuário atual e removidos automaticamente. O banco persistente
+  `sia_dev` não foi acessado nem alterado.
+
+### Resultado da concorrência PostgreSQL
+
+- Duas criações simultâneas de inscrição da mesma Pessoa/tipo produziram uma
+  única inscrição pendente; a concorrente foi rejeitada pelo service.
+- Duas conclusões simultâneas de Escalada em edições distintas produziram uma
+  única conclusão e um único `PerfilAlpinista`; a tentativa concorrente foi
+  rejeitada sem estado parcial.
+- `transaction.atomic`, `select_for_update`, as unique constraints e a
+  conversão de conflitos em erro de domínio funcionaram no backend alvo.
+- A idempotência dos comandos e os rollbacks permaneceram cobertos pela suíte
+  funcional completa.
+
+### Critérios finais da D.2
+
+- confirmação permanece separada de participação;
+- vínculo legado não ativa Alpinista nem cria resultado novo;
+- apenas conclusão de Escalada/ESPPA cria `PerfilAlpinista` ausente;
+- falta, desistência, AVC e Acampamento não criam perfil;
+- nenhum fluxo da D.2 cria `Frequencia`;
+- APIs novas delegam aos services e contratos antigos continuam passando;
+- não existe backfill ou dual-write inferido a partir do legado.
+
+Todos os critérios necessários foram satisfeitos. A Fase 1B.3D.2 está
+tecnicamente concluída.
+
 ## Débitos
 
 - Alpinistas criados depois da migration 0026 podem não possuir `pessoa_id`;
@@ -434,26 +478,21 @@ Cobertura adicionada ou ajustada na D.2D:
 - A data histórica de elegibilidade deve usar o calendário oficial vigente do
   Encontro; `data_referencia` permanece somente como fallback de
   compatibilidade enquanto o débito da D.1 existir.
-- A semântica de concorrência de `select_for_update` será validada em
-  PostgreSQL na D.2E. Os testes já existem, mas o ambiente precisa provisionar
-  um banco de testes separado ou conceder `CREATEDB` ao usuário de teste; não
-  se deve executar o runner sobre `sia_dev`.
 - Avisos etários de Escalada e ESPPA permanecem responsabilidade da futura
   camada de comando/apresentação: são consultivos e não interferem nas
   transações implementadas.
 - `Alpinista.status` e o vínculo legado continuam necessários para o frontend
   e históricos atuais, mas ficaram isolados de confirmação, resultado e
-  criação de `PerfilAlpinista`. Sua depreciação física depende da migração dos
-  consumidores na D.2E ou em plano posterior explícito.
+  criação de `PerfilAlpinista`. Sua depreciação física depende de um plano
+  posterior explícito para migração dos consumidores.
 - Alpinistas legados sem `pessoa_id` não podem usar os comandos novos até
   reconciliação segura; o cutover não cria associações heurísticas.
 
 ## Pendências humanas
 
-Nenhuma decisão de produto pendente bloqueia D.2D. Profiling de dados reais,
-eventual autorização para captação anônima e provisionamento do banco
-descartável de testes são trabalhos futuros com evidência própria, não
-pressupostos do cutover lógico.
+Nenhuma decisão de produto pendente bloqueia o fechamento da D.2. Profiling de
+dados reais e eventual autorização para captação anônima são trabalhos
+futuros com evidência própria, não pressupostos do cutover lógico.
 
 ## Arquivos relevantes
 
@@ -512,11 +551,16 @@ pressupostos do cutover lógico.
 - `backend/core/tests/test_authorization.py`
 - `docs/workplans/PHASE_1B_D2.md`
 
+## Arquivos alterados na D.2E
+
+- `docs/workplans/PHASE_1B_D2.md`
+- `docs/PROJECT_STATE.md`
+- `docs/00_HOME.md`
+
 ## Próximo passo
 
-Executar D.2E — regressão final, validação PostgreSQL e fechamento da D.2,
-mantendo a estrutura legada até que todos os consumidores possam ser
-depreciados com segurança.
+Executar 1B.3D.3 — Equipes e Trabalho em Encontro, preservando a estrutura
+legada até que todos os consumidores possam ser depreciados com segurança.
 
 ## Padrão de relatórios durante a D.2
 
@@ -553,3 +597,7 @@ O chat não deve repetir o conteúdo completo já registrado neste workplan.
   legado, desacopladas as actions antigas de `Alpinista.status` e introduzidos
   comandos de API que delegam aos services novos. Contratos e estrutura
   legados foram preservados sem dual-write; 296 testes backend passaram.
+- 2026-10-04 — D.2E e a Fase 1B.3D.2 concluídas. A suíte completa passou no
+  SQLite e com 296/296 no PostgreSQL 16 efêmero; os dois cenários de corrida
+  foram aprovados, as migrations aplicaram até `0029` e nenhum recurso
+  temporário ou alteração em `sia_dev` permaneceu.

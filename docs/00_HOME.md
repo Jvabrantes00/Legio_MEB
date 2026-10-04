@@ -15,7 +15,9 @@ substitui os documentos de referência nem os `AGENTS.md` aplicáveis.
 - 1B.3D.0 concluiu a decisão do Calendário Institucional como HUB.
 - 1B.3D.1 concluiu o núcleo de Encontros com lifecycle, calendários e dias,
   preservando o contrato legado da API.
-- Próxima implementação: 1B.3D.2 — Inscrição, Convite e Participação.
+- 1B.3D.2 concluiu Inscrição, Convite e Participação, com services
+  transacionais, cutover lógico e validação real em PostgreSQL.
+- Próxima implementação: 1B.3D.3 — Equipes e Trabalho em Encontro.
 
 O estado vivo e o roadmap estão em [[PROJECT_STATE]].
 

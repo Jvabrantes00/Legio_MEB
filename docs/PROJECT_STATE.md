@@ -2,7 +2,7 @@
 
 ## Estado atual
 
-- Data: 28 de setembro de 2026.
+- Data: 4 de outubro de 2026.
 - Branch: `sia/fase-1-modelagem-dominio`.
 - **FASE 0 — ESTABILIZAÇÃO: CONCLUÍDA**
 - **FASE 1 — REMODELAGEM DE DOMÍNIO: EM ANDAMENTO**
@@ -21,7 +21,7 @@
 | 0H PostgreSQL e legado | ✅ Concluída |
 | 0I Débitos técnicos restantes | ✅ Concluída |
 | 0J Gate e auditoria final | ✅ Concluída |
-| Fase 1 Remodelagem de domínio | Em andamento; 1B.3D.1 concluída; próxima etapa 1B.3D.2 |
+| Fase 1 Remodelagem de domínio | Em andamento; 1B.3D.2 concluída; próxima etapa 1B.3D.3 |
 
 ## Estado da Fase 1
 
@@ -37,8 +37,9 @@
   segurança; nenhum backfill será feito neste momento.
 - O backfill histórico de Grupo permanece bloqueado até a obtenção e a
   reconciliação do catálogo legado real.
-- `PerfilAlpinista` existe no schema, mas sua criação automática também
-  continua bloqueada até a reconciliação das evidências do legado.
+- O backfill automático de `PerfilAlpinista` continua bloqueado até a
+  reconciliação das evidências do legado. Para novos resultados inequívocos,
+  a conclusão transacional de Escalada ou ESPPA cria o perfil com segurança.
 - 1B.3D.0 definiu o Calendário Institucional como HUB que projeta Encontros,
   Eventos e compromissos sem duplicar os objetos dos domínios de origem.
 - A decisão aprovou o lifecycle futuro de Encontros, dias não consecutivos,
@@ -56,7 +57,19 @@
   calendário e permanecem como débito de compatibilidade.
 - `status_encontro` continua sendo uma projeção temporal legada baseada em
   data; não representa nem substitui o novo lifecycle administrativo.
-- Próxima implementação: 1B.3D.2 — Inscrição, Convite e Participação.
+- 1B.3D.2 concluiu Inscrição, Convite e Participação. `Inscricao`,
+  `ConviteEncontro` e o novo `ParticipacaoEncontro` separam fila, confirmação
+  e resultado real; os writes passam por services transacionais.
+- Somente `CONCLUIU` em Escalada ou ESPPA pode criar `PerfilAlpinista`.
+  Confirmação, falta, desistência, AVC e Acampamento não criam perfil, e
+  nenhum fluxo da etapa cria `Frequencia`.
+- O cutover lógico removeu a ativação implícita causada pelo vínculo legado,
+  preservando temporariamente tabela, rotas, payloads e históricos antigos
+  sem dual-write ou backfill heurístico.
+- A regressão final aprovou 296/296 testes no PostgreSQL 16 descartável,
+  inclusive os dois cenários reais de concorrência, e confirmou migrations
+  aplicáveis até `core.0029_expand_inscricao_convite_participacao`.
+- Próxima implementação: 1B.3D.3 — Equipes e Trabalho em Encontro.
 
 ## Histórico — Fase 0
 
