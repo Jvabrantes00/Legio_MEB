@@ -2,9 +2,9 @@
 
 ## Status geral
 
-Fase em andamento. A D.3A foi concluída por inspeção estática do código em
-2026-10-04, sem acesso ao PostgreSQL e sem alteração de implementação. Não há
-decisão humana bloqueante para iniciar a fundação expansiva da D.3B.
+Fase em andamento. D.3A e D.3B estão concluídas. A fundação estrutural de
+templates, snapshots, roles e `TrabalhoEncontro` foi implementada e validada;
+D.3C é o próximo bloco.
 
 ## Objetivo
 
@@ -42,11 +42,11 @@ Status: concluída em 2026-10-04.
 
 ### D.3B — Templates, equipes, roles e TrabalhoEncontro
 
-Status: próximo bloco.
+Status: concluída em 2026-10-04.
 
 ### D.3C — Services de convite, alocação e trabalho
 
-Status: pendente.
+Status: próximo bloco.
 
 ### D.3D — Reuniões preparatórias e presença
 
@@ -393,16 +393,100 @@ transação, autorização, auditoria e erros previsíveis.
 - Depreciação e remoção física ficam para etapa posterior, após inventário de
   consumidores, reconciliação dos dados e janela explícita de compatibilidade.
 
+## Resultado da D.3B
+
+### Models implementados
+
+- `TemplateEquipeEncontro`, com tipo, código estável, apresentação, ordem,
+  capacidades consultivas, ativação e timestamps.
+- `TemplateRoleEquipe`, ligado por `PROTECT` ao template de equipe, com código,
+  apresentação, ordem, quantidade estrutural, capability futura de presença,
+  ativação e timestamps.
+- `EquipeEncontro`, snapshot ligado por `PROTECT` ao Encontro e ao template de
+  origem, com cópia dos dados operacionais da equipe.
+- `RoleEquipeEncontro`, snapshot ligado por `PROTECT` à equipe da edição e à
+  role de origem, com cópia da posição estrutural.
+- `TrabalhoEncontro`, separado de participação, com FKs protegidas para
+  Pessoa, Encontro e convite, role snapshot opcional, estados estruturais e
+  timestamps.
+- `ConviteEncontro.role_trabalho_proposta`, opcional e protegido, registra
+  somente a proposta conhecida de role para convite de trabalho; não cria
+  trabalho nem alocação.
+
+O trabalho exige convite estruturalmente, conforme o desenho da D.3A, mas pode
+nascer em `AGUARDANDO_ALOCACAO` sem role. A equipe é derivada da role snapshot,
+evitando armazenar uma combinação equipe/role divergente. Não foi criado campo
+de substituição, signal, service de fluxo ou efeito sobre `Frequencia`.
+
+### Constraints e indexes
+
+- Códigos únicos por tipo/template/Encontro nos escopos aprovados.
+- Coerência interna de capacidades mínima e máxima, sem limitar ocupação.
+- Quantidade estrutural positiva quando informada, sem implementar contagem de
+  composição no banco.
+- Role proposta aceita somente em convite `TRABALHAR`.
+- Um trabalho por convite e unicidade forte por Pessoa/Encontro.
+- Checks locais de status, role e timestamp de resultado.
+- Índices de templates ativos, ordenação dos snapshots e consultas de trabalho
+  por Encontro, Pessoa, role e status.
+
+Tipo do Encontro, correspondência convite/Pessoa/Encontro, role pertencente ao
+snapshot correto, composição, capacidade de ocupação, transições e
+elegibilidade permanecem invariantes de services para a D.3C/D.3F.
+
+### Migration
+
+- Criada `0030_expand_equipes_trabalho_encontro`, dependente de
+  `0029_expand_inscricao_convite_participacao`.
+- A migration apenas cria models, FKs, índice, constraints e o campo opcional
+  no convite. Não remove, renomeia ou transforma estrutura anterior.
+- Não há `RunPython`, seed, dual-write ou alteração de dados existentes.
+- O teste de migration confirmou o vínculo legado e o convite anteriores
+  preservados, `role_trabalho_proposta` nula e todas as tabelas novas vazias.
+
+Embora a D.3A previsse um seed versionado posterior, a instrução explícita da
+D.3B proibiu `RunPython`. O catálogo não foi populado automaticamente; sua
+provisão deverá ocorrer por caminho explícito e autorizado de sistema/Suporte,
+sem inferência a partir do legado.
+
+### Testes e validações
+
+- Adicionados 12 testes estruturais para templates, roles, independência dos
+  snapshots, convite com e sem proposta, trabalho sem alocação, FK de role,
+  choices, unicidade, checks, `PROTECT`, ausência de `Frequencia`, estrutura
+  legada e avanço da migration.
+- Testes novos: 12/12 aprovados.
+- Suíte backend: 308/308 aprovados; 2 skips condicionais já existentes.
+- `python manage.py check --settings=setup.test_settings`: aprovado.
+- `python manage.py makemigrations --check --dry-run
+  --settings=setup.test_settings`: nenhuma mudança detectada.
+- PostgreSQL não foi necessário para esta fundação estrutural; concorrência e
+  validação real permanecem no fechamento D.3G.
+
+### Débitos da D.3B
+
+- O catálogo de templates continua vazio por decisão explícita de não executar
+  carga automática nesta etapa.
+- Criação de snapshots, validação cross-FK, transições e locks pertencem à
+  D.3C.
+- Reuniões, presença, autorização contextual, elegibilidade, novos contratos e
+  cutover permanecem nos blocos D.3D–D.3G.
+- Nenhum dado legado foi classificado como trabalho realizado.
+
+### Arquivos alterados na D.3B
+
+- `backend/core/models.py`
+- `backend/core/migrations/0030_expand_equipes_trabalho_encontro.py`
+- `backend/core/tests/test_encontro_trabalho_models.py`
+- `docs/workplans/PHASE_1B_D3.md`
+
 ## Migrations previstas
 
-1. `0030_expand_equipes_trabalho_encontro`: schema expansivo dos templates,
-   snapshots, roles, `TrabalhoEncontro` e `role_trabalho_proposta`, com
-   constraints e índices.
-2. `0031_seed_templates_equipes`: seed determinístico do catálogo aprovado por
-   tipo de Encontro. É carga de referência versionada, não backfill legado.
-3. `0032_reunioes_presencas_preparatorias`: reuniões e presenças.
-4. `0033_vinculo_usuario_pessoa`: vínculo explícito necessário à autorização
-   contextual da D.3E.
+1. `0030_expand_equipes_trabalho_encontro`: implementada na D.3B.
+2. Próxima numeração disponível: `0031`; nenhuma migration é antecipada antes
+   da mudança real de schema do bloco correspondente.
+3. Reuniões/presenças e vínculo User/Pessoa continuam previstos para D.3D e
+   D.3E, respectivamente.
 
 A numeração deve ser reconfirmada no início de cada implementação. Nenhuma
 migration transforma, renomeia ou remove tabelas/campos legados. Snapshots de
@@ -427,10 +511,9 @@ devem permanecer apenas no contrato legado e em relatório de reconciliação.
 
 ### D.3B
 
-- Models, choices, FKs `PROTECT`, snapshots independentes do template,
+- Concluída: models, choices, FKs `PROTECT`, snapshots independentes,
   constraints, índices e migration do estado `0029` para o novo schema.
-- Seed exato por tipo, inclusive ausência de Dirigentes em AVC e composições
-  estruturais, sem criar snapshots ou trabalhos para dados existentes.
+- Nenhum seed foi executado, conforme a proibição de `RunPython` da etapa.
 
 ### D.3C
 
@@ -511,10 +594,11 @@ Fase 1B.3D.3 em andamento e o roteamento já aponta para os documentos certos.
 
 ## Próximo passo
 
-D.3B — implementar a fundação expansiva de templates, snapshots, roles e
-`TrabalhoEncontro`, confirmar novamente a migration mais recente e cobrir
-somente models, constraints, seed e migration. Services de fluxo, reuniões,
-autorização, elegibilidade e cutover permanecem nos blocos D.3C–D.3G.
+D.3C — implementar os services transacionais de preparação dos snapshots,
+convite de trabalho, criação do trabalho confirmado, alocação, realocação,
+resultado, retirada e substituição, com locks e testes de concorrência. Os
+blocos de reuniões, autorização, elegibilidade e cutover permanecem em
+D.3D–D.3G.
 
 ## Padrão de relatórios durante a D.3
 
@@ -533,3 +617,6 @@ Ao finalizar cada bloco:
 - 2026-10-04 — D.3A concluída por inspeção estática. O legado foi inventariado,
   o desenho expansivo e transacional foi fechado, não foi identificado
   backfill seguro e D.3B foi definido como próximo bloco.
+- 2026-10-04 — D.3B concluída. Models, migration expansiva e 12 testes
+  estruturais foram adicionados; a suíte backend aprovou 308 testes, sem
+  alteração ou população automática da estrutura legada.

@@ -624,6 +624,211 @@ class EntregaMaterial(models.Model):
     def __str__(self):
         return f'Entrega {self.pk} do Material {self.material_id}'
 
+
+# Fundação estrutural de equipes e trabalho em Encontros.
+class TemplateEquipeEncontro(models.Model):
+    tipo_encontro = models.CharField(
+        max_length=20,
+        choices=Encontro.Tipo.choices,
+    )
+    codigo = models.SlugField(max_length=50)
+    nome = models.CharField(max_length=100)
+    ordem = models.PositiveIntegerField(default=99)
+    capacidade_minima_recomendada = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+    )
+    capacidade_maxima_recomendada = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+    )
+    ativo = models.BooleanField(default=True)
+    criado_em = models.DateTimeField(auto_now_add=True)
+    atualizado_em = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['tipo_encontro', 'ordem', 'id']
+        indexes = [
+            models.Index(
+                fields=['tipo_encontro', 'ativo', 'ordem'],
+                name='tmpl_eq_tipo_ativo_idx',
+            ),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=['tipo_encontro', 'codigo'],
+                name='template_equipe_codigo_unico_tipo',
+            ),
+            models.CheckConstraint(
+                condition=models.Q(tipo_encontro__in=Encontro.Tipo.values),
+                name='template_equipe_tipo_valido',
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(capacidade_minima_recomendada__isnull=True)
+                    | models.Q(capacidade_maxima_recomendada__isnull=True)
+                    | models.Q(
+                        capacidade_minima_recomendada__lte=models.F(
+                            'capacidade_maxima_recomendada'
+                        )
+                    )
+                ),
+                name='template_equipe_capacidade_coerente',
+            ),
+        ]
+
+    def __str__(self):
+        return f'{self.nome} ({self.get_tipo_encontro_display()})'
+
+
+class TemplateRoleEquipe(models.Model):
+    template_equipe = models.ForeignKey(
+        TemplateEquipeEncontro,
+        on_delete=models.PROTECT,
+        related_name='roles',
+    )
+    codigo = models.SlugField(max_length=50)
+    nome = models.CharField(max_length=100)
+    ordem = models.PositiveIntegerField(default=99)
+    quantidade_estrutural = models.PositiveSmallIntegerField(
+        null=True,
+        blank=True,
+    )
+    concede_registro_presenca = models.BooleanField(default=False)
+    ativo = models.BooleanField(default=True)
+    criado_em = models.DateTimeField(auto_now_add=True)
+    atualizado_em = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['template_equipe', 'ordem', 'id']
+        indexes = [
+            models.Index(
+                fields=['template_equipe', 'ativo', 'ordem'],
+                name='tmpl_role_eq_ativo_idx',
+            ),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=['template_equipe', 'codigo'],
+                name='template_role_codigo_unico_equipe',
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(quantidade_estrutural__isnull=True)
+                    | models.Q(quantidade_estrutural__gt=0)
+                ),
+                name='template_role_quantidade_positiva',
+            ),
+        ]
+
+    def __str__(self):
+        return f'{self.nome} — {self.template_equipe.nome}'
+
+
+class EquipeEncontro(models.Model):
+    encontro = models.ForeignKey(
+        Encontro,
+        on_delete=models.PROTECT,
+        related_name='equipes',
+    )
+    template_origem = models.ForeignKey(
+        TemplateEquipeEncontro,
+        on_delete=models.PROTECT,
+        related_name='snapshots',
+    )
+    codigo = models.SlugField(max_length=50)
+    nome = models.CharField(max_length=100)
+    ordem = models.PositiveIntegerField(default=99)
+    capacidade_minima_recomendada = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+    )
+    capacidade_maxima_recomendada = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+    )
+    criado_em = models.DateTimeField(auto_now_add=True)
+    atualizado_em = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['encontro', 'ordem', 'id']
+        indexes = [
+            models.Index(
+                fields=['encontro', 'ordem'],
+                name='equipe_enc_ordem_idx',
+            ),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=['encontro', 'codigo'],
+                name='equipe_encontro_codigo_unico',
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(capacidade_minima_recomendada__isnull=True)
+                    | models.Q(capacidade_maxima_recomendada__isnull=True)
+                    | models.Q(
+                        capacidade_minima_recomendada__lte=models.F(
+                            'capacidade_maxima_recomendada'
+                        )
+                    )
+                ),
+                name='equipe_encontro_capacidade_coerente',
+            ),
+        ]
+
+    def __str__(self):
+        return f'{self.nome} — {self.encontro.encontro}'
+
+
+class RoleEquipeEncontro(models.Model):
+    equipe_encontro = models.ForeignKey(
+        EquipeEncontro,
+        on_delete=models.PROTECT,
+        related_name='roles',
+    )
+    template_origem = models.ForeignKey(
+        TemplateRoleEquipe,
+        on_delete=models.PROTECT,
+        related_name='snapshots',
+    )
+    codigo = models.SlugField(max_length=50)
+    nome = models.CharField(max_length=100)
+    ordem = models.PositiveIntegerField(default=99)
+    quantidade_estrutural = models.PositiveSmallIntegerField(
+        null=True,
+        blank=True,
+    )
+    concede_registro_presenca = models.BooleanField(default=False)
+    criado_em = models.DateTimeField(auto_now_add=True)
+    atualizado_em = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['equipe_encontro', 'ordem', 'id']
+        indexes = [
+            models.Index(
+                fields=['equipe_encontro', 'ordem'],
+                name='role_eq_enc_ordem_idx',
+            ),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=['equipe_encontro', 'codigo'],
+                name='role_equipe_codigo_unico',
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(quantidade_estrutural__isnull=True)
+                    | models.Q(quantidade_estrutural__gt=0)
+                ),
+                name='role_equipe_quantidade_positiva',
+            ),
+        ]
+
+    def __str__(self):
+        return f'{self.nome} — {self.equipe_encontro.nome}'
+
+
 # Domínio de inscrição, convite e resultado de participação.
 class Inscricao(models.Model):
     class Tipo(models.TextChoices):
@@ -727,6 +932,13 @@ class ConviteEncontro(models.Model):
         null=True,
         blank=True,
     )
+    role_trabalho_proposta = models.ForeignKey(
+        RoleEquipeEncontro,
+        on_delete=models.PROTECT,
+        related_name='convites_propostos',
+        null=True,
+        blank=True,
+    )
     criado_em = models.DateTimeField(auto_now_add=True)
     atualizado_em = models.DateTimeField(auto_now=True)
 
@@ -768,7 +980,125 @@ class ConviteEncontro(models.Model):
                 ),
                 name='convite_trabalho_sem_inscricao',
             ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(finalidade='trabalhar')
+                    | models.Q(role_trabalho_proposta__isnull=True)
+                ),
+                name='convite_role_apenas_trabalho',
+            ),
         ]
+
+
+class TrabalhoEncontro(models.Model):
+    class Status(models.TextChoices):
+        AGUARDANDO_ALOCACAO = (
+            'aguardando_alocacao',
+            'Aguardando alocação',
+        )
+        ALOCADO = 'alocado', 'Alocado'
+        TRABALHOU = 'trabalhou', 'Trabalhou'
+        FALTOU = 'faltou', 'Faltou'
+        RETIRADO = 'retirado', 'Retirado'
+
+    pessoa = models.ForeignKey(
+        Pessoa,
+        on_delete=models.PROTECT,
+        related_name='trabalhos_encontro',
+    )
+    encontro = models.ForeignKey(
+        Encontro,
+        on_delete=models.PROTECT,
+        related_name='trabalhos',
+    )
+    convite = models.OneToOneField(
+        ConviteEncontro,
+        on_delete=models.PROTECT,
+        related_name='trabalho',
+    )
+    role_equipe = models.ForeignKey(
+        RoleEquipeEncontro,
+        on_delete=models.PROTECT,
+        related_name='trabalhos',
+        null=True,
+        blank=True,
+    )
+    status = models.CharField(
+        max_length=30,
+        choices=Status.choices,
+        default=Status.AGUARDANDO_ALOCACAO,
+    )
+    resultado_registrado_em = models.DateTimeField(null=True, blank=True)
+    criado_em = models.DateTimeField(auto_now_add=True)
+    atualizado_em = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        indexes = [
+            models.Index(
+                fields=['encontro', 'status'],
+                name='trab_encontro_status_idx',
+            ),
+            models.Index(
+                fields=['pessoa', 'status'],
+                name='trab_pessoa_status_idx',
+            ),
+            models.Index(
+                fields=['role_equipe', 'status'],
+                name='trab_role_status_idx',
+            ),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=['pessoa', 'encontro'],
+                name='trabalho_unico_pessoa_encontro',
+            ),
+            models.CheckConstraint(
+                condition=models.Q(
+                    status__in=(
+                        'aguardando_alocacao',
+                        'alocado',
+                        'trabalhou',
+                        'faltou',
+                        'retirado',
+                    )
+                ),
+                name='trabalho_status_valido',
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(
+                        status='aguardando_alocacao',
+                        role_equipe__isnull=True,
+                    )
+                    | models.Q(
+                        status__in=('alocado', 'trabalhou', 'faltou'),
+                        role_equipe__isnull=False,
+                    )
+                    | models.Q(status='retirado')
+                ),
+                name='trabalho_alocacao_coerente',
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(
+                        status__in=('trabalhou', 'faltou'),
+                        resultado_registrado_em__isnull=False,
+                    )
+                    | models.Q(
+                        status__in=(
+                            'aguardando_alocacao',
+                            'alocado',
+                            'retirado',
+                        ),
+                        resultado_registrado_em__isnull=True,
+                    )
+                ),
+                name='trabalho_resultado_coerente',
+            ),
+        ]
+
+    def __str__(self):
+        return f'{self.pessoa.nome} — {self.encontro.encontro}'
 
 
 class ParticipacaoEncontro(models.Model):
