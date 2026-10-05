@@ -55,6 +55,21 @@ Consulte `docs/PROJECT_STATE.md` somente quando o estado global do projeto for
 necessário. Carregue outros documentos apenas diante de dependência real da
 tarefa.
 
+### Equipes e Trabalho em Encontro
+
+Se a tarefa envolver templates ou equipes de Encontro, roles/funções, convite
+para trabalhar, alocação, `TrabalhoEncontro`, coordenação, reuniões ou presença
+preparatória, autorização contextual da Coordenação Geral ou elegibilidade
+para trabalhar, leia nesta ordem:
+
+1. `docs/domain/ENCOUNTER_WORK.md`;
+2. `docs/workplans/PHASE_1B_D3.md`.
+
+Consulte `docs/PROJECT_STATE.md` somente quando o estado global for necessário.
+Consulte `docs/domain/ENCOUNTER_PARTICIPATION.md` quando houver dependência
+direta do `ConviteEncontro` criado na D.2. Não carregue outros domínios sem
+evidência de necessidade.
+
 ### Arquitetura
 
 Para decisões ou mudanças arquiteturais, consulte:
