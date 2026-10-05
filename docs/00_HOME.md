@@ -19,8 +19,8 @@ substitui os documentos de referência nem os `AGENTS.md` aplicáveis.
   transacionais, cutover lógico e validação real em PostgreSQL.
 - 1B.3D.3 concluiu Equipes e Trabalho em Encontro, incluindo cutover lógico e
   validação de concorrência em PostgreSQL.
-- Próxima frente documentada: Palestras e seus históricos; a numeração do
-  próximo bloco ainda será definida no workplan correspondente.
+- 1B.3D.4 — Formação em Encontros preparada documentalmente; próximo bloco:
+  D.4A, análise do legado e desenho técnico.
 
 O estado vivo e o roadmap estão em [[PROJECT_STATE]].
 
@@ -72,6 +72,20 @@ Consulte `docs/PROJECT_STATE.md` somente quando o estado global for necessário.
 Consulte `docs/domain/ENCOUNTER_PARTICIPATION.md` quando houver dependência
 direta do `ConviteEncontro` criado na D.2. Não carregue outros domínios sem
 evidência de necessidade.
+
+### Formação em Encontros
+
+Se a tarefa envolver palestras, bate-papos, sessões formativas, palestrantes,
+palestrante externo, histórico formativo ou Formação em Encontros, leia nesta
+ordem:
+
+1. `docs/domain/ENCOUNTER_FORMATION.md`;
+2. `docs/workplans/PHASE_1B_D4.md`.
+
+Consulte `docs/domain/ENCOUNTER_WORK.md` somente quando houver dependência
+direta de `TrabalhoEncontro`, especialmente para a regra de palestrante no
+AVC. Consulte `docs/AUTHORIZATION_MATRIX.md` somente quando a tarefa envolver
+permissões. Não carregue outros domínios indiscriminadamente.
 
 ### Arquitetura
 
