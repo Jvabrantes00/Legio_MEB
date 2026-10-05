@@ -2,9 +2,9 @@
 
 ## Status geral
 
-Fase em andamento. D.3A, D.3B, D.3C e D.3D estão concluídas. A fundação de
-equipes e trabalho, seus services transacionais e as reuniões preparatórias
-com presença foram implementados e validados; D.3E é o próximo bloco.
+Fase em andamento. D.3A a D.3E estão concluídas. A fundação de equipes e
+trabalho, seus services transacionais, reuniões preparatórias e autorização
+contextual foram implementados e validados; D.3F é o próximo bloco.
 
 ## Objetivo
 
@@ -54,11 +54,11 @@ Status: concluída em 2026-10-05.
 
 ### D.3E — Autorização contextual da Coordenação Geral
 
-Status: próximo bloco.
+Status: concluída em 2026-10-05.
 
 ### D.3F — Elegibilidade e avisos para trabalhar
 
-Status: pendente.
+Status: próximo bloco.
 
 ### D.3G — Compatibilidade, PostgreSQL, regressão e fechamento
 
@@ -648,12 +648,94 @@ foi solicitada saída da sandbox nesta etapa.
 - `backend/core/tests/test_encontro_reunioes_preparatorias.py`
 - `docs/workplans/PHASE_1B_D3.md`
 
+## D.3E — autorização contextual da Coordenação Geral
+
+### Vínculo explícito entre identidade e domínio
+
+- `VinculoUsuarioPessoa` liga exatamente um `User` técnico a exatamente uma
+  `Pessoa`, com FKs `PROTECT` e timestamps. Não há associação por nome, e-mail
+  ou grupo Django, nem criação ou exclusão automática de conta.
+- A migration expansiva `0032_vinculousuariopessoa` cria somente a tabela do
+  vínculo e nasce vazia. Nenhum dado legado foi associado ou classificado.
+- O vínculo é requisito apenas para a capability contextual. Suporte,
+  Diretoria e Fichas continuam autorizados por seus papéis globais, sem
+  converter Alpinistas operacionais em grupos administrativos.
+
+### Policy e lifecycle
+
+- `pode_registrar_presenca_preparatoria(user, encontro)` exige usuário
+  autenticado e ativo. Para o caminho contextual, exige também vínculo
+  explícito, `TrabalhoEncontro` atualmente `ALOCADO` no mesmo Encontro, role
+  snapshot com `concede_registro_presenca=True` e origem estrutural coerente
+  com o template da equipe snapshot.
+- A checagem não depende do nome de apresentação da equipe ou da role.
+  Coordenadores de outras equipes e integrantes comuns não recebem a
+  capability.
+- O acesso contextual é negado em `FINALIZADO` e `CANCELADO`; os demais
+  estados preservam a avaliação operacional. Superuser técnico e os papéis
+  administrativos Fichas, Diretoria e Suporte continuam sujeitos à matriz
+  global, sem serem transformados em vínculo contextual.
+- A permission DRF aplica default deny tanto na entrada quanto ao objeto.
+  Ausência de vínculo é negada antes da resolução do payload; outro Encontro,
+  trabalho retirado e role não elegível são negados sem escrita.
+
+### API, services e auditoria
+
+- `POST /api/presencas-preparatorias/` registra presença e
+  `PATCH /api/presencas-preparatorias/{id}/corrigir/` corrige o registro.
+  Não foram expostos listagem, leitura genérica, exclusão ou CRUD de equipes.
+- A view limita-se a autorização, transação e auditoria. Criação e correção
+  reutilizam os services da D.3D, que permanecem responsáveis por status,
+  unicidade e coerência reunião/trabalho.
+- O contrato usa allowlist e expõe somente IDs, status, justificativa e
+  timestamps operacionais. Não há campos de saúde ou perfil pessoal.
+- `registrada_por` preserva o autor no próprio registro. `LogSistema` registra
+  criação/correção apenas por identificadores; falha do log reverte a mudança
+  de presença na mesma transação.
+
+### Testes e validações
+
+- Foram adicionados 15 testes para vínculo one-to-one e `PROTECT`, migration
+  vazia, papéis Fichas/Diretoria/Suporte, Coordenação Geral apropriada,
+  coordenador de outra equipe, integrante comum, cross-Encontro, ausência de
+  vínculo explícito, usuário inativo, lifecycle, trabalho retirado, registro,
+  correção, auditoria e rollback, escopo global/saúde e preservação de `User`.
+- Suíte backend: 358/358 testes aprovados; 7 skips condicionais já esperados.
+- `python manage.py check --settings=setup.test_settings`: aprovado.
+- `python manage.py makemigrations --check --dry-run
+  --settings=setup.test_settings`: nenhuma mudança detectada.
+- A etapa não exigiu PostgreSQL. Os testes concorrentes continuam reservados
+  para a D.3G.
+
+### Débitos da D.3E
+
+- O processo administrativo de provisionar contas e vínculos explícitos
+  permanece separado deste endpoint operacional; nenhuma API pública de
+  gestão de `User` foi criada.
+- Frontend para presença, elegibilidade/avisos e cutover continuam em blocos
+  posteriores. A capability não concede gestão de equipe, participantes,
+  saúde ou qualquer papel global.
+
+### Arquivos alterados na D.3E
+
+- `backend/core/models.py`
+- `backend/core/migrations/0032_vinculousuariopessoa.py`
+- `backend/core/permissions.py`
+- `backend/core/serializers.py`
+- `backend/core/views.py`
+- `backend/core/urls.py`
+- `backend/core/tests/test_encontro_autorizacao_contextual.py`
+- `backend/core/tests/test_serializer_contracts.py`
+- `docs/AUTHORIZATION_MATRIX.md`
+- `docs/workplans/PHASE_1B_D3.md`
+
 ## Migrations previstas
 
 1. `0030_expand_equipes_trabalho_encontro`: implementada na D.3B.
 2. `0031_expand_reunioes_presencas_preparatorias`: implementada na D.3D.
-3. Próxima numeração disponível: `0032`; o vínculo User/Pessoa continua
-   previsto para D.3E, sem antecipação da migration antes da mudança real.
+3. `0032_vinculousuariopessoa`: implementada na D.3E.
+4. Próxima numeração disponível: `0033`; nenhuma migration é antecipada antes
+   de mudança real de schema.
 
 A numeração deve ser reconfirmada no início de cada implementação. Nenhuma
 migration transforma, renomeia ou remove tabelas/campos legados. Snapshots de
@@ -699,9 +781,9 @@ devem permanecer apenas no contrato legado e em relatório de reconciliação.
 
 ### D.3E
 
-- Vínculo User/Pessoa, default deny, Coordenação Geral apropriada, outra
-  coordenação negada, cross-Encontro negado, lifecycle final/cancelado negado,
-  bypass técnico e roles administrativas preservados.
+- Concluída: vínculo User/Pessoa, default deny, Coordenação Geral apropriada,
+  outra coordenação negada, cross-Encontro negado, lifecycle
+  final/cancelado negado, bypass técnico e roles administrativas preservados.
 
 ### D.3F
 
@@ -760,8 +842,8 @@ Fase 1B.3D.3 em andamento e o roteamento já aponta para os documentos certos.
 
 ## Próximo passo
 
-D.3E — implementar a autorização contextual da Coordenação Geral. Os blocos
-de elegibilidade e cutover permanecem em D.3F–D.3G.
+D.3F — implementar elegibilidade e avisos para trabalhar. Compatibilidade,
+PostgreSQL e fechamento permanecem na D.3G.
 
 ## Padrão de relatórios durante a D.3
 
@@ -789,3 +871,6 @@ Ao finalizar cada bloco:
 - 2026-10-05 — D.3D concluída. Reuniões preparatórias, presenças, services
   transacionais, migration expansiva e 13 testes foram adicionados; a suíte
   backend aprovou 343 testes, sem backfill ou alteração do fluxo legado.
+- 2026-10-05 — D.3E concluída. Vínculo explícito User/Pessoa, policy
+  contextual e API restrita de presença foram implementados; a suíte backend
+  aprovou 358 testes sem criação automática de contas ou acesso a saúde.

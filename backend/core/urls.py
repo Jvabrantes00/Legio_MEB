@@ -11,6 +11,7 @@ from .views import (
     ParticipacaoEncontroViewSet, ParticipacaoEventoViewSet, LogSistemaViewSet,
     InscricaoEncontroCommandViewSet, ConviteEncontroCommandViewSet,
     ResultadoParticipacaoCommandViewSet,
+    PresencaPreparatoriaCommandViewSet,
 )
 from .views import dashboard_stats
 from .views import current_user
@@ -53,6 +54,11 @@ router.register(
     r'resultados-participacoes-encontros',
     ResultadoParticipacaoCommandViewSet,
     basename='resultado-participacao-encontro',
+)
+router.register(
+    r'presencas-preparatorias',
+    PresencaPreparatoriaCommandViewSet,
+    basename='presenca-preparatoria',
 )
 router.register(r'participacoes-eventos', ParticipacaoEventoViewSet)
 router.register(r'logs', LogSistemaViewSet)

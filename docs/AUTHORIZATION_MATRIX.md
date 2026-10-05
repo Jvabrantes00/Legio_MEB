@@ -62,6 +62,21 @@ ainda não implementada, sem alterar as permissões da matriz corrente.
 - Fichas não recebe acesso à galeria no contrato atual.
 - Foto associada a outro Encontro retorna `404`, não acesso cruzado.
 
+### Presença preparatória contextual
+
+- Suporte, Diretoria e Fichas podem registrar e corrigir presença preparatória
+  como parte da administração de Encontros. O superuser permanece como bypass
+  técnico separado.
+- Um usuário ativo sem papel administrativo pode registrar ou corrigir
+  presença somente quando possui vínculo explícito com a `Pessoa` alocada em
+  role snapshot habilitada para presença naquele mesmo Encontro.
+- Essa capability contextual termina quando o trabalho deixa de estar
+  `ALOCADO` ou quando o Encontro fica `FINALIZADO`/`CANCELADO`.
+- A capability não concede leitura global de Encontros ou Alpinistas, gestão
+  de equipes/participantes, acesso a saúde nem qualquer papel global.
+- A API contextual oferece apenas criação e correção; ausência de regra
+  explícita permanece negada.
+
 ### Domínios especializados
 
 - Eventos: Suporte, Diretoria e Eventos têm CRUD de Evento e Participação de

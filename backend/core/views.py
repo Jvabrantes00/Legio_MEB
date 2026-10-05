@@ -14,7 +14,7 @@ from .models import (
     Alpinista, ConviteEncontro, Encontro, EntregaMaterial, Evento,
     FotoEncontro, FuncaoEncontro, Inscricao, Palestra,
     ParticipacaoEncontro as ResultadoParticipacaoEncontro,
-    ParticipacaoEvento, LogSistema, Material,
+    ParticipacaoEvento, LogSistema, Material, PresencaPreparatoria,
     VinculoEncontroLegado as ParticipacaoEncontro,
 )
 from .serializers import (
@@ -29,8 +29,16 @@ from .serializers import (
     InscricaoEncontroCommandSerializer, ConviteEncontroCommandSerializer,
     RespostaConviteEncontroCommandSerializer,
     ResultadoParticipacaoCommandSerializer,
+    CorrecaoPresencaPreparatoriaCommandSerializer,
+    PresencaPreparatoriaCommandSerializer,
     )
-from .permissions import AlpinistaQueryPolicy, HasAnySiaRole, require_sia_roles
+from .permissions import (
+    AlpinistaQueryPolicy,
+    CanRegisterPreparatoryAttendance,
+    HasAnySiaRole,
+    require_sia_roles,
+)
+from .services.reunioes_preparatorias import corrigir_presenca_preparatoria
 from .roles import (
     EVENT_MANAGEMENT_ROLES,
     ENCOUNTER_PHOTO_MANAGEMENT_ROLES,
@@ -758,6 +766,56 @@ class ResultadoParticipacaoCommandViewSet(
                     'registrada.'
                 ),
             )
+
+
+class PresencaPreparatoriaCommandViewSet(
+    mixins.CreateModelMixin,
+    viewsets.GenericViewSet,
+):
+    queryset = PresencaPreparatoria.objects.select_related(
+        'reuniao__encontro',
+        'trabalho__pessoa',
+        'registrada_por',
+    )
+    serializer_class = PresencaPreparatoriaCommandSerializer
+    permission_classes = [CanRegisterPreparatoryAttendance]
+
+    def perform_create(self, serializer):
+        reuniao = serializer.validated_data['reuniao']
+        self.check_object_permissions(self.request, reuniao)
+        with transaction.atomic():
+            presenca = serializer.save(registrada_por=self.request.user)
+            LogSistema.objects.create(
+                usuario=self.request.user,
+                acao='CREATE',
+                modulo='PresencaPreparatoria',
+                descricao=f'PresencaPreparatoria ID {presenca.pk} registrada.',
+            )
+
+    @action(detail=True, methods=['patch'], url_path='corrigir')
+    def corrigir(self, request, pk=None):
+        presenca = self.get_object()
+        serializer = CorrecaoPresencaPreparatoriaCommandSerializer(
+            data=request.data,
+        )
+        serializer.is_valid(raise_exception=True)
+        with transaction.atomic():
+            presenca = corrigir_presenca_preparatoria(
+                presenca,
+                registrada_por=request.user,
+                **serializer.validated_data,
+            )
+            LogSistema.objects.create(
+                usuario=request.user,
+                acao='UPDATE',
+                modulo='PresencaPreparatoria',
+                descricao=f'PresencaPreparatoria ID {presenca.pk} corrigida.',
+            )
+        return Response(
+            self.get_serializer(presenca).data,
+            status=status.HTTP_200_OK,
+        )
+
 
 class ParticipacaoEventoViewSet(AuditedCrudViewSetMixin, viewsets.ModelViewSet):
     queryset = (

@@ -7,10 +7,12 @@ from .models import (
     Alpinista, ConviteEncontro, Encontro, EntregaMaterial, Evento,
     FotoEncontro, FuncaoEncontro, Inscricao, LogSistema, Material, Palestra,
     ParticipacaoEncontro as ResultadoParticipacaoEncontro, ParticipacaoEvento,
-    Pessoa,
+    Pessoa, PresencaPreparatoria, ReuniaoPreparatoriaEncontro,
+    TrabalhoEncontro,
     VinculoEncontroLegado as ParticipacaoEncontro,
 )
 from .services import participacoes as participacao_services
+from .services import reunioes_preparatorias as reuniao_services
 from .validators import normalize_cpf, validate_image_upload_size
 from .roles import recognized_user_roles
 
@@ -627,6 +629,56 @@ class ResultadoParticipacaoCommandSerializer(serializers.ModelSerializer):
             )
         except ValidationError as error:
             _erro_de_dominio(error)
+
+
+class PresencaPreparatoriaCommandSerializer(serializers.ModelSerializer):
+    reuniao_id = serializers.PrimaryKeyRelatedField(
+        source='reuniao',
+        queryset=ReuniaoPreparatoriaEncontro.objects.all(),
+    )
+    trabalho_id = serializers.PrimaryKeyRelatedField(
+        source='trabalho',
+        queryset=TrabalhoEncontro.objects.all(),
+    )
+    registrada_por_id = serializers.IntegerField(read_only=True)
+
+    class Meta:
+        model = PresencaPreparatoria
+        fields = (
+            'id',
+            'reuniao_id',
+            'trabalho_id',
+            'status',
+            'justificativa',
+            'registrada_por_id',
+            'criado_em',
+            'atualizado_em',
+        )
+        read_only_fields = (
+            'id',
+            'registrada_por_id',
+            'criado_em',
+            'atualizado_em',
+        )
+
+    def create(self, validated_data):
+        try:
+            return reuniao_services.registrar_presenca_preparatoria(
+                **validated_data,
+            )
+        except ValidationError as error:
+            _erro_de_dominio(error)
+
+
+class CorrecaoPresencaPreparatoriaCommandSerializer(serializers.Serializer):
+    status = serializers.ChoiceField(
+        choices=PresencaPreparatoria.Status.choices,
+    )
+    justificativa = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        default='',
+    )
 
 
 class ParticipacaoEventoSerializer(serializers.ModelSerializer):

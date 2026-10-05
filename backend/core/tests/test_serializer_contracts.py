@@ -8,6 +8,7 @@ from core.serializers import (
     EncontroSerializer,
     EventoSerializer,
     FuncaoEncontroSerializer,
+    PresencaPreparatoriaCommandSerializer,
 )
 from core.tests.base import AuthenticatedAPITestCase
 from core.tests.factories import make_alpinista, make_encontro, make_funcao
@@ -45,6 +46,19 @@ class RemainingSerializerAllowlistTests(AuthenticatedAPITestCase):
             (
                 FuncaoEncontroSerializer,
                 ('id', 'nome', 'tipo', 'descricao_faq', 'ordem', 'eh_violeiro'),
+            ),
+            (
+                PresencaPreparatoriaCommandSerializer,
+                (
+                    'id',
+                    'reuniao_id',
+                    'trabalho_id',
+                    'status',
+                    'justificativa',
+                    'registrada_por_id',
+                    'criado_em',
+                    'atualizado_em',
+                ),
             ),
         )
 

@@ -48,6 +48,24 @@ class Pessoa(models.Model):
         self.cpf = normalize_cpf(self.cpf)
 
 
+class VinculoUsuarioPessoa(models.Model):
+    usuario = models.OneToOneField(
+        User,
+        on_delete=models.PROTECT,
+        related_name='vinculo_pessoa',
+    )
+    pessoa = models.OneToOneField(
+        Pessoa,
+        on_delete=models.PROTECT,
+        related_name='vinculo_usuario',
+    )
+    criado_em = models.DateTimeField(auto_now_add=True)
+    atualizado_em = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f'Usuário {self.usuario_id} — Pessoa {self.pessoa_id}'
+
+
 class RegiaoAdministrativa(models.Model):
     nome = models.CharField(max_length=255, unique=True)
     ativa = models.BooleanField(default=True)

@@ -1,11 +1,84 @@
+from django.db.models import F
 from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.permissions import BasePermission, SAFE_METHODS
 
+from .models import (
+    Encontro,
+    PresencaPreparatoria,
+    ReuniaoPreparatoriaEncontro,
+    TrabalhoEncontro,
+    VinculoUsuarioPessoa,
+)
 from .roles import (
     FICHAS_MANAGEMENT_ROLES,
     SiaRole,
     user_has_any_role,
 )
+
+
+def pode_registrar_presenca_preparatoria(user, encontro):
+    if not (
+        getattr(user, 'is_authenticated', False)
+        and getattr(user, 'is_active', False)
+        and encontro is not None
+        and encontro.pk is not None
+    ):
+        return False
+    if user.is_superuser or user_has_any_role(
+        user,
+        *FICHAS_MANAGEMENT_ROLES,
+    ):
+        return True
+    if encontro.status in {
+        Encontro.Status.FINALIZADO,
+        Encontro.Status.CANCELADO,
+    }:
+        return False
+
+    try:
+        pessoa_id = user.vinculo_pessoa.pessoa_id
+    except VinculoUsuarioPessoa.DoesNotExist:
+        return False
+
+    return TrabalhoEncontro.objects.filter(
+        pessoa_id=pessoa_id,
+        encontro=encontro,
+        status=TrabalhoEncontro.Status.ALOCADO,
+        role_equipe__concede_registro_presenca=True,
+        role_equipe__equipe_encontro__encontro=encontro,
+        role_equipe__template_origem__template_equipe=F(
+            'role_equipe__equipe_encontro__template_origem'
+        ),
+    ).exists()
+
+
+class CanRegisterPreparatoryAttendance(BasePermission):
+    message = (
+        'Seu usuário não pode registrar presença preparatória neste Encontro.'
+    )
+
+    def has_permission(self, request, view):
+        user = request.user
+        if not (
+            getattr(user, 'is_authenticated', False)
+            and getattr(user, 'is_active', False)
+        ):
+            return False
+        if user.is_superuser or user_has_any_role(
+            user,
+            *FICHAS_MANAGEMENT_ROLES,
+        ):
+            return True
+        return VinculoUsuarioPessoa.objects.filter(usuario=user).exists()
+
+    def has_object_permission(self, request, view, obj):
+        if isinstance(obj, PresencaPreparatoria):
+            encontro = obj.reuniao.encontro
+        elif isinstance(obj, ReuniaoPreparatoriaEncontro):
+            encontro = obj.encontro
+        else:
+            return False
+        return pode_registrar_presenca_preparatoria(request.user, encontro)
 
 
 class AlpinistaQueryPolicy:
