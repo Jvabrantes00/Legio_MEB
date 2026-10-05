@@ -2,9 +2,9 @@
 
 ## Status geral
 
-Fase em andamento. D.3A e D.3B estão concluídas. A fundação estrutural de
-templates, snapshots, roles e `TrabalhoEncontro` foi implementada e validada;
-D.3C é o próximo bloco.
+Fase em andamento. D.3A, D.3B e D.3C estão concluídas. A fundação estrutural e
+os services transacionais de equipes e trabalho foram implementados e
+validados; D.3D é o próximo bloco.
 
 ## Objetivo
 
@@ -46,11 +46,11 @@ Status: concluída em 2026-10-04.
 
 ### D.3C — Services de convite, alocação e trabalho
 
-Status: próximo bloco.
+Status: concluída em 2026-10-05.
 
 ### D.3D — Reuniões preparatórias e presença
 
-Status: pendente.
+Status: próximo bloco.
 
 ### D.3E — Autorização contextual da Coordenação Geral
 
@@ -480,6 +480,94 @@ sem inferência a partir do legado.
 - `backend/core/tests/test_encontro_trabalho_models.py`
 - `docs/workplans/PHASE_1B_D3.md`
 
+## Resultado da D.3C
+
+### Services implementados
+
+Foi criado `core/services/trabalhos.py` com operações explícitas, sem lógica em
+`model.save()`, serializer ou signal:
+
+- `preparar_equipes_encontro`: materializa templates ativos do tipo do
+  Encontro, copia roles ativas e devolve o snapshot congelado. Catálogo vazio
+  permanece vazio; uma repetição após a primeira materialização preserva
+  integralmente os snapshots existentes.
+- `criar_convite_trabalho`: reutiliza o service de convite da D.2 com
+  finalidade `TRABALHAR`, aceita role proposta do mesmo snapshot e não cria
+  trabalho implicitamente.
+- `iniciar_trabalho_confirmado`: exige convite de trabalho confirmado, cria o
+  vínculo de forma idempotente e usa `AGUARDANDO_ALOCACAO` sem proposta ou
+  `ALOCADO` com proposta válida.
+- `alocar_trabalho` e `desalocar_trabalho`: atribuem, realocam ou removem a
+  role atual antes de resultado final, sempre dentro do snapshot do mesmo
+  Encontro.
+- `retirar_trabalho`: finaliza operacionalmente a escala sem registrar
+  comparecimento e preserva a última role quando existente.
+- `registrar_resultado_trabalho`: aceita somente `TRABALHOU` ou `FALTOU` para
+  trabalho alocado; o mesmo resultado é idempotente e estados finais não são
+  reabertos.
+- `substituir_trabalho`: retira o ocupante anterior e aloca outra Pessoa na
+  mesma role em uma única transação, sem entidade, timeline ou FK de
+  substituição.
+
+Convite de participação, convite não confirmado, role de outro Encontro e
+role cuja origem seja incompatível com a equipe snapshot são rejeitados. As
+capacidades recomendadas não bloqueiam alocação; somente
+`quantidade_estrutural`, quando informada, é tratada como limite rígido.
+
+### Transações, locks e concorrência
+
+- Todas as mutações públicas usam `transaction.atomic`.
+- A ordem normal de locks é Pessoa → Encontro → convite → trabalho → role;
+  substituição bloqueia Pessoas, convites e trabalhos em ordem de PK antes da
+  role compartilhada.
+- A materialização bloqueia o Encontro antes de snapshots e templates. Isso
+  serializa duas preparações e impede snapshots duplicados.
+- Criação do trabalho bloqueia Pessoa, Encontro e convite e mantém as
+  constraints de one-to-one e Pessoa/Encontro como defesa final.
+- Alocação/realocação e resultado bloqueiam o trabalho; quantidade estrutural
+  bloqueia a role antes de contar ocupantes `ALOCADO`.
+- `IntegrityError` de criação concorrente é traduzido para erro de domínio;
+  rollback transacional cobre falhas intermediárias da substituição.
+
+Cinco testes de corrida real foram adicionados e condicionados a PostgreSQL:
+materialização concorrente, criação concorrente do trabalho, alocação
+concorrente sob quantidade estrutural, realocação concorrente e resultados
+finais concorrentes. Eles permanecem pendentes de execução real na D.3G; não
+foi solicitada saída da sandbox nesta etapa.
+
+### Testes e validações
+
+- Adicionados 22 testes de service: 17 aprovados na suíte SQLite e 5
+  condicionados a PostgreSQL.
+- Cobertura: snapshots por tipo, catálogo vazio, idempotência, independência
+  do template, convite com e sem proposta, separação convite/trabalho,
+  confirmação, criação do trabalho, cross-FK, alocação, realocação,
+  desalocação, capacidade consultiva, quantidade estrutural, retirada,
+  resultado, substituição, rollback e ausência de `Frequencia`.
+- Suíte backend: 330/330 testes aprovados; 7 skips condicionais no total.
+- `python manage.py check --settings=setup.test_settings`: aprovado.
+- `python manage.py makemigrations --check --dry-run
+  --settings=setup.test_settings`: nenhuma mudança detectada.
+- Nenhum model ou migration precisou ser alterado na D.3C.
+
+### Débitos da D.3C
+
+- Os cinco testes concorrentes novos aguardam PostgreSQL real isolado na
+  D.3G.
+- O catálogo de templates permanece sem população automática.
+- Auditoria de comandos será integrada na camada de API quando os novos
+  contratos forem expostos; os services não recebem `User` nem registram PII.
+- Reuniões/presença, autorização contextual, elegibilidade/avisos e cutover
+  continuam fora deste bloco.
+- Histórico e contadores públicos ainda usam o contrato legado até D.3G;
+  canonicamente, o novo domínio já distingue `TRABALHOU` dos demais estados.
+
+### Arquivos alterados na D.3C
+
+- `backend/core/services/trabalhos.py`
+- `backend/core/tests/test_encontro_trabalho_services.py`
+- `docs/workplans/PHASE_1B_D3.md`
+
 ## Migrations previstas
 
 1. `0030_expand_equipes_trabalho_encontro`: implementada na D.3B.
@@ -517,13 +605,12 @@ devem permanecer apenas no contrato legado e em relatório de reconciliação.
 
 ### D.3C
 
-- Convite sem role e com role proposta; confirmação; criação idempotente do
-  trabalho; uma Pessoa/Encontro; alocação, realocação, retirada, substituição e
-  resultados.
-- Rejeição de convite não confirmado, finalidade incorreta, Pessoa/Encontro
-  divergentes, role cross-Encontro e excesso estrutural.
-- Histórico somente para `TRABALHOU`; nenhum `PerfilAlpinista` ou `Frequencia`
-  criado; rollback e concorrência real.
+- Concluída: snapshots, convite de trabalho, criação idempotente do vínculo,
+  alocação, realocação, retirada, substituição e resultados finais.
+- Validações de finalidade, confirmação, Pessoa/Encontro, origem da role,
+  quantidade estrutural, rollback e ausência de `Frequencia` cobertas.
+- Cinco cenários concorrentes estão implementados e condicionados ao
+  PostgreSQL para execução na D.3G.
 
 ### D.3D
 
@@ -594,11 +681,10 @@ Fase 1B.3D.3 em andamento e o roteamento já aponta para os documentos certos.
 
 ## Próximo passo
 
-D.3C — implementar os services transacionais de preparação dos snapshots,
-convite de trabalho, criação do trabalho confirmado, alocação, realocação,
-resultado, retirada e substituição, com locks e testes de concorrência. Os
-blocos de reuniões, autorização, elegibilidade e cutover permanecem em
-D.3D–D.3G.
+D.3D — implementar reuniões preparatórias e presença, vinculadas ao trabalho
+do mesmo Encontro, com flag derivado de revisão e sem remoção automática. Os
+blocos de autorização contextual, elegibilidade e cutover permanecem em
+D.3E–D.3G.
 
 ## Padrão de relatórios durante a D.3
 
@@ -620,3 +706,6 @@ Ao finalizar cada bloco:
 - 2026-10-04 — D.3B concluída. Models, migration expansiva e 12 testes
   estruturais foram adicionados; a suíte backend aprovou 308 testes, sem
   alteração ou população automática da estrutura legada.
+- 2026-10-05 — D.3C concluída. Services transacionais e 22 testes foram
+  adicionados; a suíte backend aprovou 330 testes e os cinco novos cenários
+  de concorrência ficaram condicionados à validação PostgreSQL da D.3G.
