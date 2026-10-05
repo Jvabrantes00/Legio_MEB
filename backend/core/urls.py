@@ -13,9 +13,11 @@ from .views import (
     ResultadoParticipacaoCommandViewSet,
     EquipeEncontroViewSet, TrabalhoEncontroCommandViewSet,
     PresencaPreparatoriaCommandViewSet,
+    SessaoFormativaCommandViewSet,
 )
 from .views import dashboard_stats
 from .views import current_user
+from .views import catalogo_formacao
 from .authentication import SiaTokenRefreshSerializer
 from .permissions import IsSiaSuperuser
 
@@ -71,6 +73,11 @@ router.register(
     PresencaPreparatoriaCommandViewSet,
     basename='presenca-preparatoria',
 )
+router.register(
+    r'sessoes-formativas',
+    SessaoFormativaCommandViewSet,
+    basename='sessao-formativa',
+)
 router.register(r'participacoes-eventos', ParticipacaoEventoViewSet)
 router.register(r'logs', LogSistemaViewSet)
 router.register(r'materiais', MaterialViewSet)
@@ -80,6 +87,7 @@ router.register(r'entregas-materiais', EntregaMaterialViewSet)
 urlpatterns = [
     path('', include(router.urls)),
     path('dashboard-stats/', dashboard_stats, name='dashboard-stats'),
+    path('catalogo-formacao/', catalogo_formacao, name='catalogo-formacao'),
     path('auth/me/', current_user, name='current-user'),
     
     # --- ROTAS DE AUTENTICAÇÃO ---

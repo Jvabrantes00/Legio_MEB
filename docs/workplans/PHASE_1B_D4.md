@@ -2,10 +2,9 @@
 
 ## Status geral
 
-Fase em andamento. D.4A, D.4B, D.4C e o ajuste D.4C.1 estão concluídos. O
-desenho técnico, a fundação estrutural, os services transacionais e o catálogo
-real em código foram implementados sem cutover ou backfill. D.4D é o próximo
-bloco.
+Fase em andamento. D.4A, D.4B, D.4C, D.4C.1 e D.4D estão concluídos. O
+domínio possui fundação, catálogo real, services, API canônica, autorização e
+compatibilidade de leitura sem backfill. D.4E é o próximo bloco.
 
 ## Objetivo
 
@@ -32,7 +31,7 @@ incremental com o legado.
 
 - Conteúdo formativo de Acampamento.
 - CRUD livre ou administrativo de temas.
-- Nomes reais ou fictícios de palestras e bate-papos nesta preparação.
+- Inclusão de temas além do catálogo real aprovado na D.4C.1.
 - Dia e horário obrigatórios para a sessão.
 - Criação de `Pessoa` para palestrante externo.
 - Criação de `PerfilAlpinista` ou `Frequencia`.
@@ -59,7 +58,7 @@ Status: concluída em 2026-10-05.
 
 ### D.4D — API, autorização e compatibilidade
 
-Status: pendente.
+Status: concluída em 2026-10-05.
 
 ### D.4E — PostgreSQL, regressão e fechamento
 
@@ -470,6 +469,75 @@ de realização. Registros não reconciliados permanecem apenas no legado.
 - `backend/core/tests/test_encontro_formacao_services.py`
 - `docs/workplans/PHASE_1B_D4.md`
 
+## D.4D — resultado da implementação
+
+### Endpoints e contratos
+
+- `GET /api/catalogo-formacao/?encontro={id}` lista somente o catálogo
+  aplicável, com código, título, tipo, ordem e bloco. Não existe write ou CRUD
+  de tema.
+- `GET|POST /api/sessoes-formativas/` exige escopo de Encontro na listagem e
+  cria sessões exclusivamente pelo service. `GET
+  /api/sessoes-formativas/{id}/` expõe contrato allowlisted com palestrantes.
+- Actions explícitas oferecem `alterar-tema`, `cancelar`, `palestrantes`,
+  `adicionar-palestrante`, `remover-palestrante` e `realizar`. Não existem
+  update ou delete genéricos.
+- `realizar` recebe o resultado de toda a composição e delega ao comando
+  transacional da D.4C, que registra `MINISTROU`/`NAO_MINISTROU` e finaliza a
+  sessão atomicamente.
+- `GET /api/alpinistas/{id}/historico-formativo/` expõe somente histórico
+  canônico derivado com Alpinista, tema e Encontro, sem dados sensíveis.
+- Erros de domínio são traduzidos para `400`; nested mismatch de palestrante
+  retorna `404`; métodos genéricos não suportados retornam `405`.
+
+### Autorização
+
+- `FORMATION_MANAGEMENT_ROLES` contém Suporte, Diretoria e Formação.
+  Superuser continua bypass técnico e não foi convertido em papel de negócio.
+- `FORMATION_HISTORY_ROLES` preserva leitura para Suporte, Diretoria, Fichas e
+  Formação. Fichas não recebe nenhum comando de gestão.
+- Os demais papéis permanecem negados por default. Formação não recebeu
+  gestão de Alpinista, Trabalho, equipe, Frequência ou saúde.
+- A matriz de autorização foi atualizada para separar formalmente leitura e
+  gestão de Formação em Encontros.
+
+### Compatibilidade e cutover lógico
+
+- Novos writes existem somente na API canônica e não criam `Palestra`,
+  `TrabalhoEncontro`, `Frequencia`, Pessoa externa ou User.
+- `Palestra` e `GET /api/alpinistas/{id}/historico-palestras/` foram
+  preservados como leitura legada. O filtro legado `palestrou` também não foi
+  removido nesta etapa.
+- O histórico novo usa path próprio e somente a projeção canônica. Não há
+  união silenciosa entre fontes, dual-write, conversão, backfill ou migration
+  destrutiva.
+- A retirada do endpoint/model legado e o cutover de consumidores antigos
+  dependem de inventário/reconciliação futuros.
+
+### Testes e validações
+
+- Foram adicionados 12 testes de API cobrindo catálogo dos quatro tipos,
+  escopo, allowlists, criação/listagem, papéis positivos e negativos,
+  edição/cancelamento, múltiplos palestrantes, nested mismatch, externo,
+  bloqueio/aceite do AVC, realização, histórico e compatibilidade legada.
+- A regressão focada de API, serializers e autorização executou 105 testes com
+  resultado OK.
+- A suíte backend executou 429 testes com resultado OK e 9 ignorados.
+- `manage.py check` e `git diff --check`: sem problemas.
+- `makemigrations --check --dry-run`: nenhuma mudança detectada; D.4D não
+  criou migration.
+
+### Arquivos alterados
+
+- `backend/core/roles.py`
+- `backend/core/serializers.py`
+- `backend/core/views.py`
+- `backend/core/urls.py`
+- `backend/core/tests/test_encontro_formacao_api.py`
+- `backend/core/tests/test_serializer_contracts.py`
+- `docs/AUTHORIZATION_MATRIX.md`
+- `docs/workplans/PHASE_1B_D4.md`
+
 ## Decisões da fase
 
 - As regras de produto fechadas permanecem no documento de domínio; o desenho
@@ -487,10 +555,11 @@ write API, service, admin, transformador legado ou consumidor frontend fonte.
 
 ## Compatibilidade com legado
 
-- Preservar `Palestra`, o path histórico e o filtro durante EXPAND.
-- Novos writes serão exclusivamente canônicos e sem dual-write.
-- Cutover lógico ocorrerá na D.4D; remoção física e reconciliação ficam para
-  etapa futura explícita.
+- `Palestra`, seu path histórico e o filtro legado permanecem disponíveis
+  somente para leitura compatível.
+- Novos writes são exclusivamente canônicos e sem dual-write.
+- O histórico canônico possui path separado; remoção física, reconciliação e
+  cutover dos consumidores antigos ficam para etapa futura explícita.
 - **nenhum backfill automático nesta etapa**.
 
 ## Migrations
@@ -511,14 +580,17 @@ write API, service, admin, transformador legado ou consumidor frontend fonte.
 - Na D.4C, 20 testes de service foram adicionados; a suíte backend passou com
   412 testes e 9 skips. Os dois testes novos de concorrência real estão
   condicionados a PostgreSQL e permanecem reservados ao fechamento D.4E.
+- Na D.4D, 12 testes de API foram adicionados e a suíte backend passou com 429
+  testes e 9 skips. A regressão focada de API/contratos/autorização passou com
+  105 testes.
 
 ## Débitos
 
-- API, autorização, compatibilidade e cutover da D.4D.
 - Execução PostgreSQL dos testes de inclusão e realização concorrentes,
   regressão final e fechamento da D.4E.
 - Reconciliação humana do legado e futura depreciação do model `Palestra`.
 - Inventário de consumidores externos ao repositório antes da remoção física.
+- Migração de qualquer consumidor frontend legado para a API canônica.
 
 ## Arquivos relevantes
 
@@ -545,13 +617,14 @@ write API, service, admin, transformador legado ou consumidor frontend fonte.
 - `backend/core/migrations/0032_vinculousuariopessoa.py`
 - `backend/core/tests/test_authorization.py`
 - `backend/core/tests/test_authorization_paths.py`
+- `backend/core/tests/test_encontro_formacao_api.py`
+- `backend/core/tests/test_serializer_contracts.py`
 - `backend/core/legacy/`
 
 ## Próximo passo
 
-D.4D — implementar API, autorização e compatibilidade/cutover lógico conforme
-o desenho aprovado, preservando os contratos legados até sua transição
-validada.
+D.4E — executar os testes de concorrência em PostgreSQL real, regressão final,
+conferência das migrations e fechamento da Fase 1B.3D.4.
 
 ## Histórico de execução
 
@@ -575,3 +648,7 @@ validada.
   Escalada/ESPPA e onze bate-papos de AVC, incluindo ordem e bloco. Os
   services passaram a ser testados contra o catálogo real, sem model,
   migration, seed ou banco, e D.4D permaneceu como próximo bloco.
+- 2026-10-05 — D.4D concluiu a API canônica, autorização por papel, histórico
+  derivado e compatibilidade de leitura do legado. A suíte backend executou
+  429 testes com resultado OK e 9 skips, nenhuma migration foi gerada e D.4E
+  foi definido como próximo bloco.

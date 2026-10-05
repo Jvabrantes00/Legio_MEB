@@ -17,14 +17,14 @@ ainda não implementada, sem alterar as permissões da matriz corrente.
 
 ## Matriz
 
-| Papel | API root | Admin | Alpinista | Escrita Alpinista | Foto perfil | Música | Palestras | Encontros | Galeria | Funções / participações | Eventos / participações | Materiais / entregas | Dashboard | Logs |
+| Papel | API root | Admin | Alpinista | Escrita Alpinista | Foto perfil | Música | Formação em Encontros | Encontros | Galeria | Funções / participações | Eventos / participações | Materiais / entregas | Dashboard | Logs |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| Superuser técnico | R | RW | Full | RW | RW | RW | R | Full/RW | RW | RW | RW | RW | R | R |
-| Suporte | — | — | Full | RW | RW | RW | R | Full/RW | RW | RW | RW | RW | R | R |
-| Diretoria | — | — | Full | RW | RW | RW | R | Full/RW | RW | RW | RW | RW | R | R |
+| Superuser técnico | R | RW | Full | RW | RW | RW | RW | Full/RW | RW | RW | RW | RW | R | R |
+| Suporte | — | — | Full | RW | RW | RW | RW | Full/RW | RW | RW | RW | RW | R | R |
+| Diretoria | — | — | Full | RW | RW | RW | RW | Full/RW | RW | RW | RW | RW | R | R |
 | Fichas | — | — | Full | RW | RW | RW | R | Full/RW | — | RW | — | — | R | — |
 | MME | — | — | Summary | — | R | RW | — | — | — | — | — | — | — | — |
-| Formação | — | — | Summary | — | R | — | R | — | — | — | — | — | — | — |
+| Formação | — | — | Summary | — | R | — | RW | — | — | — | — | — | — | — |
 | Secretaria | — | — | Summary | — | R | — | — | — | — | — | — | RW | — | — |
 | Ação Social | — | — | Summary | — | R | — | — | — | — | — | — | — | — | — |
 | Liturgia | — | — | Summary | — | R | — | — | — | — | — | — | — | — | — |
@@ -90,6 +90,20 @@ ainda não implementada, sem alterar as permissões da matriz corrente.
 - Usuários sem uma das roles administrativas não recebem gestão de equipes. A
   capability contextual da Coordenação Geral continua limitada ao registro de
   presença preparatória e não amplia esses comandos.
+
+### Formação em Encontros
+
+- Suporte, Diretoria e Formação podem criar e configurar sessões, gerir
+  palestrantes, cancelar e registrar realização. O superuser permanece como
+  bypass técnico separado.
+- Fichas pode consultar catálogo, sessões, palestrantes e históricos, mas não
+  recebe gestão. Os demais papéis permanecem negados por default.
+- A gestão de Formação não concede escrita de Alpinista, TrabalhoEncontro,
+  equipes, Frequência ou saúde. Regras por tipo e a invariante do AVC são
+  aplicadas pelos services canônicos.
+- O histórico formativo canônico é separado do histórico de equipes. A leitura
+  do endpoint legado de palestras permanece disponível durante a
+  compatibilidade, sem dual-write ou backfill automático.
 
 ### Domínios especializados
 

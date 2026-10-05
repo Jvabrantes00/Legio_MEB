@@ -16,8 +16,8 @@ from .models import (
     EquipeEncontro,
     FotoEncontro, FuncaoEncontro, Inscricao, Palestra,
     ParticipacaoEncontro as ResultadoParticipacaoEncontro,
-    ParticipacaoEvento, LogSistema, Material, PresencaPreparatoria,
-    TrabalhoEncontro,
+    ParticipacaoEvento, LogSistema, Material, PalestranteSessao,
+    PerfilAlpinista, PresencaPreparatoria, SessaoFormativa, TrabalhoEncontro,
     VinculoEncontroLegado as ParticipacaoEncontro,
 )
 from .serializers import (
@@ -38,6 +38,15 @@ from .serializers import (
     ResultadoTrabalhoCommandSerializer,
     SubstituicaoTrabalhoCommandSerializer,
     TrabalhoEncontroCommandSerializer,
+    AlteracaoTemaSessaoCommandSerializer,
+    CriacaoSessaoFormativaCommandSerializer,
+    HistoricoFormativoSerializer,
+    PalestranteSessaoCommandSerializer,
+    PalestranteSessaoSerializer,
+    RealizacaoSessaoCommandSerializer,
+    RemocaoPalestranteCommandSerializer,
+    SessaoFormativaSerializer,
+    TemaFormativoSerializer,
     )
 from .permissions import (
     AlpinistaQueryPolicy,
@@ -47,13 +56,16 @@ from .permissions import (
 )
 from .services.reunioes_preparatorias import corrigir_presenca_preparatoria
 from .services import trabalhos as trabalho_services
-from .serializers import _erro_de_trabalho
+from .services import formacoes as formacao_services
+from .serializers import _erro_de_dominio, _erro_de_trabalho
+from .formacao_catalogo import TEMAS_FORMATIVOS
 from .roles import (
     EVENT_MANAGEMENT_ROLES,
     ENCOUNTER_PHOTO_MANAGEMENT_ROLES,
     ENCOUNTER_READ_ROLES,
     FICHAS_MANAGEMENT_ROLES,
     FORMATION_HISTORY_ROLES,
+    FORMATION_MANAGEMENT_ROLES,
     FULL_ADMIN_ROLES,
     RECOGNIZED_ROLES,
     MUSIC_MANAGEMENT_ROLES,
@@ -111,6 +123,24 @@ def current_user(request):
     return Response(CurrentUserSerializer(request.user).data)
 
 
+@api_view(['GET'])
+@permission_classes([require_sia_roles(*FORMATION_HISTORY_ROLES)])
+def catalogo_formacao(request):
+    encontro_id = request.query_params.get('encontro')
+    if not encontro_id:
+        raise ValidationError({'encontro': ['Este filtro é obrigatório.']})
+    encontro = get_object_or_404(Encontro, pk=encontro_id)
+    temas = sorted(
+        (
+            tema
+            for tema in TEMAS_FORMATIVOS.values()
+            if encontro.tipo in tema.tipos_encontro
+        ),
+        key=lambda tema: tema.ordem,
+    )
+    return Response(TemaFormativoSerializer(temas, many=True).data)
+
+
 class AuditedCrudViewSetMixin:
     """Keep CRUD changes and their identifier-only audit log together."""
 
@@ -166,6 +196,7 @@ class AlpinistaViewSet(viewsets.ModelViewSet):
         'musica': MUSIC_MANAGEMENT_ROLES,
         'historico_violeiro': MUSIC_MANAGEMENT_ROLES,
         'historico_palestras': FORMATION_HISTORY_ROLES,
+        'historico_formativo': FORMATION_HISTORY_ROLES,
     }
 
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
@@ -189,6 +220,8 @@ class AlpinistaViewSet(viewsets.ModelViewSet):
             return HistoricoVioleiroSerializer
         if self.action == 'historico_palestras':
             return HistoricoPalestraSerializer
+        if self.action == 'historico_formativo':
+            return HistoricoFormativoSerializer
         if self.has_full_profile_access():
             return AlpinistaCompletoSerializer
         return AlpinistaResumoSerializer
@@ -333,6 +366,19 @@ class AlpinistaViewSet(viewsets.ModelViewSet):
             .order_by('-encontro__data_referencia', '-id')
         )
         serializer = self.get_serializer(palestras, many=True)
+        return Response(serializer.data)
+
+    @action(detail=True, methods=['get'], url_path='historico-formativo')
+    def historico_formativo(self, request, pk=None):
+        alpinista = self.get_object()
+        if alpinista.pessoa_id is None:
+            raise Http404('PerfilAlpinista não encontrado.')
+        perfil = get_object_or_404(
+            PerfilAlpinista,
+            pessoa_id=alpinista.pessoa_id,
+        )
+        historico = formacao_services.obter_historico_formativo(perfil)
+        serializer = self.get_serializer(historico, many=True)
         return Response(serializer.data)
 
     def perform_create(self, serializer):
@@ -990,6 +1036,194 @@ class TrabalhoEncontroCommandViewSet(
             'anterior': TrabalhoEncontroCommandSerializer(anterior).data,
             'novo': TrabalhoEncontroCommandSerializer(novo).data,
         })
+
+
+class SessaoFormativaCommandViewSet(
+    mixins.CreateModelMixin,
+    mixins.ListModelMixin,
+    mixins.RetrieveModelMixin,
+    viewsets.GenericViewSet,
+):
+    permission_classes = [HasAnySiaRole]
+    read_roles = FORMATION_HISTORY_ROLES
+    write_roles = FORMATION_MANAGEMENT_ROLES
+    action_roles = {
+        'palestrantes': FORMATION_HISTORY_ROLES,
+        'alterar_tema': FORMATION_MANAGEMENT_ROLES,
+        'cancelar': FORMATION_MANAGEMENT_ROLES,
+        'adicionar_palestrante': FORMATION_MANAGEMENT_ROLES,
+        'remover_palestrante': FORMATION_MANAGEMENT_ROLES,
+        'realizar': FORMATION_MANAGEMENT_ROLES,
+    }
+    pagination_class = None
+
+    def get_queryset(self):
+        queryset = (
+            SessaoFormativa.objects
+            .select_related('encontro')
+            .prefetch_related('palestrantes__perfil_alpinista__pessoa')
+            .order_by('encontro_id', 'id')
+        )
+        encontro_id = self.request.query_params.get('encontro')
+        if self.action == 'list':
+            if not encontro_id:
+                raise ValidationError({
+                    'encontro': ['Este filtro é obrigatório.'],
+                })
+            queryset = queryset.filter(encontro_id=encontro_id)
+        return queryset
+
+    def get_serializer_class(self):
+        return {
+            'create': CriacaoSessaoFormativaCommandSerializer,
+            'alterar_tema': AlteracaoTemaSessaoCommandSerializer,
+            'adicionar_palestrante': PalestranteSessaoCommandSerializer,
+            'remover_palestrante': RemocaoPalestranteCommandSerializer,
+            'realizar': RealizacaoSessaoCommandSerializer,
+        }.get(self.action, SessaoFormativaSerializer)
+
+    def _resposta(self, sessao, *, status_code=status.HTTP_200_OK):
+        sessao = self.get_queryset().get(pk=sessao.pk)
+        return Response(
+            SessaoFormativaSerializer(
+                sessao,
+                context=self.get_serializer_context(),
+            ).data,
+            status=status_code,
+        )
+
+    def _auditar(self, request, sessao, operacao, *, acao='UPDATE'):
+        LogSistema.objects.create(
+            usuario=request.user,
+            acao=acao,
+            modulo='SessaoFormativa',
+            descricao=f'SessaoFormativa ID {sessao.pk}: {operacao}.',
+        )
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        with transaction.atomic():
+            sessao = serializer.save()
+            self._auditar(request, sessao, 'criada', acao='CREATE')
+        return self._resposta(sessao, status_code=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=['patch'], url_path='alterar-tema')
+    def alterar_tema(self, request, pk=None):
+        sessao = self.get_object()
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            with transaction.atomic():
+                sessao = formacao_services.alterar_tema_sessao(
+                    sessao,
+                    **serializer.validated_data,
+                )
+                self._auditar(request, sessao, 'tema alterado')
+        except django_core_validation_error as error:
+            _erro_de_dominio(error)
+        return self._resposta(sessao)
+
+    @action(detail=True, methods=['post'])
+    def cancelar(self, request, pk=None):
+        sessao = self.get_object()
+        try:
+            with transaction.atomic():
+                sessao = formacao_services.cancelar_sessao_formativa(sessao)
+                self._auditar(request, sessao, 'cancelada')
+        except django_core_validation_error as error:
+            _erro_de_dominio(error)
+        return self._resposta(sessao)
+
+    @action(detail=True, methods=['get'])
+    def palestrantes(self, request, pk=None):
+        sessao = self.get_object()
+        palestrantes = (
+            sessao.palestrantes
+            .select_related('perfil_alpinista__pessoa')
+            .order_by('id')
+        )
+        return Response(PalestranteSessaoSerializer(
+            palestrantes,
+            many=True,
+        ).data)
+
+    @action(
+        detail=True,
+        methods=['post'],
+        url_path='adicionar-palestrante',
+    )
+    def adicionar_palestrante(self, request, pk=None):
+        sessao = self.get_object()
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            with transaction.atomic():
+                if 'perfil_alpinista' in serializer.validated_data:
+                    palestrante = (
+                        formacao_services.adicionar_palestrante_alpinista(
+                            sessao,
+                            serializer.validated_data['perfil_alpinista'],
+                        )
+                    )
+                else:
+                    palestrante = (
+                        formacao_services.adicionar_palestrante_externo(
+                            sessao,
+                            nome_externo=(
+                                serializer.validated_data['nome_externo']
+                            ),
+                        )
+                    )
+                self._auditar(request, sessao, 'palestrante adicionado')
+        except django_core_validation_error as error:
+            _erro_de_dominio(error)
+        return Response(
+            PalestranteSessaoSerializer(palestrante).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+    @action(
+        detail=True,
+        methods=['post'],
+        url_path='remover-palestrante',
+    )
+    def remover_palestrante(self, request, pk=None):
+        sessao = self.get_object()
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        palestrante = get_object_or_404(
+            PalestranteSessao,
+            pk=serializer.validated_data['palestrante_id'],
+            sessao_formativa=sessao,
+        )
+        try:
+            with transaction.atomic():
+                formacao_services.remover_palestrante(palestrante)
+                self._auditar(request, sessao, 'palestrante removido')
+        except django_core_validation_error as error:
+            _erro_de_dominio(error)
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    @action(detail=True, methods=['post'])
+    def realizar(self, request, pk=None):
+        sessao = self.get_object()
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        resultados = {
+            item['palestrante_id']: item['status']
+            for item in serializer.validated_data['resultados']
+        }
+        try:
+            with transaction.atomic():
+                sessao = formacao_services.registrar_realizacao_sessao(
+                    sessao,
+                    resultados=resultados,
+                )
+                self._auditar(request, sessao, 'realizada')
+        except django_core_validation_error as error:
+            _erro_de_dominio(error)
+        return self._resposta(sessao)
 
 
 class PresencaPreparatoriaCommandViewSet(

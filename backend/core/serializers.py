@@ -8,13 +8,15 @@ from .models import (
     EquipeEncontro,
     FotoEncontro, FuncaoEncontro, Inscricao, LogSistema, Material, Palestra,
     ParticipacaoEncontro as ResultadoParticipacaoEncontro, ParticipacaoEvento,
-    Pessoa, PresencaPreparatoria, ReuniaoPreparatoriaEncontro,
-    RoleEquipeEncontro, TrabalhoEncontro,
+    PalestranteSessao, PerfilAlpinista, Pessoa, PresencaPreparatoria,
+    ReuniaoPreparatoriaEncontro, RoleEquipeEncontro, SessaoFormativa,
+    TrabalhoEncontro,
     VinculoEncontroLegado as ParticipacaoEncontro,
 )
 from .services import participacoes as participacao_services
 from .services import reunioes_preparatorias as reuniao_services
 from .services import trabalhos as trabalho_services
+from .services import formacoes as formacao_services
 from .services.elegibilidade_trabalho import (
     avaliar_capacidade_equipe,
     avaliar_composicao_estrutural,
@@ -184,6 +186,182 @@ class HistoricoPalestraSerializer(serializers.ModelSerializer):
             'tipo_encontro',
             'data_encontro',
             'titulo',
+        )
+        read_only_fields = fields
+
+
+class TemaFormativoSerializer(serializers.Serializer):
+    tema_codigo = serializers.CharField(source='codigo', read_only=True)
+    titulo = serializers.CharField(read_only=True)
+    tipo = serializers.CharField(source='tipo_conteudo', read_only=True)
+    ordem = serializers.IntegerField(read_only=True)
+    bloco = serializers.CharField(read_only=True)
+
+
+class PalestranteSessaoSerializer(serializers.ModelSerializer):
+    perfil_alpinista_id = serializers.IntegerField(read_only=True)
+    nome_alpinista = serializers.CharField(
+        source='perfil_alpinista.pessoa.nome',
+        read_only=True,
+        allow_null=True,
+    )
+
+    class Meta:
+        model = PalestranteSessao
+        fields = (
+            'id',
+            'perfil_alpinista_id',
+            'nome_alpinista',
+            'nome_externo',
+            'status',
+            'ministrou_em',
+            'criado_em',
+            'atualizado_em',
+        )
+        read_only_fields = fields
+
+
+class SessaoFormativaSerializer(serializers.ModelSerializer):
+    encontro_id = serializers.IntegerField(read_only=True)
+    palestrantes = PalestranteSessaoSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = SessaoFormativa
+        fields = (
+            'id',
+            'encontro_id',
+            'tema_codigo',
+            'titulo_snapshot',
+            'tipo_conteudo',
+            'status',
+            'realizada_em',
+            'palestrantes',
+            'criado_em',
+            'atualizado_em',
+        )
+        read_only_fields = fields
+
+
+class CriacaoSessaoFormativaCommandSerializer(serializers.Serializer):
+    encontro_id = serializers.PrimaryKeyRelatedField(
+        source='encontro',
+        queryset=Encontro.objects.all(),
+    )
+    tema_codigo = serializers.SlugField(max_length=100)
+
+    def create(self, validated_data):
+        try:
+            return formacao_services.criar_sessao_formativa(**validated_data)
+        except ValidationError as error:
+            _erro_de_dominio(error)
+
+
+class AlteracaoTemaSessaoCommandSerializer(serializers.Serializer):
+    tema_codigo = serializers.SlugField(max_length=100)
+
+
+class PalestranteSessaoCommandSerializer(serializers.Serializer):
+    perfil_alpinista_id = serializers.PrimaryKeyRelatedField(
+        source='perfil_alpinista',
+        queryset=PerfilAlpinista.objects.all(),
+        required=False,
+        allow_null=True,
+    )
+    nome_externo = serializers.CharField(
+        max_length=255,
+        required=False,
+        allow_blank=False,
+        trim_whitespace=True,
+    )
+
+    def validate(self, attrs):
+        perfil = attrs.get('perfil_alpinista')
+        nome_externo = attrs.get('nome_externo')
+        if (perfil is None) == (nome_externo is None):
+            raise serializers.ValidationError(
+                'Informe exatamente um Alpinista ou nome externo.'
+            )
+        return attrs
+
+
+class RemocaoPalestranteCommandSerializer(serializers.Serializer):
+    palestrante_id = serializers.IntegerField(min_value=1)
+
+
+class ResultadoPalestranteCommandSerializer(serializers.Serializer):
+    palestrante_id = serializers.IntegerField(min_value=1)
+    status = serializers.ChoiceField(choices=(
+        PalestranteSessao.Status.MINISTROU,
+        PalestranteSessao.Status.NAO_MINISTROU,
+    ))
+
+
+class RealizacaoSessaoCommandSerializer(serializers.Serializer):
+    resultados = ResultadoPalestranteCommandSerializer(
+        many=True,
+        allow_empty=False,
+    )
+
+    def validate_resultados(self, resultados):
+        ids = [item['palestrante_id'] for item in resultados]
+        if len(ids) != len(set(ids)):
+            raise serializers.ValidationError(
+                'Cada palestrante deve possuir somente um resultado.'
+            )
+        return resultados
+
+
+class HistoricoFormativoSerializer(serializers.ModelSerializer):
+    palestrante_id = serializers.IntegerField(
+        source='perfil_alpinista_id',
+        read_only=True,
+    )
+    palestrante_nome = serializers.CharField(
+        source='perfil_alpinista.pessoa.nome',
+        read_only=True,
+    )
+    encontro_id = serializers.IntegerField(
+        source='sessao_formativa.encontro_id',
+        read_only=True,
+    )
+    nome_encontro = serializers.CharField(
+        source='sessao_formativa.encontro.encontro',
+        read_only=True,
+    )
+    tipo_encontro = serializers.CharField(
+        source='sessao_formativa.encontro.tipo',
+        read_only=True,
+    )
+    data_encontro = serializers.DateField(
+        source='sessao_formativa.encontro.data_referencia',
+        read_only=True,
+    )
+    tema_codigo = serializers.CharField(
+        source='sessao_formativa.tema_codigo',
+        read_only=True,
+    )
+    titulo = serializers.CharField(
+        source='sessao_formativa.titulo_snapshot',
+        read_only=True,
+    )
+    tipo_conteudo = serializers.CharField(
+        source='sessao_formativa.tipo_conteudo',
+        read_only=True,
+    )
+
+    class Meta:
+        model = PalestranteSessao
+        fields = (
+            'palestrante_id',
+            'palestrante_nome',
+            'encontro_id',
+            'nome_encontro',
+            'tipo_encontro',
+            'data_encontro',
+            'tema_codigo',
+            'titulo',
+            'tipo_conteudo',
+            'ministrou_em',
         )
         read_only_fields = fields
 

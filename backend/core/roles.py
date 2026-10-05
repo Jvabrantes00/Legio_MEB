@@ -25,8 +25,11 @@ FICHAS_MANAGEMENT_ROLES = (*FULL_ADMIN_ROLES, SiaRole.FICHAS)
 # Gestão das características musicais e do histórico de Violeiro.
 MUSIC_MANAGEMENT_ROLES = (*FICHAS_MANAGEMENT_ROLES, SiaRole.MME)
 
-# Consulta do histórico de palestras, sem conceder escrita à Formação.
+# Consulta do histórico legado e canônico por papéis autorizados.
 FORMATION_HISTORY_ROLES = (*FICHAS_MANAGEMENT_ROLES, SiaRole.FORMACAO)
+
+# Gestão canônica de sessões e palestrantes, sem ampliar a gestão de fichas.
+FORMATION_MANAGEMENT_ROLES = (*FULL_ADMIN_ROLES, SiaRole.FORMACAO)
 
 # Administração do domínio existente de Eventos e suas participações.
 EVENT_MANAGEMENT_ROLES = (*FULL_ADMIN_ROLES, SiaRole.EVENTOS)
