@@ -2,9 +2,9 @@
 
 ## Status geral
 
-Fase em andamento. D.4A e D.4B estão concluídas. O desenho técnico foi fechado
-sem decisão humana bloqueante e a fundação estrutural foi implementada sem
-cutover ou backfill. D.4C é o próximo bloco.
+Fase em andamento. D.4A, D.4B e D.4C estão concluídas. O desenho técnico, a
+fundação estrutural e os services transacionais foram implementados sem
+cutover ou backfill. D.4D é o próximo bloco.
 
 ## Objetivo
 
@@ -50,7 +50,7 @@ Status: concluída em 2026-10-05.
 
 ### D.4C — Services, regras por tipo e histórico
 
-Status: pendente.
+Status: concluída em 2026-10-05.
 
 ### D.4D — API, autorização e compatibilidade
 
@@ -339,6 +339,71 @@ de realização. Registros não reconciliados permanecem apenas no legado.
 - `backend/core/tests/test_encontro_formacao_models.py`
 - `docs/workplans/PHASE_1B_D4.md`
 
+## D.4C — resultado da implementação
+
+### Services e transições
+
+- `core/services/formacoes.py` centraliza criação e alteração de tema de
+  sessão planejada, inclusão e remoção de palestrantes, cancelamento,
+  realização com resultados individuais e consulta do histórico derivado.
+- A criação resolve exclusivamente o registry e copia código, tipo e título
+  para o snapshot. Código ausente ou incompatível não vira texto livre.
+- Sessões passam de `PLANEJADA` para `REALIZADA` ou `CANCELADA`. A realização
+  exige resultado para toda a composição e ao menos um `MINISTROU`; repetição
+  semanticamente idêntica é idempotente e resultado divergente é rejeitado.
+- Palestrantes permanecem `PREVISTO`, `MINISTROU` ou `NAO_MINISTROU` conforme
+  o resultado. Remoção só ocorre antes da atuação e em sessão planejada.
+
+### Regras por tipo e histórico
+
+- Escalada e ESPPA aceitam somente temas `PALESTRA` aplicáveis e podem ter
+  Alpinista ou externo. Externo é apenas nome normalizado na sessão e não cria
+  Pessoa, Perfil, User, Trabalho ou Frequência.
+- AVC aceita somente `BATE_PAPO`, bloqueia externo e exige
+  `TrabalhoEncontro` da mesma Pessoa e do mesmo Encontro em `ALOCADO` ou
+  `TRABALHOU`, tanto na indicação quanto na realização.
+- As transições de trabalho agora usam uma guarda explícita: palestrante
+  previsto ou efetivo do AVC não pode ser desalocado, retirado, substituído ou
+  receber `FALTOU`. A guarda não altera o trabalho e não usa signal.
+- Acampamento é bloqueado antes da criação da sessão.
+- O histórico canônico é uma consulta sobre palestrante interno `MINISTROU`
+  em sessão `REALIZADA`, carregando snapshot e Encontro. Sessão planejada,
+  `NAO_MINISTROU`, externo, `Palestra` legado e `TrabalhoEncontro` não entram.
+
+### Transações e concorrência
+
+- Comandos de escrita usam `transaction.atomic` e locks pessimistas sobre o
+  contexto necessário, seguindo Pessoa/Perfil, Encontro, Trabalho no AVC,
+  Sessão e Palestrante.
+- A composição é revalidada sob lock na realização; alteração concorrente
+  detectada exige nova tentativa. A unicidade do palestrante interno continua
+  como defesa final no banco e `IntegrityError` é traduzido.
+- Dois testes de corrida real foram adicionados e condicionados a PostgreSQL:
+  inclusão simultânea do mesmo Alpinista e realizações simultâneas com
+  resultados divergentes. A execução real permanece para D.4E.
+
+### Testes e validações
+
+- Foram adicionados 20 testes de service: 18 executados com sucesso em SQLite
+  e 2 ignorados por exigirem PostgreSQL real.
+- Eles cobrem registry e snapshots, múltiplos palestrantes, regras por tipo,
+  vínculo correto do AVC, realização, idempotência, cancelamento, histórico,
+  isolamento do legado, ausência de efeitos colaterais e rollback após falha
+  intermediária.
+- Regressão focada com Formação e Trabalho: 42 testes, resultado OK, com 7
+  ignorados conforme suas condições.
+- Suíte backend: 412 testes executados, resultado OK, com 9 ignorados.
+- `manage.py check`: sem problemas.
+- `makemigrations --check --dry-run`: nenhuma mudança detectada; D.4C não
+  criou migration.
+
+### Arquivos alterados
+
+- `backend/core/services/formacoes.py`
+- `backend/core/services/trabalhos.py`
+- `backend/core/tests/test_encontro_formacao_services.py`
+- `docs/workplans/PHASE_1B_D4.md`
+
 ## Decisões da fase
 
 - As regras de produto fechadas permanecem no documento de domínio; o desenho
@@ -377,14 +442,16 @@ write API, service, admin, transformador legado ou consumidor frontend fonte.
   passaram; a suíte backend executou 392 testes com resultado OK e 7 ignorados
   conforme suas condições próprias.
 - `check` e `makemigrations --check --dry-run` passaram sem apontamentos.
-- PostgreSQL e concorrência real permanecem reservados ao fechamento D.4E.
+- Na D.4C, 20 testes de service foram adicionados; a suíte backend passou com
+  412 testes e 9 skips. Os dois testes novos de concorrência real estão
+  condicionados a PostgreSQL e permanecem reservados ao fechamento D.4E.
 
 ## Débitos
 
 - Conteúdo real do catálogo fixo, deliberadamente adiado.
-- Services, regras por tipo e histórico derivado da D.4C.
 - API, autorização, compatibilidade e cutover da D.4D.
-- Validação PostgreSQL, regressão final e fechamento da D.4E.
+- Execução PostgreSQL dos testes de inclusão e realização concorrentes,
+  regressão final e fechamento da D.4E.
 - Reconciliação humana do legado e futura depreciação do model `Palestra`.
 - Inventário de consumidores externos ao repositório antes da remoção física.
 
@@ -399,6 +466,8 @@ write API, service, admin, transformador legado ou consumidor frontend fonte.
 - `backend/core/formacao_catalogo.py`
 - `backend/core/migrations/0033_expand_sessoes_formativas.py`
 - `backend/core/tests/test_encontro_formacao_models.py`
+- `backend/core/services/formacoes.py`
+- `backend/core/tests/test_encontro_formacao_services.py`
 - `backend/core/serializers.py`
 - `backend/core/views.py`
 - `backend/core/permissions.py`
@@ -414,9 +483,9 @@ write API, service, admin, transformador legado ou consumidor frontend fonte.
 
 ## Próximo passo
 
-D.4C — implementar services transacionais, regras por tipo de Encontro e
-histórico formativo derivado, incluindo a guarda bloqueante do AVC, sem API ou
-cutover legado.
+D.4D — implementar API, autorização e compatibilidade/cutover lógico conforme
+o desenho aprovado, preservando os contratos legados até sua transição
+validada.
 
 ## Histórico de execução
 
@@ -431,3 +500,8 @@ cutover legado.
   migration expansiva `0033`, constraints, índices e 11 testes novos. A suíte
   backend de 392 testes, os checks do Django e o autodetector de migrations
   passaram; D.4C foi definida como próximo bloco.
+- 2026-10-05 — D.4C concluída com services transacionais, regras por tipo,
+  guarda do trabalho no AVC e histórico derivado. A suíte backend executou
+  412 testes com resultado OK e 9 skips; dois testes de concorrência real
+  ficaram condicionados ao PostgreSQL da D.4E, e D.4D foi definido como
+  próximo bloco.

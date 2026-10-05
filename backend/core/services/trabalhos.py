@@ -19,6 +19,7 @@ from core.services.elegibilidade_trabalho import (
     avaliar_alocacao_trabalho,
     avaliar_elegibilidade_trabalho,
 )
+from core.services.formacoes import validar_transicao_trabalho_formacao
 
 
 STATUS_FINAIS = {
@@ -411,6 +412,11 @@ def desalocar_trabalho(trabalho):
     if trabalho_bloqueado.status != TrabalhoEncontro.Status.ALOCADO:
         raise ValidationError('Somente trabalho alocado pode ser desalocado.')
 
+    validar_transicao_trabalho_formacao(
+        trabalho_bloqueado,
+        novo_status=TrabalhoEncontro.Status.AGUARDANDO_ALOCACAO,
+    )
+
     trabalho_bloqueado.role_equipe = None
     trabalho_bloqueado.status = TrabalhoEncontro.Status.AGUARDANDO_ALOCACAO
     trabalho_bloqueado.resultado_registrado_em = None
@@ -436,6 +442,11 @@ def retirar_trabalho(trabalho):
     }:
         raise ValidationError('Resultado final não pode ser convertido em retirada.')
 
+    validar_transicao_trabalho_formacao(
+        trabalho_bloqueado,
+        novo_status=TrabalhoEncontro.Status.RETIRADO,
+    )
+
     trabalho_bloqueado.status = TrabalhoEncontro.Status.RETIRADO
     trabalho_bloqueado.resultado_registrado_em = None
     trabalho_bloqueado.save(
@@ -459,6 +470,11 @@ def registrar_resultado_trabalho(trabalho, *, status, momento=None):
         raise ValidationError('O trabalho já possui estado final.')
     if trabalho_bloqueado.status != TrabalhoEncontro.Status.ALOCADO:
         raise ValidationError('Somente trabalho alocado pode receber resultado.')
+
+    validar_transicao_trabalho_formacao(
+        trabalho_bloqueado,
+        novo_status=status,
+    )
 
     trabalho_bloqueado.status = status
     trabalho_bloqueado.resultado_registrado_em = momento or timezone.now()
@@ -578,6 +594,11 @@ def substituir_trabalho(
         raise ValidationError(
             'O trabalho substituto deve estar aguardando alocação.'
         )
+
+    validar_transicao_trabalho_formacao(
+        anterior,
+        novo_status=TrabalhoEncontro.Status.RETIRADO,
+    )
 
     _validar_quantidade_estrutural(
         role_bloqueada,
