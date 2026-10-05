@@ -1101,6 +1101,108 @@ class TrabalhoEncontro(models.Model):
         return f'{self.pessoa.nome} — {self.encontro.encontro}'
 
 
+class ReuniaoPreparatoriaEncontro(models.Model):
+    encontro = models.ForeignKey(
+        Encontro,
+        on_delete=models.PROTECT,
+        related_name='reunioes_preparatorias',
+    )
+    ordem = models.PositiveIntegerField()
+    data = models.DateField()
+    horario = models.TimeField()
+    local = models.CharField(max_length=255)
+    observacoes = models.TextField(blank=True, default='')
+    criado_em = models.DateTimeField(auto_now_add=True)
+    atualizado_em = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['encontro', 'ordem', 'id']
+        indexes = [
+            models.Index(
+                fields=['encontro', 'ordem'],
+                name='reun_enc_ordem_idx',
+            ),
+            models.Index(
+                fields=['encontro', 'data'],
+                name='reun_enc_data_idx',
+            ),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=['encontro', 'ordem'],
+                name='reuniao_ordem_unica_encontro',
+            ),
+            models.CheckConstraint(
+                condition=models.Q(ordem__gt=0),
+                name='reuniao_ordem_positiva',
+            ),
+        ]
+
+    def __str__(self):
+        return f'{self.encontro.encontro} — reunião {self.ordem}'
+
+
+class PresencaPreparatoria(models.Model):
+    class Status(models.TextChoices):
+        PRESENTE = 'presente', 'Presente'
+        AUSENTE_JUSTIFICADO = (
+            'ausente_justificado',
+            'Ausente justificado',
+        )
+        AUSENTE_SEM_JUSTIFICATIVA = (
+            'ausente_sem_justificativa',
+            'Ausente sem justificativa',
+        )
+
+    reuniao = models.ForeignKey(
+        ReuniaoPreparatoriaEncontro,
+        on_delete=models.PROTECT,
+        related_name='presencas',
+    )
+    trabalho = models.ForeignKey(
+        TrabalhoEncontro,
+        on_delete=models.PROTECT,
+        related_name='presencas_preparatorias',
+    )
+    status = models.CharField(max_length=30, choices=Status.choices)
+    justificativa = models.TextField(blank=True, default='')
+    registrada_por = models.ForeignKey(
+        User,
+        on_delete=models.PROTECT,
+        related_name='presencas_preparatorias_registradas',
+    )
+    criado_em = models.DateTimeField(auto_now_add=True)
+    atualizado_em = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['reuniao', 'trabalho', 'id']
+        indexes = [
+            models.Index(
+                fields=['reuniao', 'status'],
+                name='pres_reun_status_idx',
+            ),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=['reuniao', 'trabalho'],
+                name='presenca_unica_reuniao_trabalho',
+            ),
+            models.CheckConstraint(
+                condition=models.Q(
+                    status__in=(
+                        'presente',
+                        'ausente_justificado',
+                        'ausente_sem_justificativa',
+                    )
+                ),
+                name='presenca_preparatoria_status_valido',
+            ),
+        ]
+
+    def __str__(self):
+        return f'{self.trabalho} — reunião {self.reuniao.ordem}'
+
+
 class ParticipacaoEncontro(models.Model):
     class Resultado(models.TextChoices):
         CONCLUIU = 'concluiu', 'Concluiu'

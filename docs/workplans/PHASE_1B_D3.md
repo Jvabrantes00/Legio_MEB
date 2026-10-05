@@ -2,9 +2,9 @@
 
 ## Status geral
 
-Fase em andamento. D.3A, D.3B e D.3C estão concluídas. A fundação estrutural e
-os services transacionais de equipes e trabalho foram implementados e
-validados; D.3D é o próximo bloco.
+Fase em andamento. D.3A, D.3B, D.3C e D.3D estão concluídas. A fundação de
+equipes e trabalho, seus services transacionais e as reuniões preparatórias
+com presença foram implementados e validados; D.3E é o próximo bloco.
 
 ## Objetivo
 
@@ -50,11 +50,11 @@ Status: concluída em 2026-10-05.
 
 ### D.3D — Reuniões preparatórias e presença
 
-Status: próximo bloco.
+Status: concluída em 2026-10-05.
 
 ### D.3E — Autorização contextual da Coordenação Geral
 
-Status: pendente.
+Status: próximo bloco.
 
 ### D.3F — Elegibilidade e avisos para trabalhar
 
@@ -568,13 +568,92 @@ foi solicitada saída da sandbox nesta etapa.
 - `backend/core/tests/test_encontro_trabalho_services.py`
 - `docs/workplans/PHASE_1B_D3.md`
 
+## D.3D — implementação de reuniões preparatórias e presença
+
+### Models, migration e integridade
+
+- `ReuniaoPreparatoriaEncontro` foi adicionada com Encontro protegido, ordem,
+  data, horário, local, observações e timestamps. A ordem é positiva e única
+  por Encontro; os índices cobrem ordenação e consulta por data no contexto da
+  edição.
+- `PresencaPreparatoria` foi adicionada com FKs protegidas para reunião,
+  trabalho e `User` registrador, os três estados aprovados, justificativa
+  opcional e timestamps.
+- A unicidade reunião/trabalho e o conjunto válido de estados são protegidos
+  no banco. A coerência cross-Encontro permanece no service, sem constraint
+  SQL baseada em joins.
+- A migration expansiva
+  `0031_expand_reunioes_presencas_preparatorias` cria somente as duas tabelas,
+  índices e constraints novos. Não há `RunPython`, transformação do legado ou
+  backfill automático.
+
+### Services e estado de revisão
+
+- `criar_reuniao_preparatoria` e `editar_reuniao_preparatoria` serializam a
+  ordem pelo lock do Encontro e traduzem conflitos de unicidade para erro de
+  domínio. Edição não permite reatribuir a reunião a outro Encontro.
+- `registrar_presenca_preparatoria` bloqueia o contexto operacional do
+  trabalho antes da reunião e da presença, rejeita cross-FK e é idempotente
+  quando o comando é repetido sem alteração.
+- `corrigir_presenca_preparatoria` atualiza o registro existente sob lock e
+  não cria uma segunda presença.
+- `anotar_revisao_permanencia` expõe `requer_revisao` por `Exists` das
+  ausências sem justificativa atuais; `trabalho_requer_revisao` oferece a
+  mesma derivação pontual. Nenhum booleano redundante é persistido.
+- Corrigir uma presença recalcula naturalmente o estado a partir do conjunto
+  atual. Ausência injustificada não altera status ou role do trabalho e não
+  cria `Frequencia`.
+
+### Transações e concorrência
+
+- Todas as mutações públicas usam `transaction.atomic`.
+- Criação e reordenação bloqueiam o Encontro antes da reunião. Registro e
+  correção preservam a ordem Pessoa → Encontro → convite → trabalho → reunião
+  → presença, reutilizando o bloqueio transacional do contexto de trabalho.
+- `UniqueConstraint` permanece a defesa final para ordem e presença em uma
+  corrida. Esta etapa não antecipa os cinco testes PostgreSQL já reservados
+  para a D.3G.
+
+### Testes e validações
+
+- Foram adicionados 13 testes estruturais, de service e migration: múltiplas
+  reuniões, ordenação, conflito por Encontro, mesma ordem entre edições,
+  edição, estados e justificativa, unicidade e idempotência, cross-FK,
+  correção, derivação do estado de revisão pelo conjunto atual, ausência sem
+  retirada, `PROTECT`, rollback, ausência de `Frequencia` e expansão sem
+  população automática.
+- Testes novos: 13/13 aprovados.
+- Suíte backend: 343/343 testes aprovados; 7 skips condicionais já esperados.
+- `python manage.py check --settings=setup.test_settings`: aprovado.
+- `python manage.py makemigrations --check --dry-run
+  --settings=setup.test_settings`: nenhuma mudança detectada.
+- A validação desta etapa usou SQLite em memória. Nenhuma característica nova
+  da D.3D exigiu PostgreSQL, e os testes concorrentes da D.3C permanecem para
+  a D.3G conforme planejado.
+
+### Débitos da D.3D
+
+- Autorização contextual, permissions e contratos de API continuam fora do
+  bloco e serão tratados na D.3E.
+- O indicador de revisão já está disponível no domínio, mas sua exposição em
+  contrato ocorrerá apenas junto da API apropriada.
+- Elegibilidade, cutover legado e regressão PostgreSQL permanecem em D.3F e
+  D.3G. Nenhuma remoção física ou dual-write foi introduzida.
+
+### Arquivos alterados na D.3D
+
+- `backend/core/models.py`
+- `backend/core/migrations/0031_expand_reunioes_presencas_preparatorias.py`
+- `backend/core/services/reunioes_preparatorias.py`
+- `backend/core/tests/test_encontro_reunioes_preparatorias.py`
+- `docs/workplans/PHASE_1B_D3.md`
+
 ## Migrations previstas
 
 1. `0030_expand_equipes_trabalho_encontro`: implementada na D.3B.
-2. Próxima numeração disponível: `0031`; nenhuma migration é antecipada antes
-   da mudança real de schema do bloco correspondente.
-3. Reuniões/presenças e vínculo User/Pessoa continuam previstos para D.3D e
-   D.3E, respectivamente.
+2. `0031_expand_reunioes_presencas_preparatorias`: implementada na D.3D.
+3. Próxima numeração disponível: `0032`; o vínculo User/Pessoa continua
+   previsto para D.3E, sem antecipação da migration antes da mudança real.
 
 A numeração deve ser reconfirmada no início de cada implementação. Nenhuma
 migration transforma, renomeia ou remove tabelas/campos legados. Snapshots de
@@ -614,9 +693,9 @@ devem permanecer apenas no contrato legado e em relatório de reconciliação.
 
 ### D.3D
 
-- Ordem de reuniões, presença única, vínculo cross-Encontro rejeitado,
-  correção idempotente, flag derivado de revisão e ausência sem remoção
-  automática.
+- Concluída: ordem de reuniões, presença única, vínculo cross-Encontro
+  rejeitado, correção idempotente, flag derivado de revisão e ausência sem
+  remoção automática.
 
 ### D.3E
 
@@ -681,10 +760,8 @@ Fase 1B.3D.3 em andamento e o roteamento já aponta para os documentos certos.
 
 ## Próximo passo
 
-D.3D — implementar reuniões preparatórias e presença, vinculadas ao trabalho
-do mesmo Encontro, com flag derivado de revisão e sem remoção automática. Os
-blocos de autorização contextual, elegibilidade e cutover permanecem em
-D.3E–D.3G.
+D.3E — implementar a autorização contextual da Coordenação Geral. Os blocos
+de elegibilidade e cutover permanecem em D.3F–D.3G.
 
 ## Padrão de relatórios durante a D.3
 
@@ -708,4 +785,7 @@ Ao finalizar cada bloco:
   alteração ou população automática da estrutura legada.
 - 2026-10-05 — D.3C concluída. Services transacionais e 22 testes foram
   adicionados; a suíte backend aprovou 330 testes e os cinco novos cenários
-  de concorrência ficaram condicionados à validação PostgreSQL da D.3G.
+  concorrentes permaneceram reservados para validação PostgreSQL na D.3G.
+- 2026-10-05 — D.3D concluída. Reuniões preparatórias, presenças, services
+  transacionais, migration expansiva e 13 testes foram adicionados; a suíte
+  backend aprovou 343 testes, sem backfill ou alteração do fluxo legado.
