@@ -77,6 +77,20 @@ ainda não implementada, sem alterar as permissões da matriz corrente.
 - A API contextual oferece apenas criação e correção; ausência de regra
   explícita permanece negada.
 
+### Equipes e trabalho em Encontro
+
+- Suporte, Diretoria e Fichas podem consultar snapshots por Encontro e
+  executar os comandos canônicos de convite, início, alocação, realocação,
+  retirada, substituição e resultado de trabalho. O superuser permanece como
+  bypass técnico separado.
+- As consultas exigem escopo explícito de Encontro e os comandos não expõem
+  update ou delete genéricos de `TrabalhoEncontro`.
+- Avisos de elegibilidade exigem confirmação explícita; bloqueios estruturais
+  permanecem impeditivos. Essa gestão não concede acesso a dados de saúde.
+- Usuários sem uma das roles administrativas não recebem gestão de equipes. A
+  capability contextual da Coordenação Geral continua limitada ao registro de
+  presença preparatória e não amplia esses comandos.
+
 ### Domínios especializados
 
 - Eventos: Suporte, Diretoria e Eventos têm CRUD de Evento e Participação de

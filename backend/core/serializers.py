@@ -5,14 +5,20 @@ from rest_framework import serializers
 from rest_framework.reverse import reverse
 from .models import (
     Alpinista, ConviteEncontro, Encontro, EntregaMaterial, Evento,
+    EquipeEncontro,
     FotoEncontro, FuncaoEncontro, Inscricao, LogSistema, Material, Palestra,
     ParticipacaoEncontro as ResultadoParticipacaoEncontro, ParticipacaoEvento,
     Pessoa, PresencaPreparatoria, ReuniaoPreparatoriaEncontro,
-    TrabalhoEncontro,
+    RoleEquipeEncontro, TrabalhoEncontro,
     VinculoEncontroLegado as ParticipacaoEncontro,
 )
 from .services import participacoes as participacao_services
 from .services import reunioes_preparatorias as reuniao_services
+from .services import trabalhos as trabalho_services
+from .services.elegibilidade_trabalho import (
+    avaliar_capacidade_equipe,
+    avaliar_composicao_estrutural,
+)
 from .validators import normalize_cpf, validate_image_upload_size
 from .roles import recognized_user_roles
 
@@ -272,20 +278,33 @@ class AlpinistaCompletoSerializer(
         ]
     
     def get_historico_equipes(self, obj):
-        participacoes = obj.participacoes_encontros.exclude(funcao__tipo='encontrista')
+        if obj.pessoa_id is None:
+            return []
+        trabalhos = (
+            TrabalhoEncontro.objects
+            .filter(
+                pessoa_id=obj.pessoa_id,
+                status=TrabalhoEncontro.Status.TRABALHOU,
+            )
+            .select_related(
+                'encontro',
+                'role_equipe__equipe_encontro',
+            )
+            .order_by('-encontro__data_referencia', '-id')
+        )
         return [
             {
-                "nome_encontro": p.encontro.encontro,
-                "equipe": p.funcao.nome,
-                "tipo_encontro": p.encontro.tipo,
-                "data": p.encontro.data_referencia.strftime('%d/%m/%Y') if getattr(p.encontro, 'data_referencia', None) else None,
-                "cor_grupo": (
-                    p.cor_grupo
-                    if p.funcao
-                    and "coordenador dos dirigentes" in p.funcao.nome.casefold()
+                'nome_encontro': trabalho.encontro.encontro,
+                'equipe': trabalho.role_equipe.equipe_encontro.nome,
+                'tipo_encontro': trabalho.encontro.tipo,
+                'data': (
+                    trabalho.encontro.data_referencia.strftime('%d/%m/%Y')
+                    if trabalho.encontro.data_referencia
                     else None
-                )
-            } for p in participacoes
+                ),
+                'cor_grupo': None,
+            }
+            for trabalho in trabalhos
         ]
 
         
@@ -512,6 +531,21 @@ def _erro_de_dominio(error):
     raise serializers.ValidationError(detalhe) from error
 
 
+def _erro_de_trabalho(error):
+    avaliacao = getattr(error, 'avaliacao', None)
+    if avaliacao is None:
+        _erro_de_dominio(error)
+    raise serializers.ValidationError({
+        'avaliacao': avaliacao.as_dict(),
+        'erros': getattr(error, 'message_dict', {'comando': error.messages}),
+    }) from error
+
+
+def _avaliacao_da_instancia(instance):
+    avaliacao = getattr(instance, 'avaliacao_elegibilidade', None)
+    return avaliacao.as_dict() if avaliacao is not None else None
+
+
 class InscricaoEncontroCommandSerializer(serializers.ModelSerializer):
     pessoa_id = serializers.PrimaryKeyRelatedField(
         source='pessoa',
@@ -552,6 +586,18 @@ class ConviteEncontroCommandSerializer(serializers.ModelSerializer):
         required=False,
         allow_null=True,
     )
+    role_trabalho_proposta_id = serializers.PrimaryKeyRelatedField(
+        source='role_trabalho_proposta',
+        queryset=RoleEquipeEncontro.objects.all(),
+        required=False,
+        allow_null=True,
+    )
+    confirmar_avisos = serializers.BooleanField(
+        write_only=True,
+        required=False,
+        default=False,
+    )
+    avaliacao = serializers.SerializerMethodField()
 
     class Meta:
         model = ConviteEncontro
@@ -562,15 +608,179 @@ class ConviteEncontroCommandSerializer(serializers.ModelSerializer):
             'finalidade',
             'status',
             'inscricao_id',
+            'role_trabalho_proposta_id',
+            'confirmar_avisos',
+            'avaliacao',
             'criado_em',
         )
-        read_only_fields = ('id', 'status', 'criado_em')
+        read_only_fields = ('id', 'status', 'avaliacao', 'criado_em')
+
+    def get_avaliacao(self, instance):
+        return _avaliacao_da_instancia(instance)
 
     def create(self, validated_data):
+        confirmar_avisos = validated_data.pop('confirmar_avisos', False)
+        role_proposta = validated_data.pop('role_trabalho_proposta', None)
         try:
+            if validated_data['finalidade'] == ConviteEncontro.Finalidade.TRABALHAR:
+                if validated_data.get('inscricao') is not None:
+                    raise ValidationError(
+                        'Convite de trabalho não pode estar ligado a inscrição.'
+                    )
+                return trabalho_services.criar_convite_trabalho(
+                    pessoa=validated_data['pessoa'],
+                    encontro=validated_data['encontro'],
+                    role_proposta=role_proposta,
+                    confirmar_avisos=confirmar_avisos,
+                )
+            if role_proposta is not None:
+                raise ValidationError(
+                    'Role proposta pertence somente a convite de trabalho.'
+                )
             return participacao_services.criar_convite(**validated_data)
         except ValidationError as error:
-            _erro_de_dominio(error)
+            _erro_de_trabalho(error)
+
+
+class TrabalhoEncontroCommandSerializer(serializers.ModelSerializer):
+    convite_id = serializers.PrimaryKeyRelatedField(
+        source='convite',
+        queryset=ConviteEncontro.objects.all(),
+    )
+    pessoa_id = serializers.IntegerField(read_only=True)
+    encontro_id = serializers.IntegerField(read_only=True)
+    role_equipe_id = serializers.IntegerField(read_only=True, allow_null=True)
+    confirmar_avisos = serializers.BooleanField(
+        write_only=True,
+        required=False,
+        default=False,
+    )
+    avaliacao = serializers.SerializerMethodField()
+
+    class Meta:
+        model = TrabalhoEncontro
+        fields = (
+            'id',
+            'pessoa_id',
+            'encontro_id',
+            'convite_id',
+            'role_equipe_id',
+            'status',
+            'resultado_registrado_em',
+            'confirmar_avisos',
+            'avaliacao',
+            'criado_em',
+            'atualizado_em',
+        )
+        read_only_fields = (
+            'id',
+            'pessoa_id',
+            'encontro_id',
+            'role_equipe_id',
+            'status',
+            'resultado_registrado_em',
+            'avaliacao',
+            'criado_em',
+            'atualizado_em',
+        )
+
+    def get_avaliacao(self, instance):
+        return _avaliacao_da_instancia(instance)
+
+    def create(self, validated_data):
+        convite = validated_data['convite']
+        try:
+            return trabalho_services.iniciar_trabalho_confirmado(
+                convite,
+                confirmar_avisos=validated_data.get('confirmar_avisos', False),
+            )
+        except ValidationError as error:
+            _erro_de_trabalho(error)
+
+
+class AlocacaoTrabalhoCommandSerializer(serializers.Serializer):
+    role_equipe_id = serializers.PrimaryKeyRelatedField(
+        source='role_equipe',
+        queryset=RoleEquipeEncontro.objects.all(),
+    )
+    confirmar_avisos = serializers.BooleanField(required=False, default=False)
+
+
+class ResultadoTrabalhoCommandSerializer(serializers.Serializer):
+    status = serializers.ChoiceField(choices=(
+        TrabalhoEncontro.Status.TRABALHOU,
+        TrabalhoEncontro.Status.FALTOU,
+    ))
+
+
+class SubstituicaoTrabalhoCommandSerializer(serializers.Serializer):
+    trabalho_novo_id = serializers.PrimaryKeyRelatedField(
+        source='trabalho_novo',
+        queryset=TrabalhoEncontro.objects.all(),
+    )
+    role_equipe_id = serializers.PrimaryKeyRelatedField(
+        source='role_equipe',
+        queryset=RoleEquipeEncontro.objects.all(),
+    )
+    confirmar_avisos = serializers.BooleanField(required=False, default=False)
+
+
+class RoleEquipeEncontroSerializer(serializers.ModelSerializer):
+    trabalhos = serializers.SerializerMethodField()
+
+    class Meta:
+        model = RoleEquipeEncontro
+        fields = (
+            'id',
+            'codigo',
+            'nome',
+            'ordem',
+            'quantidade_estrutural',
+            'concede_registro_presenca',
+            'trabalhos',
+        )
+        read_only_fields = fields
+
+    def get_trabalhos(self, instance):
+        trabalhos = instance.trabalhos.select_related('pessoa').order_by('id')
+        return [
+            {
+                'id': trabalho.pk,
+                'pessoa_id': trabalho.pessoa_id,
+                'pessoa_nome': trabalho.pessoa.nome,
+                'status': trabalho.status,
+            }
+            for trabalho in trabalhos
+        ]
+
+
+class EquipeEncontroSerializer(serializers.ModelSerializer):
+    encontro_id = serializers.IntegerField(read_only=True)
+    roles = RoleEquipeEncontroSerializer(many=True, read_only=True)
+    capacidade = serializers.SerializerMethodField()
+    composicao = serializers.SerializerMethodField()
+
+    class Meta:
+        model = EquipeEncontro
+        fields = (
+            'id',
+            'encontro_id',
+            'codigo',
+            'nome',
+            'ordem',
+            'capacidade_minima_recomendada',
+            'capacidade_maxima_recomendada',
+            'capacidade',
+            'composicao',
+            'roles',
+        )
+        read_only_fields = fields
+
+    def get_capacidade(self, instance):
+        return avaliar_capacidade_equipe(instance).as_dict()
+
+    def get_composicao(self, instance):
+        return avaliar_composicao_estrutural(instance).as_dict()
 
 
 class RespostaConviteEncontroCommandSerializer(serializers.Serializer):

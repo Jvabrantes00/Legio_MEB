@@ -1,10 +1,23 @@
 from datetime import date
 
+from django.utils import timezone
 from rest_framework import status
 
-from core.models import VinculoEncontroLegado as ParticipacaoEncontro
+from core.models import (
+    ConviteEncontro,
+    Encontro,
+    EquipeEncontro,
+    Pessoa,
+    RoleEquipeEncontro,
+    TemplateEquipeEncontro,
+    TemplateRoleEquipe,
+    TrabalhoEncontro,
+    VinculoEncontroLegado as ParticipacaoEncontro,
+)
 from core.serializers import (
+    EquipeEncontroSerializer,
     AlpinistaCompletoSerializer,
+    TrabalhoEncontroCommandSerializer,
     EncontroSerializer,
     EventoSerializer,
     FuncaoEncontroSerializer,
@@ -58,6 +71,37 @@ class RemainingSerializerAllowlistTests(AuthenticatedAPITestCase):
                     'registrada_por_id',
                     'criado_em',
                     'atualizado_em',
+                ),
+            ),
+            (
+                TrabalhoEncontroCommandSerializer,
+                (
+                    'id',
+                    'pessoa_id',
+                    'encontro_id',
+                    'convite_id',
+                    'role_equipe_id',
+                    'status',
+                    'resultado_registrado_em',
+                    'confirmar_avisos',
+                    'avaliacao',
+                    'criado_em',
+                    'atualizado_em',
+                ),
+            ),
+            (
+                EquipeEncontroSerializer,
+                (
+                    'id',
+                    'encontro_id',
+                    'codigo',
+                    'nome',
+                    'ordem',
+                    'capacidade_minima_recomendada',
+                    'capacidade_maxima_recomendada',
+                    'capacidade',
+                    'composicao',
+                    'roles',
                 ),
             ),
         )
@@ -162,23 +206,59 @@ class ParticipacaoEncontroContractTests(AuthenticatedAPITestCase):
 
 
 class HistoricoEquipeContractTests(AuthenticatedAPITestCase):
-    def test_coordenador_dos_dirigentes_preserva_cor_sem_diferenciar_case(self):
-        for nome_funcao in (
-            'Coordenador dos Dirigentes',
-            'COORDENADOR DOS DIRIGENTES',
-        ):
-            with self.subTest(nome_funcao=nome_funcao):
-                alpinista = make_alpinista()
-                ParticipacaoEncontro.objects.create(
-                    alpinista=alpinista,
-                    encontro=make_encontro(),
-                    funcao=make_funcao(nome=nome_funcao, tipo='equipe'),
-                    cor_grupo='azul',
-                )
+    def test_historico_preserva_formato_e_conta_somente_trabalho_realizado(self):
+        pessoa = Pessoa.objects.create(nome='Pessoa com histórico canônico')
+        alpinista = make_alpinista(pessoa=pessoa)
+        encontro = make_encontro(encontro='Escalada canônica')
+        template = TemplateEquipeEncontro.objects.create(
+            tipo_encontro=Encontro.Tipo.ESCALADA,
+            codigo='dirigentes',
+            nome='Dirigentes',
+        )
+        template_role = TemplateRoleEquipe.objects.create(
+            template_equipe=template,
+            codigo='coordenador',
+            nome='Coordenador',
+        )
+        equipe = EquipeEncontro.objects.create(
+            encontro=encontro,
+            template_origem=template,
+            codigo=template.codigo,
+            nome=template.nome,
+        )
+        role = RoleEquipeEncontro.objects.create(
+            equipe_encontro=equipe,
+            template_origem=template_role,
+            codigo=template_role.codigo,
+            nome=template_role.nome,
+        )
+        convite = ConviteEncontro.objects.create(
+            pessoa=pessoa,
+            encontro=encontro,
+            finalidade=ConviteEncontro.Finalidade.TRABALHAR,
+            status=ConviteEncontro.Status.CONFIRMADO,
+        )
+        TrabalhoEncontro.objects.create(
+            pessoa=pessoa,
+            encontro=encontro,
+            convite=convite,
+            role_equipe=role,
+            status=TrabalhoEncontro.Status.TRABALHOU,
+            resultado_registrado_em=timezone.now(),
+        )
+        ParticipacaoEncontro.objects.create(
+            alpinista=alpinista,
+            encontro=make_encontro(encontro='Escala legada'),
+            funcao=make_funcao(nome='Legado não comprovado', tipo='equipe'),
+            cor_grupo='azul',
+        )
 
-                payload = AlpinistaCompletoSerializer(alpinista).data
+        payload = AlpinistaCompletoSerializer(alpinista).data
 
-                self.assertEqual(
-                    payload['historico_equipes'][0]['cor_grupo'],
-                    'azul',
-                )
+        self.assertEqual(payload['historico_equipes'], [{
+            'nome_encontro': 'Escalada canônica',
+            'equipe': 'Dirigentes',
+            'tipo_encontro': Encontro.Tipo.ESCALADA,
+            'data': '01/01/2030',
+            'cor_grupo': None,
+        }])

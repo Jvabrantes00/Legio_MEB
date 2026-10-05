@@ -2,9 +2,9 @@
 
 ## Status geral
 
-Fase em andamento. D.3A a D.3F estão concluídas. A fundação de equipes e
-trabalho, services transacionais, reuniões, autorização contextual e
-elegibilidade foram implementados e validados; D.3G é o próximo bloco.
+**FASE 1B.3D.3 — CONCLUÍDA.** D.3A a D.3G foram encerradas com fundação de
+equipes e trabalho, services transacionais, reuniões, autorização contextual,
+elegibilidade, cutover lógico e validação real em PostgreSQL 16.
 
 ## Objetivo
 
@@ -62,7 +62,7 @@ Status: concluída em 2026-10-05.
 
 ### D.3G — Compatibilidade, PostgreSQL, regressão e fechamento
 
-Status: próximo bloco.
+Status: concluída em 2026-10-05.
 
 ## D.3A — relatório de análise e desenho técnico
 
@@ -819,6 +819,118 @@ foi solicitada saída da sandbox nesta etapa.
 - `backend/core/tests/test_encontro_trabalho_services.py`
 - `docs/workplans/PHASE_1B_D3.md`
 
+## Resultado da D.3G
+
+### Compatibilidade e cutover lógico
+
+- `historico_equipes` preserva o formato público, mas passou a consultar
+  exclusivamente `TrabalhoEncontro(status=TRABALHOU)` ligado à `Pessoa` do
+  Alpinista. Convite, confirmação, alocação, falta, retirada e vínculo legado
+  deixaram de ser tratados como trabalho realizado.
+- `/api/funcoes/` e `/api/participacoes-encontros/` permanecem disponíveis
+  para os consumidores antigos, sem dual-write, inferência de resultado ou
+  criação de `TrabalhoEncontro`. Nenhuma tabela ou relação antiga foi removida.
+- Nenhum registro legado foi convertido. A ausência de evidência sobre role e
+  resultado mantém explícita a decisão: **nenhum backfill automático nesta
+  etapa**.
+- O frontend antigo de equipes continua como débito de compatibilidade. Sua
+  migração exige consumir os comandos canônicos e validar a interface antes da
+  futura depreciação das rotas legadas; frontend novo ficou fora da D.3G.
+
+### API canônica exposta
+
+- `POST /api/encontros/{id}/preparar-equipes/` materializa snapshots através
+  de `preparar_equipes_encontro`.
+- `GET /api/equipes-encontros/?encontro={id}` retorna equipes, roles,
+  trabalhadores e avaliações estruturadas de capacidade/composição, com
+  allowlist e escopo obrigatório por Encontro.
+- `POST /api/convites-encontros/` delega convites com finalidade `TRABALHAR` a
+  `criar_convite_trabalho`, aceita role proposta e mantém
+  `confirmar_avisos` explícito. Convites de participação continuam no service
+  da D.2.
+- `/api/trabalhos-encontros/` oferece criação a partir de convite confirmado,
+  leitura por Encontro e comandos de alocação, realocação, desalocação,
+  retirada, substituição e resultado. Não há update/delete genéricos.
+- As operações reutilizam integralmente os services da D.3C/D.3F. Respostas e
+  erros preservam `ELEGIVEL`, `AVISO` ou `BLOQUEIO`, códigos e motivos; avisos
+  não são aceitos silenciosamente.
+- A auditoria geral registra IDs, confirmação de avisos e códigos estruturados,
+  sem dados pessoais. Uma arquitetura específica de justificativa de override
+  continua como débito futuro.
+- As novas rotas mantêm default deny e gestão restrita a Suporte, Diretoria e
+  Fichas; nenhuma permissão de saúde foi adicionada.
+
+### PostgreSQL e concorrência
+
+- Os cinco testes concorrentes da D.3C passaram no PostgreSQL 16 real:
+  materialização idempotente de snapshots, início concorrente do trabalho,
+  disputa por quantidade estrutural, realocação concorrente e resultado final
+  concorrente.
+- `transaction.atomic`, `select_for_update`, constraints e idempotência
+  preservaram um único estado válido nos cenários exercitados.
+- A suíte backend completa aprovou **381/381 testes** no PostgreSQL 16.
+- A validação usou `pg_virtualenv` com cluster, credenciais e banco
+  descartáveis. O cluster foi removido ao final; `sia_dev`, permissões globais
+  e `CREATEDB` do usuário da aplicação não foram alterados.
+
+### Regressão e migrations
+
+- A suíte SQLite descobriu 381 testes: 374 aprovados e os 7 cenários exclusivos
+  de PostgreSQL corretamente ignorados.
+- Foram adicionados 7 testes de API/cutover para avisos e bloqueios
+  estruturados, commands, consultas com escopo, default deny, ausência de CRUD
+  genérico e não conversão do legado; o contrato do histórico canônico também
+  foi atualizado.
+- D.3B a D.3F permaneceram cobertas: templates, snapshots, roles, trabalho,
+  services, substituição, reuniões, presença, revisão, autorização contextual,
+  elegibilidade, capacidades e composição.
+- A regressão confirmou ausência de criação de `Frequencia`, acesso a saúde,
+  criação/destruição automática de `User`, requisito conjugal ou relação
+  `substituido_por`.
+- `manage.py check --settings=setup.test_settings`: aprovado.
+- `makemigrations --check --dry-run --settings=setup.test_settings`: nenhuma
+  mudança detectada.
+- Todas as migrations aplicaram em PostgreSQL limpo. `showmigrations`
+  confirmou `core.0001` a `core.0032_vinculousuariopessoa` aplicadas.
+- Nenhuma migration foi criada no fechamento; a próxima numeração disponível
+  continua sendo `0033`, somente diante de mudança real de schema.
+
+### Débitos futuros após a D.3
+
+- Migrar e validar o frontend de equipes sobre a API canônica antes de
+  deprecar consumidores antigos.
+- Reconciliar catálogo, Pessoa, role e resultado legado somente com evidência
+  externa; remover fisicamente a estrutura antiga apenas em etapa explícita de
+  `DEPRECATE`.
+- Definir uma fonte canônica de atividade do Alpinista, sem perpetuar como
+  autoridade o adaptador exato do registro legado.
+- Fechar regras adicionais de AVC/Acampamento e saúde contextual em suas fases
+  próprias.
+- Automatizar provisionamento administrativo de contas somente após decisão
+  específica; a D.3 não cria nem destrói `User`.
+- Evoluir, se necessário, a auditoria de overrides para registrar justificativa
+  própria além dos códigos e da confirmação já auditados.
+
+### Critérios finais da D.3
+
+Os critérios essenciais foram satisfeitos. Convite, alocação e trabalho
+realizado estão separados; novos writes passam por services transacionais;
+somente `TRABALHOU` alimenta histórico; legado foi preservado sem inferência;
+concorrência e migrations foram validadas em PostgreSQL 16. A Fase 1B.3D.3
+está concluída.
+
+### Arquivos alterados na D.3G
+
+- `backend/core/serializers.py`
+- `backend/core/views.py`
+- `backend/core/urls.py`
+- `backend/core/tests/test_encontro_trabalho_api.py`
+- `backend/core/tests/test_serializer_contracts.py`
+- `docs/AUTHORIZATION_MATRIX.md`
+- `docs/workplans/PHASE_1B_D3.md`
+- `docs/PROJECT_STATE.md`
+- `docs/00_HOME.md`
+
 ## Migrations previstas
 
 1. `0030_expand_equipes_trabalho_encontro`: implementada na D.3B.
@@ -932,8 +1044,9 @@ Fase 1B.3D.3 em andamento e o roteamento já aponta para os documentos certos.
 
 ## Próximo passo
 
-D.3G — executar compatibilidade, validação PostgreSQL, regressão e fechamento
-da Fase 1B.3D.3.
+Prosseguir para o domínio já listado no planejamento como **Palestras e seus
+históricos**. A documentação atual ainda não atribui numeração a esse bloco;
+ela deve ser definida no workplan próprio, sem inventá-la neste fechamento.
 
 ## Padrão de relatórios durante a D.3
 
@@ -967,3 +1080,7 @@ Ao finalizar cada bloco:
 - 2026-10-05 — D.3F concluída. Motor derivado de elegibilidade, capacidade e
   composição foi integrado aos services de trabalho; a suíte backend aprovou
   374 testes sem migration, nova tabela de alertas ou regra de saúde.
+- 2026-10-05 — D.3G e a Fase 1B.3D.3 concluídas. O cutover lógico passou a
+  contar somente trabalho canônico realizado; a API mínima foi exposta e 381
+  testes passaram no PostgreSQL 16 descartável, incluindo os cinco cenários
+  concorrentes, sem backfill ou alteração destrutiva do legado.

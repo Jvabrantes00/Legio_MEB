@@ -2,7 +2,7 @@
 
 ## Estado atual
 
-- Data: 4 de outubro de 2026.
+- Data: 5 de outubro de 2026.
 - Branch: `sia/fase-1-modelagem-dominio`.
 - **FASE 0 — ESTABILIZAÇÃO: CONCLUÍDA**
 - **FASE 1 — REMODELAGEM DE DOMÍNIO: EM ANDAMENTO**
@@ -21,7 +21,7 @@
 | 0H PostgreSQL e legado | ✅ Concluída |
 | 0I Débitos técnicos restantes | ✅ Concluída |
 | 0J Gate e auditoria final | ✅ Concluída |
-| Fase 1 Remodelagem de domínio | Em andamento; 1B.3D.2 concluída; próxima etapa 1B.3D.3 |
+| Fase 1 Remodelagem de domínio | Em andamento; 1B.3D.3 concluída; próxima frente: Palestras e seus históricos (numeração ainda não definida) |
 
 ## Estado da Fase 1
 
@@ -69,7 +69,25 @@
 - A regressão final aprovou 296/296 testes no PostgreSQL 16 descartável,
   inclusive os dois cenários reais de concorrência, e confirmou migrations
   aplicáveis até `core.0029_expand_inscricao_convite_participacao`.
-- Próxima implementação: 1B.3D.3 — Equipes e Trabalho em Encontro.
+- 1B.3D.3 concluiu Equipes e Trabalho em Encontro. Templates, snapshots,
+  roles, `TrabalhoEncontro`, reuniões preparatórias, presença, autorização
+  contextual e elegibilidade foram implementados sem misturar convite,
+  alocação e trabalho realizado.
+- Novos writes passam por services transacionais. A API canônica exige escopo
+  de Encontro, mantém avisos explícitos e preserva default deny para Suporte,
+  Diretoria e Fichas; saúde permanece fora do domínio.
+- Somente `TrabalhoEncontro(status=TRABALHOU)` alimenta `historico_equipes`.
+  Rotas e tabelas antigas permanecem temporariamente disponíveis, sem
+  dual-write, backfill heurístico ou inferência de trabalho concluído.
+- A regressão final aprovou 381/381 testes no PostgreSQL 16 descartável,
+  inclusive os cinco cenários reais de concorrência da D.3C. A cadeia limpa de
+  migrations foi validada até `core.0032_vinculousuariopessoa`; o cluster de
+  teste foi removido ao final.
+- Permanecem futuros o frontend canônico de equipes, a reconciliação e remoção
+  física do legado, a fonte definitiva de atividade, saúde contextual e regras
+  adicionais de AVC/Acampamento.
+- Próxima frente já registrada na direção da Fase 1: Palestras e seus
+  históricos. A numeração do bloco ainda não está definida na documentação.
 
 ## Histórico — Fase 0
 

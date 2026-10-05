@@ -17,7 +17,10 @@ substitui os documentos de referência nem os `AGENTS.md` aplicáveis.
   preservando o contrato legado da API.
 - 1B.3D.2 concluiu Inscrição, Convite e Participação, com services
   transacionais, cutover lógico e validação real em PostgreSQL.
-- Próxima implementação: 1B.3D.3 — Equipes e Trabalho em Encontro.
+- 1B.3D.3 concluiu Equipes e Trabalho em Encontro, incluindo cutover lógico e
+  validação de concorrência em PostgreSQL.
+- Próxima frente documentada: Palestras e seus históricos; a numeração do
+  próximo bloco ainda será definida no workplan correspondente.
 
 O estado vivo e o roadmap estão em [[PROJECT_STATE]].
 

@@ -1,6 +1,7 @@
 import mimetypes
 from pathlib import Path
 
+from django.core.exceptions import ValidationError as django_core_validation_error
 from django.http import FileResponse, Http404
 from rest_framework import filters, mixins, status, viewsets
 from rest_framework.decorators import api_view, permission_classes, action
@@ -12,9 +13,11 @@ from django.shortcuts import get_object_or_404
 
 from .models import (
     Alpinista, ConviteEncontro, Encontro, EntregaMaterial, Evento,
+    EquipeEncontro,
     FotoEncontro, FuncaoEncontro, Inscricao, Palestra,
     ParticipacaoEncontro as ResultadoParticipacaoEncontro,
     ParticipacaoEvento, LogSistema, Material, PresencaPreparatoria,
+    TrabalhoEncontro,
     VinculoEncontroLegado as ParticipacaoEncontro,
 )
 from .serializers import (
@@ -29,8 +32,12 @@ from .serializers import (
     InscricaoEncontroCommandSerializer, ConviteEncontroCommandSerializer,
     RespostaConviteEncontroCommandSerializer,
     ResultadoParticipacaoCommandSerializer,
+    AlocacaoTrabalhoCommandSerializer, EquipeEncontroSerializer,
     CorrecaoPresencaPreparatoriaCommandSerializer,
     PresencaPreparatoriaCommandSerializer,
+    ResultadoTrabalhoCommandSerializer,
+    SubstituicaoTrabalhoCommandSerializer,
+    TrabalhoEncontroCommandSerializer,
     )
 from .permissions import (
     AlpinistaQueryPolicy,
@@ -39,6 +46,8 @@ from .permissions import (
     require_sia_roles,
 )
 from .services.reunioes_preparatorias import corrigir_presenca_preparatoria
+from .services import trabalhos as trabalho_services
+from .serializers import _erro_de_trabalho
 from .roles import (
     EVENT_MANAGEMENT_ROLES,
     ENCOUNTER_PHOTO_MANAGEMENT_ROLES,
@@ -366,6 +375,7 @@ class EncontroViewSet(viewsets.ModelViewSet):
         'foto_arquivo': ENCOUNTER_PHOTO_MANAGEMENT_ROLES,
         'efetivar_encontrista': FICHAS_MANAGEMENT_ROLES,
         'remover_encontristas': FICHAS_MANAGEMENT_ROLES,
+        'preparar_equipes': FICHAS_MANAGEMENT_ROLES,
     }
 
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
@@ -392,6 +402,26 @@ class EncontroViewSet(viewsets.ModelViewSet):
         if self.has_full_encontro_access():
             return queryset
         return queryset.only('id', 'encontro', 'tipo', 'data_referencia')
+
+    @action(detail=True, methods=['post'], url_path='preparar-equipes')
+    def preparar_equipes(self, request, pk=None):
+        encontro = self.get_object()
+        with transaction.atomic():
+            equipes = trabalho_services.preparar_equipes_encontro(encontro)
+            LogSistema.objects.create(
+                usuario=request.user,
+                acao='CREATE',
+                modulo='EquipeEncontro',
+                descricao=f'Equipes do Encontro {encontro.pk} preparadas.',
+            )
+        return Response(
+            EquipeEncontroSerializer(
+                equipes,
+                many=True,
+                context=self.get_serializer_context(),
+            ).data,
+            status=status.HTTP_200_OK,
+        )
 
     @action(detail=True, methods=['get', 'post'], url_path='fotos')
     def fotos(self, request, pk=None):
@@ -714,11 +744,24 @@ class ConviteEncontroCommandViewSet(
     def perform_create(self, serializer):
         with transaction.atomic():
             convite = serializer.save()
+            avaliacao = getattr(convite, 'avaliacao_elegibilidade', None)
+            codigos = (
+                ','.join(avaliacao.codigos)
+                if avaliacao is not None
+                else '-'
+            )
+            avisos_confirmados = bool(
+                avaliacao is not None and avaliacao.avisos
+            )
             LogSistema.objects.create(
                 usuario=self.request.user,
                 acao='CREATE',
                 modulo='ConviteEncontro',
-                descricao=f'ConviteEncontro ID {convite.pk} criado.',
+                descricao=(
+                    f'ConviteEncontro ID {convite.pk} criado; '
+                    f'avisos_confirmados={str(avisos_confirmados).lower()}; '
+                    f'códigos de avaliação: {codigos}.'
+                ),
             )
 
     @action(detail=True, methods=['post'], url_path='responder')
@@ -766,6 +809,187 @@ class ResultadoParticipacaoCommandViewSet(
                     'registrada.'
                 ),
             )
+
+
+class EquipeEncontroViewSet(viewsets.ReadOnlyModelViewSet):
+    serializer_class = EquipeEncontroSerializer
+    permission_classes = [require_sia_roles(*FICHAS_MANAGEMENT_ROLES)]
+    pagination_class = None
+
+    def get_queryset(self):
+        queryset = (
+            EquipeEncontro.objects
+            .select_related('encontro', 'template_origem')
+            .prefetch_related('roles__trabalhos__pessoa')
+            .order_by('encontro_id', 'ordem', 'id')
+        )
+        encontro_id = self.request.query_params.get('encontro')
+        if self.action == 'list':
+            if not encontro_id:
+                raise ValidationError({
+                    'encontro': ['Este filtro é obrigatório.'],
+                })
+            queryset = queryset.filter(encontro_id=encontro_id)
+        return queryset
+
+
+class TrabalhoEncontroCommandViewSet(
+    mixins.CreateModelMixin,
+    mixins.ListModelMixin,
+    mixins.RetrieveModelMixin,
+    viewsets.GenericViewSet,
+):
+    serializer_class = TrabalhoEncontroCommandSerializer
+    permission_classes = [require_sia_roles(*FICHAS_MANAGEMENT_ROLES)]
+    pagination_class = None
+
+    def get_queryset(self):
+        queryset = (
+            TrabalhoEncontro.objects
+            .select_related(
+                'pessoa',
+                'encontro',
+                'convite',
+                'role_equipe__equipe_encontro',
+            )
+            .order_by('id')
+        )
+        encontro_id = self.request.query_params.get('encontro')
+        if self.action == 'list':
+            if not encontro_id:
+                raise ValidationError({
+                    'encontro': ['Este filtro é obrigatório.'],
+                })
+            queryset = queryset.filter(encontro_id=encontro_id)
+        return queryset
+
+    def get_serializer_class(self):
+        return {
+            'alocar': AlocacaoTrabalhoCommandSerializer,
+            'realocar': AlocacaoTrabalhoCommandSerializer,
+            'resultado': ResultadoTrabalhoCommandSerializer,
+            'substituir': SubstituicaoTrabalhoCommandSerializer,
+        }.get(self.action, TrabalhoEncontroCommandSerializer)
+
+    def _resposta(self, trabalho):
+        return Response(
+            TrabalhoEncontroCommandSerializer(
+                trabalho,
+                context=self.get_serializer_context(),
+            ).data,
+            status=status.HTTP_200_OK,
+        )
+
+    def _auditar(self, request, trabalho, operacao, *, acao='UPDATE'):
+        avaliacao = getattr(trabalho, 'avaliacao_elegibilidade', None)
+        codigos = ','.join(avaliacao.codigos) if avaliacao is not None else '-'
+        avisos_confirmados = bool(avaliacao is not None and avaliacao.avisos)
+        LogSistema.objects.create(
+            usuario=request.user,
+            acao=acao,
+            modulo='TrabalhoEncontro',
+            descricao=(
+                f'TrabalhoEncontro ID {trabalho.pk}: {operacao}; '
+                f'avisos_confirmados={str(avisos_confirmados).lower()}; '
+                f'códigos de avaliação: {codigos}.'
+            ),
+        )
+
+    def perform_create(self, serializer):
+        with transaction.atomic():
+            trabalho = serializer.save()
+            self._auditar(
+                self.request,
+                trabalho,
+                'iniciado',
+                acao='CREATE',
+            )
+
+    def _executar_com_avaliacao(self, request, operacao, nome):
+        trabalho = self.get_object()
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            with transaction.atomic():
+                trabalho = operacao(trabalho, **serializer.validated_data)
+                self._auditar(request, trabalho, nome)
+        except django_core_validation_error as error:
+            _erro_de_trabalho(error)
+        return self._resposta(trabalho)
+
+    @action(detail=True, methods=['post'])
+    def alocar(self, request, pk=None):
+        return self._executar_com_avaliacao(
+            request,
+            trabalho_services.alocar_trabalho,
+            'alocado',
+        )
+
+    @action(detail=True, methods=['post'])
+    def realocar(self, request, pk=None):
+        return self._executar_com_avaliacao(
+            request,
+            trabalho_services.alocar_trabalho,
+            'realocado',
+        )
+
+    @action(detail=True, methods=['post'])
+    def desalocar(self, request, pk=None):
+        trabalho = self.get_object()
+        try:
+            with transaction.atomic():
+                trabalho = trabalho_services.desalocar_trabalho(trabalho)
+                self._auditar(request, trabalho, 'desalocado')
+        except django_core_validation_error as error:
+            _erro_de_trabalho(error)
+        return self._resposta(trabalho)
+
+    @action(detail=True, methods=['post'])
+    def retirar(self, request, pk=None):
+        trabalho = self.get_object()
+        try:
+            with transaction.atomic():
+                trabalho = trabalho_services.retirar_trabalho(trabalho)
+                self._auditar(request, trabalho, 'retirado')
+        except django_core_validation_error as error:
+            _erro_de_trabalho(error)
+        return self._resposta(trabalho)
+
+    @action(detail=True, methods=['post'])
+    def resultado(self, request, pk=None):
+        trabalho = self.get_object()
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            with transaction.atomic():
+                trabalho = trabalho_services.registrar_resultado_trabalho(
+                    trabalho,
+                    **serializer.validated_data,
+                )
+                self._auditar(request, trabalho, 'resultado registrado')
+        except django_core_validation_error as error:
+            _erro_de_trabalho(error)
+        return self._resposta(trabalho)
+
+    @action(detail=True, methods=['post'])
+    def substituir(self, request, pk=None):
+        trabalho = self.get_object()
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            with transaction.atomic():
+                anterior, novo = trabalho_services.substituir_trabalho(
+                    trabalho,
+                    **serializer.validated_data,
+                )
+                self._auditar(request, anterior, 'substituído')
+                self._auditar(request, novo, 'substituto alocado')
+        except django_core_validation_error as error:
+            _erro_de_trabalho(error)
+        return Response({
+            'anterior': TrabalhoEncontroCommandSerializer(anterior).data,
+            'novo': TrabalhoEncontroCommandSerializer(novo).data,
+        })
 
 
 class PresencaPreparatoriaCommandViewSet(
