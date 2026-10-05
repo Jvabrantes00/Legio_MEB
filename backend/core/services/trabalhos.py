@@ -13,6 +13,12 @@ from core.models import (
     TrabalhoEncontro,
 )
 from core.services.participacoes import criar_convite
+from core.services.elegibilidade_trabalho import (
+    AvisosElegibilidadePendentes,
+    BloqueioElegibilidadeTrabalho,
+    avaliar_alocacao_trabalho,
+    avaliar_elegibilidade_trabalho,
+)
 
 
 STATUS_FINAIS = {
@@ -20,6 +26,24 @@ STATUS_FINAIS = {
     TrabalhoEncontro.Status.FALTOU,
     TrabalhoEncontro.Status.RETIRADO,
 }
+
+
+def _validar_avaliacao_trabalho(avaliacao, *, confirmar_avisos):
+    if avaliacao.bloqueios:
+        raise BloqueioElegibilidadeTrabalho(
+            avaliacao,
+            'A operação foi bloqueada pela elegibilidade estrutural.',
+        )
+    if avaliacao.avisos and not confirmar_avisos:
+        raise AvisosElegibilidadePendentes(
+            avaliacao,
+            'Confirme explicitamente os avisos para continuar.',
+        )
+
+
+def _anexar_avaliacao(instancia, avaliacao):
+    instancia.avaliacao_elegibilidade = avaliacao
+    return instancia
 
 
 def _pk(instance, nome):
@@ -211,16 +235,32 @@ def preparar_equipes_encontro(encontro):
 
 
 @transaction.atomic
-def criar_convite_trabalho(*, pessoa, encontro, role_proposta=None):
+def criar_convite_trabalho(
+    *,
+    pessoa,
+    encontro,
+    role_proposta=None,
+    confirmar_avisos=False,
+):
+    pessoa_bloqueada = _bloquear_pessoa(pessoa)
+    encontro_bloqueado = _bloquear_encontro(encontro)
+    avaliacao = avaliar_elegibilidade_trabalho(
+        pessoa_bloqueada,
+        encontro_bloqueado,
+    )
+    _validar_avaliacao_trabalho(
+        avaliacao,
+        confirmar_avisos=confirmar_avisos,
+    )
     convite = criar_convite(
-        pessoa=pessoa,
-        encontro=encontro,
+        pessoa=pessoa_bloqueada,
+        encontro=encontro_bloqueado,
         finalidade=ConviteEncontro.Finalidade.TRABALHAR,
     )
     convite_bloqueado = _bloquear_convite(convite)
 
     if role_proposta is None:
-        return convite_bloqueado
+        return _anexar_avaliacao(convite_bloqueado, avaliacao)
 
     role_bloqueada = _bloquear_role(role_proposta)
     _validar_role_do_encontro(role_bloqueada, convite_bloqueado.encontro)
@@ -234,11 +274,11 @@ def criar_convite_trabalho(*, pessoa, encontro, role_proposta=None):
         convite_bloqueado.save(
             update_fields=['role_trabalho_proposta', 'atualizado_em']
         )
-    return convite_bloqueado
+    return _anexar_avaliacao(convite_bloqueado, avaliacao)
 
 
 @transaction.atomic
-def iniciar_trabalho_confirmado(convite):
+def iniciar_trabalho_confirmado(convite, *, confirmar_avisos=False):
     pessoa_bloqueada = _bloquear_pessoa(convite.pessoa)
     encontro_bloqueado = _bloquear_encontro(convite.encontro)
     convite_bloqueado = _bloquear_convite(convite)
@@ -246,6 +286,20 @@ def iniciar_trabalho_confirmado(convite):
         convite_bloqueado,
         pessoa_bloqueada,
         encontro_bloqueado,
+    )
+    avaliacao = avaliar_elegibilidade_trabalho(
+        pessoa_bloqueada,
+        encontro_bloqueado,
+    )
+    if convite_bloqueado.role_trabalho_proposta_id is not None:
+        avaliacao = avaliar_alocacao_trabalho(
+            pessoa_bloqueada,
+            encontro_bloqueado,
+            convite_bloqueado.role_trabalho_proposta,
+        )
+    _validar_avaliacao_trabalho(
+        avaliacao,
+        confirmar_avisos=confirmar_avisos,
     )
 
     trabalho = (
@@ -260,7 +314,7 @@ def iniciar_trabalho_confirmado(convite):
             or trabalho.encontro_id != encontro_bloqueado.pk
         ):
             raise ValidationError('O trabalho existente é incoerente com o convite.')
-        return trabalho
+        return _anexar_avaliacao(trabalho, avaliacao)
 
     outro_trabalho = (
         TrabalhoEncontro.objects
@@ -286,13 +340,14 @@ def iniciar_trabalho_confirmado(convite):
 
     try:
         with transaction.atomic():
-            return TrabalhoEncontro.objects.create(
+            trabalho = TrabalhoEncontro.objects.create(
                 pessoa=pessoa_bloqueada,
                 encontro=encontro_bloqueado,
                 convite=convite_bloqueado,
                 role_equipe=role_bloqueada,
                 status=status,
             )
+            return _anexar_avaliacao(trabalho, avaliacao)
     except IntegrityError as error:
         raise ValidationError(
             'A Pessoa já possui trabalho neste Encontro.'
@@ -300,7 +355,12 @@ def iniciar_trabalho_confirmado(convite):
 
 
 @transaction.atomic
-def alocar_trabalho(trabalho, role_equipe):
+def alocar_trabalho(
+    trabalho,
+    role_equipe,
+    *,
+    confirmar_avisos=False,
+):
     trabalho_bloqueado, _, encontro_bloqueado, _ = (
         _bloquear_contexto_trabalho(trabalho)
     )
@@ -309,11 +369,21 @@ def alocar_trabalho(trabalho, role_equipe):
 
     if trabalho_bloqueado.status in STATUS_FINAIS:
         raise ValidationError('Trabalho finalizado não pode ser alocado novamente.')
+    avaliacao = avaliar_alocacao_trabalho(
+        trabalho_bloqueado.pessoa,
+        encontro_bloqueado,
+        role_bloqueada,
+        trabalho=trabalho_bloqueado,
+    )
+    _validar_avaliacao_trabalho(
+        avaliacao,
+        confirmar_avisos=confirmar_avisos,
+    )
     if (
         trabalho_bloqueado.status == TrabalhoEncontro.Status.ALOCADO
         and trabalho_bloqueado.role_equipe_id == role_bloqueada.pk
     ):
-        return trabalho_bloqueado
+        return _anexar_avaliacao(trabalho_bloqueado, avaliacao)
 
     _validar_quantidade_estrutural(
         role_bloqueada,
@@ -330,7 +400,7 @@ def alocar_trabalho(trabalho, role_equipe):
             'atualizado_em',
         ]
     )
-    return trabalho_bloqueado
+    return _anexar_avaliacao(trabalho_bloqueado, avaliacao)
 
 
 @transaction.atomic
@@ -403,6 +473,8 @@ def substituir_trabalho(
     trabalho_anterior,
     trabalho_novo,
     role_equipe,
+    *,
+    confirmar_avisos=False,
 ):
     anterior_id = _pk(trabalho_anterior, 'Trabalho anterior')
     novo_id = _pk(trabalho_novo, 'Trabalho novo')
@@ -483,12 +555,23 @@ def substituir_trabalho(
     if anterior.role_equipe_id != role_bloqueada.pk:
         raise ValidationError('A substituição deve preservar a posição anterior.')
 
+    avaliacao = avaliar_alocacao_trabalho(
+        novo.pessoa,
+        encontro,
+        role_bloqueada,
+        trabalho=novo,
+    )
+    _validar_avaliacao_trabalho(
+        avaliacao,
+        confirmar_avisos=confirmar_avisos,
+    )
+
     if (
         anterior.status == TrabalhoEncontro.Status.RETIRADO
         and novo.status == TrabalhoEncontro.Status.ALOCADO
         and novo.role_equipe_id == role_bloqueada.pk
     ):
-        return anterior, novo
+        return anterior, _anexar_avaliacao(novo, avaliacao)
     if anterior.status != TrabalhoEncontro.Status.ALOCADO:
         raise ValidationError('O trabalho substituído deve estar alocado.')
     if novo.status != TrabalhoEncontro.Status.AGUARDANDO_ALOCACAO:
@@ -516,4 +599,4 @@ def substituir_trabalho(
             'atualizado_em',
         ]
     )
-    return anterior, novo
+    return anterior, _anexar_avaliacao(novo, avaliacao)

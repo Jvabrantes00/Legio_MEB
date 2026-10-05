@@ -2,9 +2,9 @@
 
 ## Status geral
 
-Fase em andamento. D.3A a D.3E estão concluídas. A fundação de equipes e
-trabalho, seus services transacionais, reuniões preparatórias e autorização
-contextual foram implementados e validados; D.3F é o próximo bloco.
+Fase em andamento. D.3A a D.3F estão concluídas. A fundação de equipes e
+trabalho, services transacionais, reuniões, autorização contextual e
+elegibilidade foram implementados e validados; D.3G é o próximo bloco.
 
 ## Objetivo
 
@@ -58,11 +58,11 @@ Status: concluída em 2026-10-05.
 
 ### D.3F — Elegibilidade e avisos para trabalhar
 
-Status: próximo bloco.
+Status: concluída em 2026-10-05.
 
 ### D.3G — Compatibilidade, PostgreSQL, regressão e fechamento
 
-Status: pendente.
+Status: próximo bloco.
 
 ## D.3A — relatório de análise e desenho técnico
 
@@ -729,6 +729,96 @@ foi solicitada saída da sandbox nesta etapa.
 - `docs/AUTHORIZATION_MATRIX.md`
 - `docs/workplans/PHASE_1B_D3.md`
 
+## D.3F — elegibilidade e avisos para trabalhar
+
+### Motor e resultado estruturado
+
+- `core/services/elegibilidade_trabalho.py` concentra toda a avaliação sem
+  escrita ou dependência de permission DRF. `AvaliacaoElegibilidade` retorna
+  `ELEGIVEL`, `AVISO` ou `BLOQUEIO`, motivos ordenados, códigos estáveis,
+  mensagens humanas e contexto operacional serializável.
+- O código distingue `AvisosElegibilidadePendentes` de
+  `BloqueioElegibilidadeTrabalho`. Ambas as exceções preservam a avaliação
+  completa para consumo futuro por serializer, API e auditoria.
+- Avisos e bloqueios permanecem derivados; não foi criada tabela de alerta,
+  histórico paralelo ou migration.
+
+### Regras implementadas
+
+- `PerfilAlpinista` ausente gera `PERFIL_ALPINISTA_AUSENTE`. A atividade lê
+  somente o `Alpinista` legado ligado exatamente à mesma `Pessoa`: inatividade
+  gera `ALPINISTA_INATIVO` e evidência ausente ou não conclusiva gera
+  `ATIVIDADE_NAO_DETERMINADA`.
+- Conclusões são lidas exclusivamente de `ParticipacaoEncontro` canônica com
+  resultado `CONCLUIU`. O caminho Escalada sem AVC produz o bloqueio
+  `AVC_NAO_CONCLUIDO_CAMINHO_ESCALADA`; os caminhos aprovados por ESPPA e por
+  Escalada mais AVC permanecem elegíveis.
+- Ausência de evidência suficiente do caminho produz
+  `CAMINHO_FORMATIVO_NAO_DETERMINADO`, sem inferência pelo legado. AVC e
+  Acampamento produzem os códigos conservadores de revisão manual previstos,
+  sem novo bloqueio de produto.
+- Nenhuma regra consulta saúde, vínculo conjugal, frequência, nome livre de
+  equipe ou quantidade anual de trabalhos.
+
+### Capacidade e composição
+
+- `avaliar_capacidade_equipe` calcula ocupação `ALOCADO` e emite avisos de
+  mínimo não atingido ou máximo excedido. Referências consultivas nunca
+  bloqueiam a operação.
+- `avaliar_composicao_estrutural` usa somente
+  `quantidade_estrutural` congelada nas roles snapshot. Falta de ocupantes é
+  pendência/aviso; excesso é bloqueio estrutural.
+- `avaliar_alocacao_trabalho` combina elegibilidade da Pessoa, capacidade da
+  equipe e limite estrutural prospectivo da role, inclusive em realocação.
+
+### Integração com os services
+
+- Convite de trabalho, início com role proposta, alocação, realocação e
+  substituição executam o mesmo evaluator centralizado. Bloqueios abortam a
+  transação; avisos exigem `confirmar_avisos=True` para decisão humana
+  explícita.
+- A avaliação é anexada ao objeto retornado como
+  `avaliacao_elegibilidade`, sem persistência redundante, para a futura API
+  registrar a decisão e os códigos na auditoria.
+- Reavaliações usam o estado atual, mas nunca reabrem nem alteram
+  `TrabalhoEncontro` já finalizado. Os locks e constraints da D.3C continuam
+  sendo a defesa transacional final.
+
+### Testes e validações
+
+- Foram adicionados 16 testes para Alpinista ativo/inativo, ausência de perfil
+  ou atividade determinada, caminhos Escalada/ESPPA/AVC/Acampamento, códigos
+  e mensagens, capacidades mínima/máxima, composição pendente/válida/excedida,
+  convite, override, bloqueio de alocação, realocação, saúde, `Frequencia` e
+  preservação do histórico concluído.
+- Os testes existentes dos services foram adaptados para confirmar
+  explicitamente os avisos dos fixtures legados sem perfil/conclusões, sem
+  enfraquecer os cenários de bloqueio ou concorrência.
+- Testes novos: 16/16 aprovados.
+- Suíte backend: 374/374 testes aprovados; 7 skips condicionais já esperados.
+- `python manage.py check --settings=setup.test_settings`: aprovado.
+- `python manage.py makemigrations --check --dry-run
+  --settings=setup.test_settings`: nenhuma mudança detectada.
+- PostgreSQL não foi necessário; os cinco testes concorrentes permanecem para
+  execução real na D.3G.
+
+### Débitos da D.3F
+
+- A futura API de comandos de trabalho deverá expor a avaliação estruturada e
+  auditar `confirmar_avisos` com os códigos, sem dados pessoais sensíveis.
+- A fonte canônica de atividade continua pendente; o adaptador legado exato é
+  deliberadamente isolado no evaluator.
+- Regras adicionais de trabalho em AVC/Acampamento continuam dependendo de
+  decisão de produto e permanecem como revisão manual, não bloqueio.
+
+### Arquivos alterados na D.3F
+
+- `backend/core/services/elegibilidade_trabalho.py`
+- `backend/core/services/trabalhos.py`
+- `backend/core/tests/test_encontro_trabalho_elegibilidade.py`
+- `backend/core/tests/test_encontro_trabalho_services.py`
+- `docs/workplans/PHASE_1B_D3.md`
+
 ## Migrations previstas
 
 1. `0030_expand_equipes_trabalho_encontro`: implementada na D.3B.
@@ -787,9 +877,9 @@ devem permanecer apenas no contrato legado e em relatório de reconciliação.
 
 ### D.3F
 
-- Cada código de elegibilidade/aviso, adaptador exato de atividade, ausência
-  de evidência, override humano, caminhos de conclusão e regras conservadoras
-  de AVC/Acampamento.
+- Concluída: códigos estruturados, adaptador exato de atividade, ausência de
+  evidência, override humano, caminhos de conclusão, capacidade/composição e
+  regras conservadoras de AVC/Acampamento.
 
 ### D.3G
 
@@ -842,8 +932,8 @@ Fase 1B.3D.3 em andamento e o roteamento já aponta para os documentos certos.
 
 ## Próximo passo
 
-D.3F — implementar elegibilidade e avisos para trabalhar. Compatibilidade,
-PostgreSQL e fechamento permanecem na D.3G.
+D.3G — executar compatibilidade, validação PostgreSQL, regressão e fechamento
+da Fase 1B.3D.3.
 
 ## Padrão de relatórios durante a D.3
 
@@ -874,3 +964,6 @@ Ao finalizar cada bloco:
 - 2026-10-05 — D.3E concluída. Vínculo explícito User/Pessoa, policy
   contextual e API restrita de presença foram implementados; a suíte backend
   aprovou 358 testes sem criação automática de contas ou acesso a saúde.
+- 2026-10-05 — D.3F concluída. Motor derivado de elegibilidade, capacidade e
+  composição foi integrado aos services de trabalho; a suíte backend aprovou
+  374 testes sem migration, nova tabela de alertas ou regra de saúde.

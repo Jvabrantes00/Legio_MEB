@@ -72,6 +72,7 @@ class EncounterWorkServiceTests(TestCase):
             pessoa=pessoa,
             encontro=encontro or self.encontro,
             role_proposta=role,
+            confirmar_avisos=True,
         )
         return responder_convite(
             convite,
@@ -85,7 +86,7 @@ class EncounterWorkServiceTests(TestCase):
             encontro=encontro,
             role=role,
         )
-        return iniciar_trabalho_confirmado(convite)
+        return iniciar_trabalho_confirmado(convite, confirmar_avisos=True)
 
     def test_materializa_snapshots_do_tipo_com_roles_ativas(self):
         TemplateRoleEquipe.objects.create(
@@ -155,10 +156,12 @@ class EncounterWorkServiceTests(TestCase):
         convite = criar_convite_trabalho(
             pessoa=pessoa,
             encontro=self.encontro,
+            confirmar_avisos=True,
         )
         repetido = criar_convite_trabalho(
             pessoa=pessoa,
             encontro=self.encontro,
+            confirmar_avisos=True,
         )
 
         self.assertEqual(convite.pk, repetido.pk)
@@ -173,11 +176,13 @@ class EncounterWorkServiceTests(TestCase):
             pessoa=pessoa,
             encontro=self.encontro,
             role_proposta=role,
+            confirmar_avisos=True,
         )
         repetido = criar_convite_trabalho(
             pessoa=pessoa,
             encontro=self.encontro,
             role_proposta=role,
+            confirmar_avisos=True,
         )
 
         self.assertEqual(repetido.pk, convite.pk)
@@ -189,6 +194,7 @@ class EncounterWorkServiceTests(TestCase):
                 pessoa=Pessoa.objects.create(nome='Pessoa cross-FK'),
                 encontro=outro_encontro,
                 role_proposta=role,
+                confirmar_avisos=True,
             )
 
     def test_iniciar_trabalho_exige_convite_de_trabalho_confirmado(self):
@@ -196,6 +202,7 @@ class EncounterWorkServiceTests(TestCase):
         convite = criar_convite_trabalho(
             pessoa=pessoa,
             encontro=self.encontro,
+            confirmar_avisos=True,
         )
         with self.assertRaisesMessage(ValidationError, 'convite confirmado'):
             iniciar_trabalho_confirmado(convite)
@@ -215,8 +222,14 @@ class EncounterWorkServiceTests(TestCase):
         pessoa = Pessoa.objects.create(nome='Pessoa confirmada')
         convite = self._convite_confirmado(pessoa)
 
-        trabalho = iniciar_trabalho_confirmado(convite)
-        repetido = iniciar_trabalho_confirmado(convite)
+        trabalho = iniciar_trabalho_confirmado(
+            convite,
+            confirmar_avisos=True,
+        )
+        repetido = iniciar_trabalho_confirmado(
+            convite,
+            confirmar_avisos=True,
+        )
 
         self.assertEqual(repetido.pk, trabalho.pk)
         self.assertEqual(
@@ -237,7 +250,11 @@ class EncounterWorkServiceTests(TestCase):
         role = self._preparar_role()
         trabalho = self._trabalho('Pessoa aguardando')
 
-        alocado = alocar_trabalho(trabalho, role)
+        alocado = alocar_trabalho(
+            trabalho,
+            role,
+            confirmar_avisos=True,
+        )
         self.assertEqual(alocado.status, TrabalhoEncontro.Status.ALOCADO)
         self.assertEqual(alocado.role_equipe, role)
 
@@ -292,7 +309,11 @@ class EncounterWorkServiceTests(TestCase):
         )
         trabalho = self._trabalho('Pessoa realocada', role=primeira_role)
 
-        realocado = alocar_trabalho(trabalho, segunda_role)
+        realocado = alocar_trabalho(
+            trabalho,
+            segunda_role,
+            confirmar_avisos=True,
+        )
         self.assertEqual(realocado.role_equipe, segunda_role)
         desalocado = desalocar_trabalho(realocado)
         self.assertEqual(
@@ -388,8 +409,18 @@ class EncounterWorkServiceTests(TestCase):
         anterior = self._trabalho('Pessoa anterior', role=role)
         novo = self._trabalho('Pessoa substituta')
 
-        retirado, alocado = substituir_trabalho(anterior, novo, role)
-        repetido = substituir_trabalho(retirado, alocado, role)
+        retirado, alocado = substituir_trabalho(
+            anterior,
+            novo,
+            role,
+            confirmar_avisos=True,
+        )
+        repetido = substituir_trabalho(
+            retirado,
+            alocado,
+            role,
+            confirmar_avisos=True,
+        )
 
         self.assertEqual(retirado.status, TrabalhoEncontro.Status.RETIRADO)
         self.assertEqual(alocado.status, TrabalhoEncontro.Status.ALOCADO)
@@ -413,7 +444,12 @@ class EncounterWorkServiceTests(TestCase):
 
         with patch.object(TrabalhoEncontro, 'save', new=falhar_no_novo):
             with self.assertRaisesMessage(RuntimeError, 'falha intermediária'):
-                substituir_trabalho(anterior, novo, role)
+                substituir_trabalho(
+                    anterior,
+                    novo,
+                    role,
+                    confirmar_avisos=True,
+                )
 
         anterior.refresh_from_db()
         novo.refresh_from_db()
@@ -475,7 +511,11 @@ class EncounterWorkConcurrencyTests(TransactionTestCase):
     def test_inicio_concorrente_cria_um_trabalho(self):
         encontro = make_encontro(tipo=Encontro.Tipo.ESCALADA)
         pessoa = Pessoa.objects.create(nome='Pessoa concorrente')
-        convite = criar_convite_trabalho(pessoa=pessoa, encontro=encontro)
+        convite = criar_convite_trabalho(
+            pessoa=pessoa,
+            encontro=encontro,
+            confirmar_avisos=True,
+        )
         responder_convite(
             convite,
             status=ConviteEncontro.Status.CONFIRMADO,
@@ -483,7 +523,8 @@ class EncounterWorkConcurrencyTests(TransactionTestCase):
 
         resultados = self._executar_em_threads(
             lambda: iniciar_trabalho_confirmado(
-                ConviteEncontro.objects.get(pk=convite.pk)
+                ConviteEncontro.objects.get(pk=convite.pk),
+                confirmar_avisos=True,
             ).pk
         )
 
@@ -497,18 +538,26 @@ class EncounterWorkConcurrencyTests(TransactionTestCase):
         trabalhos = []
         for indice in range(2):
             pessoa = Pessoa.objects.create(nome=f'Pessoa concorrente {indice}')
-            convite = criar_convite_trabalho(pessoa=pessoa, encontro=encontro)
+            convite = criar_convite_trabalho(
+                pessoa=pessoa,
+                encontro=encontro,
+                confirmar_avisos=True,
+            )
             responder_convite(
                 convite,
                 status=ConviteEncontro.Status.CONFIRMADO,
             )
-            trabalhos.append(iniciar_trabalho_confirmado(convite))
+            trabalhos.append(iniciar_trabalho_confirmado(
+                convite,
+                confirmar_avisos=True,
+            ))
         indice = iter(range(2))
 
         resultados = self._executar_em_threads(
             lambda: alocar_trabalho(
                 TrabalhoEncontro.objects.get(pk=trabalhos[next(indice)].pk),
                 RoleEquipeEncontro.objects.get(pk=role.pk),
+                confirmar_avisos=True,
             ).pk
         )
 
@@ -536,18 +585,23 @@ class EncounterWorkConcurrencyTests(TransactionTestCase):
             pessoa=pessoa,
             encontro=encontro,
             role_proposta=roles['origem'],
+            confirmar_avisos=True,
         )
         responder_convite(
             convite,
             status=ConviteEncontro.Status.CONFIRMADO,
         )
-        trabalho = iniciar_trabalho_confirmado(convite)
+        trabalho = iniciar_trabalho_confirmado(
+            convite,
+            confirmar_avisos=True,
+        )
         destinos = iter((roles['destino-a'].pk, roles['destino-b'].pk))
 
         resultados = self._executar_em_threads(
             lambda: alocar_trabalho(
                 TrabalhoEncontro.objects.get(pk=trabalho.pk),
                 RoleEquipeEncontro.objects.get(pk=next(destinos)),
+                confirmar_avisos=True,
             ).role_equipe_id
         )
 
@@ -571,12 +625,16 @@ class EncounterWorkConcurrencyTests(TransactionTestCase):
             pessoa=pessoa,
             encontro=encontro,
             role_proposta=role,
+            confirmar_avisos=True,
         )
         responder_convite(
             convite,
             status=ConviteEncontro.Status.CONFIRMADO,
         )
-        trabalho = iniciar_trabalho_confirmado(convite)
+        trabalho = iniciar_trabalho_confirmado(
+            convite,
+            confirmar_avisos=True,
+        )
         resultados_finais = iter((
             TrabalhoEncontro.Status.TRABALHOU,
             TrabalhoEncontro.Status.FALTOU,
