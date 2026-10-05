@@ -9,6 +9,7 @@ from django.test import TestCase, TransactionTestCase
 from django.utils import timezone
 
 from core.formacao_catalogo import (
+    BlocoFormativo,
     TEMAS_FORMATIVOS,
     TemaFormativo,
     TipoConteudoFormativo,
@@ -38,14 +39,16 @@ class EncounterFormationFoundationTests(TestCase):
             titulo_snapshot='Título histórico',
         )
 
-    def test_registry_nasce_vazio_e_imutavel(self):
-        self.assertEqual(dict(TEMAS_FORMATIVOS), {})
+    def test_registry_preenchido_permanece_imutavel(self):
+        self.assertEqual(len(TEMAS_FORMATIVOS), 20)
 
         with self.assertRaises(TypeError):
             TEMAS_FORMATIVOS['tema'] = TemaFormativo(
                 codigo='tema',
                 tipo_conteudo=TipoConteudoFormativo.PALESTRA,
                 titulo='Tema',
+                ordem=1,
+                bloco=BlocoFormativo.PRE_ESCALADA,
                 tipos_encontro=frozenset({Encontro.Tipo.ESCALADA}),
             )
 
@@ -54,6 +57,8 @@ class EncounterFormationFoundationTests(TestCase):
             codigo='tema',
             tipo_conteudo=TipoConteudoFormativo.BATE_PAPO,
             titulo='Tema',
+            ordem=1,
+            bloco=BlocoFormativo.PRE_AVC,
             tipos_encontro=frozenset({Encontro.Tipo.AVC}),
         )
 

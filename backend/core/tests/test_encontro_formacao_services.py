@@ -10,7 +10,12 @@ from django.db import close_old_connections, connection
 from django.test import TestCase, TransactionTestCase
 from django.utils import timezone
 
-from core.formacao_catalogo import TemaFormativo, TipoConteudoFormativo
+from core.formacao_catalogo import (
+    BlocoFormativo,
+    TEMAS_FORMATIVOS,
+    TemaFormativo,
+    TipoConteudoFormativo,
+)
 from core.models import (
     Alpinista,
     ConviteEncontro,
@@ -44,44 +49,18 @@ from core.services.trabalhos import (
 from core.tests.factories import make_encontro
 
 
-REGISTRY_TESTE = MappingProxyType({
-    'palestra-base': TemaFormativo(
-        codigo='palestra-base',
-        tipo_conteudo=TipoConteudoFormativo.PALESTRA,
-        titulo='Palestra de teste',
-        tipos_encontro=frozenset({
-            Encontro.Tipo.ESCALADA,
-            Encontro.Tipo.ESPPA,
-        }),
-    ),
-    'palestra-alternativa': TemaFormativo(
-        codigo='palestra-alternativa',
-        tipo_conteudo=TipoConteudoFormativo.PALESTRA,
-        titulo='Palestra alternativa',
-        tipos_encontro=frozenset({Encontro.Tipo.ESCALADA}),
-    ),
-    'bate-papo-avc': TemaFormativo(
-        codigo='bate-papo-avc',
-        tipo_conteudo=TipoConteudoFormativo.BATE_PAPO,
-        titulo='Bate-papo de teste',
-        tipos_encontro=frozenset({Encontro.Tipo.AVC}),
-    ),
-})
-
-
 class EncounterFormationServiceTests(TestCase):
     def setUp(self):
-        patcher = patch(
-            'core.services.formacoes.TEMAS_FORMATIVOS',
-            REGISTRY_TESTE,
-        )
-        patcher.start()
-        self.addCleanup(patcher.stop)
         self.encontro = make_encontro(tipo=Encontro.Tipo.ESCALADA)
         self.pessoa = Pessoa.objects.create(nome='Palestrante interno')
         self.perfil = PerfilAlpinista.objects.create(pessoa=self.pessoa)
 
-    def _sessao(self, *, encontro=None, tema_codigo='palestra-base'):
+    def _sessao(
+        self,
+        *,
+        encontro=None,
+        tema_codigo='PALESTRA_SER_PESSOA',
+    ):
         return criar_sessao_formativa(
             encontro=encontro or self.encontro,
             tema_codigo=tema_codigo,
@@ -141,9 +120,9 @@ class EncounterFormationServiceTests(TestCase):
     def test_cria_sessao_valida_com_snapshot_do_registry(self):
         sessao = self._sessao()
 
-        self.assertEqual(sessao.tema_codigo, 'palestra-base')
+        self.assertEqual(sessao.tema_codigo, 'PALESTRA_SER_PESSOA')
         self.assertEqual(sessao.tipo_conteudo, 'palestra')
-        self.assertEqual(sessao.titulo_snapshot, 'Palestra de teste')
+        self.assertEqual(sessao.titulo_snapshot, 'Ser Pessoa')
         self.assertEqual(sessao.status, SessaoFormativa.Status.PLANEJADA)
 
     def test_rejeita_tema_invalido_ou_incompativel(self):
@@ -152,7 +131,7 @@ class EncounterFormationServiceTests(TestCase):
 
         avc = make_encontro(tipo=Encontro.Tipo.AVC)
         with self.assertRaisesMessage(ValidationError, 'tipo de conteúdo'):
-            self._sessao(encontro=avc, tema_codigo='palestra-base')
+            self._sessao(encontro=avc, tema_codigo='PALESTRA_SER_PESSOA')
 
         self.assertFalse(SessaoFormativa.objects.exists())
 
@@ -160,9 +139,9 @@ class EncounterFormationServiceTests(TestCase):
         sessao = self._sessao()
         alterada = alterar_tema_sessao(
             sessao,
-            tema_codigo='palestra-alternativa',
+            tema_codigo='PALESTRA_AMOR_DE_DEUS',
         )
-        self.assertEqual(alterada.titulo_snapshot, 'Palestra alternativa')
+        self.assertEqual(alterada.titulo_snapshot, 'Amor de Deus')
 
         palestrante = adicionar_palestrante_alpinista(alterada, self.perfil)
         registrar_realizacao_sessao(
@@ -170,12 +149,17 @@ class EncounterFormationServiceTests(TestCase):
             resultados={palestrante.pk: PalestranteSessao.Status.MINISTROU},
         )
         registry_alterado = MappingProxyType({
-            **REGISTRY_TESTE,
-            'palestra-alternativa': TemaFormativo(
-                codigo='palestra-alternativa',
+            **TEMAS_FORMATIVOS,
+            'PALESTRA_AMOR_DE_DEUS': TemaFormativo(
+                codigo='PALESTRA_AMOR_DE_DEUS',
                 tipo_conteudo=TipoConteudoFormativo.PALESTRA,
                 titulo='Título futuro',
-                tipos_encontro=frozenset({Encontro.Tipo.ESCALADA}),
+                ordem=3,
+                bloco=BlocoFormativo.PRE_ESCALADA,
+                tipos_encontro=frozenset({
+                    Encontro.Tipo.ESCALADA,
+                    Encontro.Tipo.ESPPA,
+                }),
             ),
         })
         with patch(
@@ -185,11 +169,11 @@ class EncounterFormationServiceTests(TestCase):
             with self.assertRaisesMessage(ValidationError, 'planejada'):
                 alterar_tema_sessao(
                     alterada,
-                    tema_codigo='palestra-alternativa',
+                    tema_codigo='PALESTRA_AMOR_DE_DEUS',
                 )
 
         alterada.refresh_from_db()
-        self.assertEqual(alterada.titulo_snapshot, 'Palestra alternativa')
+        self.assertEqual(alterada.titulo_snapshot, 'Amor de Deus')
 
     def test_multiplos_palestrantes_internos_e_externos(self):
         sessao = self._sessao()
@@ -243,7 +227,10 @@ class EncounterFormationServiceTests(TestCase):
 
     def test_avc_bloqueia_externo(self):
         avc = make_encontro(tipo=Encontro.Tipo.AVC)
-        sessao = self._sessao(encontro=avc, tema_codigo='bate-papo-avc')
+        sessao = self._sessao(
+            encontro=avc,
+            tema_codigo='BATE_PAPO_JESUS_DEUS_HOMEM',
+        )
 
         with self.assertRaisesMessage(ValidationError, 'não permite'):
             adicionar_palestrante_externo(
@@ -256,7 +243,10 @@ class EncounterFormationServiceTests(TestCase):
     def test_avc_aceita_alpinista_trabalhando_no_mesmo_encontro(self):
         avc = make_encontro(tipo=Encontro.Tipo.AVC)
         trabalho = self._trabalho_avc(pessoa=self.pessoa, encontro=avc)
-        sessao = self._sessao(encontro=avc, tema_codigo='bate-papo-avc')
+        sessao = self._sessao(
+            encontro=avc,
+            tema_codigo='BATE_PAPO_JESUS_DEUS_HOMEM',
+        )
 
         palestrante = adicionar_palestrante_alpinista(sessao, self.perfil)
 
@@ -266,7 +256,10 @@ class EncounterFormationServiceTests(TestCase):
 
     def test_avc_bloqueia_alpinista_sem_trabalho_no_mesmo_encontro(self):
         avc = make_encontro(tipo=Encontro.Tipo.AVC)
-        sessao = self._sessao(encontro=avc, tema_codigo='bate-papo-avc')
+        sessao = self._sessao(
+            encontro=avc,
+            tema_codigo='BATE_PAPO_JESUS_DEUS_HOMEM',
+        )
 
         with self.assertRaisesMessage(ValidationError, 'mesmo Encontro'):
             adicionar_palestrante_alpinista(sessao, self.perfil)
@@ -282,7 +275,7 @@ class EncounterFormationServiceTests(TestCase):
         with self.assertRaisesMessage(ValidationError, 'Acampamento'):
             self._sessao(
                 encontro=acampamento,
-                tema_codigo='palestra-base',
+                tema_codigo='PALESTRA_SER_PESSOA',
             )
 
     def test_realizacao_registra_resultados_e_e_idempotente(self):
@@ -394,7 +387,7 @@ class EncounterFormationServiceTests(TestCase):
         self.assertEqual([item.pk for item in historico], [interno.pk])
         self.assertEqual(
             historico[0].sessao_formativa.titulo_snapshot,
-            'Palestra de teste',
+            'Ser Pessoa',
         )
         self.assertEqual(historico[0].sessao_formativa.encontro, self.encontro)
         self.assertEqual(historico_outro, [])
@@ -448,7 +441,10 @@ class EncounterFormationServiceTests(TestCase):
     def test_avc_impede_perder_trabalho_enquanto_for_palestrante(self):
         avc = make_encontro(tipo=Encontro.Tipo.AVC)
         trabalho = self._trabalho_avc(pessoa=self.pessoa, encontro=avc)
-        sessao = self._sessao(encontro=avc, tema_codigo='bate-papo-avc')
+        sessao = self._sessao(
+            encontro=avc,
+            tema_codigo='BATE_PAPO_JESUS_DEUS_HOMEM',
+        )
         adicionar_palestrante_alpinista(sessao, self.perfil)
 
         with self.assertRaisesMessage(ValidationError, 'estado operacional'):
@@ -465,7 +461,10 @@ class EncounterFormationServiceTests(TestCase):
     def test_avc_permite_resultado_trabalhou_e_revalida_na_realizacao(self):
         avc = make_encontro(tipo=Encontro.Tipo.AVC)
         trabalho = self._trabalho_avc(pessoa=self.pessoa, encontro=avc)
-        sessao = self._sessao(encontro=avc, tema_codigo='bate-papo-avc')
+        sessao = self._sessao(
+            encontro=avc,
+            tema_codigo='BATE_PAPO_JESUS_DEUS_HOMEM',
+        )
         palestrante = adicionar_palestrante_alpinista(sessao, self.perfil)
 
         trabalho = registrar_resultado_trabalho(
@@ -524,18 +523,12 @@ class EncounterFormationServiceTests(TestCase):
 @skipUnless(connection.vendor == 'postgresql', 'Requer PostgreSQL real')
 class EncounterFormationConcurrencyTests(TransactionTestCase):
     def setUp(self):
-        patcher = patch(
-            'core.services.formacoes.TEMAS_FORMATIVOS',
-            REGISTRY_TESTE,
-        )
-        patcher.start()
-        self.addCleanup(patcher.stop)
         self.encontro = make_encontro(tipo=Encontro.Tipo.ESCALADA)
         pessoa = Pessoa.objects.create(nome='Palestrante concorrente')
         self.perfil = PerfilAlpinista.objects.create(pessoa=pessoa)
         self.sessao = criar_sessao_formativa(
             encontro=self.encontro,
-            tema_codigo='palestra-base',
+            tema_codigo='PALESTRA_SER_PESSOA',
         )
 
     def _adicionar_concorrente(self):

@@ -18,10 +18,12 @@ progresso e histórico da Fase 1B.3D.4 pertencem ao
 
 - Os temas são fixos e definidos em código.
 - A interface não oferece criação ou edição livre de temas.
-- Nesta preparação não serão cadastrados nomes reais nem dados fictícios.
+- O catálogo real está definido no registry
+  `backend/core/formacao_catalogo.py`: Escalada e ESPPA compartilham nove
+  palestras, enquanto AVC possui onze bate-papos próprios.
 - Não haverá CRUD administrativo de temas.
-- A D.4A deve decidir a representação técnica do catálogo fixo de modo que o
-  simples preenchimento futuro dos nomes não exija migration.
+- Código, título, tipo, ordem e bloco/momento são metadados imutáveis em código;
+  alterar o registry não exige migration.
 
 ## Sessão formativa e preservação histórica
 

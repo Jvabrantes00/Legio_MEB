@@ -2,9 +2,10 @@
 
 ## Status geral
 
-Fase em andamento. D.4A, D.4B e D.4C estão concluídas. O desenho técnico, a
-fundação estrutural e os services transacionais foram implementados sem
-cutover ou backfill. D.4D é o próximo bloco.
+Fase em andamento. D.4A, D.4B, D.4C e o ajuste D.4C.1 estão concluídos. O
+desenho técnico, a fundação estrutural, os services transacionais e o catálogo
+real em código foram implementados sem cutover ou backfill. D.4D é o próximo
+bloco.
 
 ## Objetivo
 
@@ -49,6 +50,10 @@ Status: concluída em 2026-10-05.
 Status: concluída em 2026-10-05.
 
 ### D.4C — Services, regras por tipo e histórico
+
+Status: concluída em 2026-10-05.
+
+### D.4C.1 — Catálogo real fixo
 
 Status: concluída em 2026-10-05.
 
@@ -339,6 +344,67 @@ de realização. Registros não reconciliados permanecem apenas no legado.
 - `backend/core/tests/test_encontro_formacao_models.py`
 - `docs/workplans/PHASE_1B_D4.md`
 
+## D.4C.1 — catálogo real fixo
+
+### Estrutura e conteúdo
+
+- O registry imutável foi preenchido com 20 temas reais: nove palestras
+  compartilhadas por Escalada/ESPPA e onze bate-papos exclusivos de AVC.
+- `TemaFormativo` agora inclui `ordem` e `bloco`, além de código, título, tipo
+  de conteúdo e tipos de Encontro. Bloco é metadado de apresentação e não foi
+  ligado ao calendário institucional nem a data/horário da sessão.
+- Os títulos fornecidos foram preservados literalmente. Acampamento continua
+  sem tema e não há seed, tabela ou CRUD de catálogo.
+
+### Códigos, ordens e blocos
+
+| Catálogo | Ordem | Código | Bloco |
+|---|---:|---|---|
+| Palestra | 1 | `PALESTRA_SER_PESSOA` | `PRE_ESCALADA` |
+| Palestra | 2 | `PALESTRA_VALORES_CONTRAVALORES` | `PRE_ESCALADA` |
+| Palestra | 3 | `PALESTRA_AMOR_DE_DEUS` | `PRE_ESCALADA` |
+| Palestra | 4 | `PALESTRA_JESUS_CRISTO` | `SABADO` |
+| Palestra | 5 | `PALESTRA_AMOR_DE_MARIA` | `SABADO` |
+| Palestra | 6 | `PALESTRA_PERDAO` | `SABADO` |
+| Palestra | 7 | `PALESTRA_AMOR_SEXUALIDADE` | `DOMINGO` |
+| Palestra | 8 | `PALESTRA_FAMILIA` | `DOMINGO` |
+| Palestra | 9 | `PALESTRA_ESTRUTURA_MOVIMENTO` | `DOMINGO` |
+| Bate-papo | 1 | `BATE_PAPO_JESUS_DEUS_HOMEM` | `PRE_AVC` |
+| Bate-papo | 2 | `BATE_PAPO_DEPOIMENTO_SANTO_1` | `PRE_AVC` |
+| Bate-papo | 3 | `BATE_PAPO_DEPOIMENTO_SANTO_2` | `PRE_AVC` |
+| Bate-papo | 4 | `BATE_PAPO_DEPOIMENTO_SANTO_3` | `PRE_AVC` |
+| Bate-papo | 5 | `BATE_PAPO_ALIANCAS_DEUS_HOMEM` | `SEXTA` |
+| Bate-papo | 6 | `BATE_PAPO_SER_PROFETA` | `SEXTA` |
+| Bate-papo | 7 | `BATE_PAPO_NECESSIDADES_SER_HUMANO` | `SABADO` |
+| Bate-papo | 8 | `BATE_PAPO_IMPORTANCIA_SACRAMENTOS_PROFETA` | `SABADO` |
+| Bate-papo | 9 | `BATE_PAPO_CAMPANHA_FRATERNIDADE` | `DOMINGO` |
+| Bate-papo | 10 | `BATE_PAPO_BIOGRAFIA_SANTO` | `DOMINGO` |
+| Bate-papo | 11 | `BATE_PAPO_PROFETA_IGREJA` | `DOMINGO` |
+
+### Testes e schema
+
+- Cinco testes dedicados validam quantidades, códigos, títulos exatos,
+  unicidade de ordem, blocos, compartilhamento Escalada/ESPPA, separação do
+  AVC, ausência de Acampamento, lookup e imutabilidade.
+- Os testes de service deixaram de substituir o registry por catálogo
+  fictício e agora exercitam os códigos reais. O único override restante
+  simula uma futura mudança de título para provar a preservação do snapshot.
+- Testes focados de catálogo, models e services: 36 testes, resultado OK, com
+  2 testes de concorrência PostgreSQL ignorados conforme condição.
+- Suíte backend: 417 testes executados, resultado OK, com 9 ignorados.
+- `manage.py check` e `git diff --check`: sem problemas.
+- Nenhuma alteração de model ou migration foi necessária; o autodetector não
+  apontou mudança de schema.
+
+### Arquivos alterados
+
+- `backend/core/formacao_catalogo.py`
+- `backend/core/tests/test_formacao_catalogo.py`
+- `backend/core/tests/test_encontro_formacao_models.py`
+- `backend/core/tests/test_encontro_formacao_services.py`
+- `docs/domain/ENCOUNTER_FORMATION.md`
+- `docs/workplans/PHASE_1B_D4.md`
+
 ## D.4C — resultado da implementação
 
 ### Services e transições
@@ -448,7 +514,6 @@ write API, service, admin, transformador legado ou consumidor frontend fonte.
 
 ## Débitos
 
-- Conteúdo real do catálogo fixo, deliberadamente adiado.
 - API, autorização, compatibilidade e cutover da D.4D.
 - Execução PostgreSQL dos testes de inclusão e realização concorrentes,
   regressão final e fechamento da D.4E.
@@ -464,6 +529,7 @@ write API, service, admin, transformador legado ou consumidor frontend fonte.
 - `docs/AUTHORIZATION_MATRIX.md`, somente quando a tarefa envolver permissões.
 - `backend/core/models.py`
 - `backend/core/formacao_catalogo.py`
+- `backend/core/tests/test_formacao_catalogo.py`
 - `backend/core/migrations/0033_expand_sessoes_formativas.py`
 - `backend/core/tests/test_encontro_formacao_models.py`
 - `backend/core/services/formacoes.py`
@@ -505,3 +571,7 @@ validada.
   412 testes com resultado OK e 9 skips; dois testes de concorrência real
   ficaram condicionados ao PostgreSQL da D.4E, e D.4D foi definido como
   próximo bloco.
+- 2026-10-05 — D.4C.1 preencheu o registry com nove palestras de
+  Escalada/ESPPA e onze bate-papos de AVC, incluindo ordem e bloco. Os
+  services passaram a ser testados contra o catálogo real, sem model,
+  migration, seed ou banco, e D.4D permaneceu como próximo bloco.
