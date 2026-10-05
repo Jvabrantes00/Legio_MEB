@@ -2,9 +2,9 @@
 
 ## Status geral
 
-Fase em andamento. A D.4A foi concluída por análise estática do código real e
-o desenho técnico foi fechado sem decisão humana bloqueante. D.4B é o próximo
-bloco.
+Fase em andamento. D.4A e D.4B estão concluídas. O desenho técnico foi fechado
+sem decisão humana bloqueante e a fundação estrutural foi implementada sem
+cutover ou backfill. D.4C é o próximo bloco.
 
 ## Objetivo
 
@@ -46,7 +46,7 @@ Status: concluída em 2026-10-05.
 
 ### D.4B — Catálogo estrutural, sessões e palestrantes
 
-Status: pendente.
+Status: concluída em 2026-10-05.
 
 ### D.4C — Services, regras por tipo e histórico
 
@@ -288,6 +288,57 @@ de realização. Registros não reconciliados permanecem apenas no legado.
   estrutural da D.4B.
 - Não existe outra decisão humana bloqueante para iniciar D.4B.
 
+## D.4B — resultado da implementação
+
+### Registry e models
+
+- `core/formacao_catalogo.py` introduz `TemaFormativo` imutável, os tipos
+  estruturais `PALESTRA`/`BATE_PAPO` e `TEMAS_FORMATIVOS` como mapping somente
+  leitura, inicialmente vazio. Nenhum nome real, seed, tabela ou CRUD de tema
+  foi criado.
+- `SessaoFormativa` armazena Encontro protegido, código sem `choices`
+  derivadas do registry, tipo estrutural, snapshot do título, estado,
+  timestamp de realização e timestamps de auditoria.
+- `PalestranteSessao` suporta múltiplas atuações por sessão e representa
+  exatamente uma origem: `PerfilAlpinista` protegido ou nome externo local.
+  O histórico continuará derivável da sessão realizada e da atuação
+  `MINISTROU`, sem tabela duplicada.
+
+### Migration, constraints e índices
+
+- A migration expansiva `0033_expand_sessoes_formativas` parte da `0032` e
+  cria somente as duas novas tabelas, quatro índices, checks locais e a
+  unicidade condicional do palestrante interno por sessão.
+- Os checks cobrem tipo e estados válidos, coerência dos timestamps de
+  realização/atuação e XOR interno/externo. As FKs históricas usam `PROTECT`.
+- As regras que atravessam `Encontro.tipo`, `TrabalhoEncontro`, registry ou
+  autorização não foram convertidas em SQL frágil e permanecem para D.4C/D.4D.
+- `Palestra` e todos os contratos legados permanecem inalterados. A migration
+  não contém `RunPython`, seed, alteração destrutiva ou dual-write.
+- **nenhum backfill automático nesta etapa**.
+
+### Testes e validações
+
+- Foram adicionados 11 testes estruturais e de migration para registry vazio
+  e imutável, independência de `tema_codigo`, snapshots, estados e timestamps,
+  múltiplos palestrantes, XOR, unicidade, `PROTECT`, preservação de `Palestra`
+  e ausência de efeitos em `TrabalhoEncontro` e `Frequencia`.
+- A migration foi testada no avanço `0032` → `0033`: o registro legado foi
+  preservado e as estruturas canônicas nasceram vazias.
+- Testes focados: 11 aprovados.
+- Suíte backend: 392 testes executados, resultado OK, com 7 ignorados.
+- `manage.py check`: sem problemas.
+- `makemigrations --check --dry-run`: nenhuma mudança detectada.
+- A validação usou SQLite de testes; D.4B não exigiu acesso ao PostgreSQL.
+
+### Arquivos alterados
+
+- `backend/core/formacao_catalogo.py`
+- `backend/core/models.py`
+- `backend/core/migrations/0033_expand_sessoes_formativas.py`
+- `backend/core/tests/test_encontro_formacao_models.py`
+- `docs/workplans/PHASE_1B_D4.md`
+
 ## Decisões da fase
 
 - As regras de produto fechadas permanecem no documento de domínio; o desenho
@@ -313,23 +364,27 @@ write API, service, admin, transformador legado ou consumidor frontend fonte.
 
 ## Migrations
 
-- Migration atual confirmada por código: `0032_vinculousuariopessoa`.
-- D.4B prevê `0033_expand_sessoes_formativas`, exclusivamente expansiva, com
-  `SessaoFormativa` e `PalestranteSessao`.
-- Não haverá tabela/seed de catálogo, `RunPython`, alteração ou remoção do
-  model `Palestra` nessa migration.
+- A migration anterior foi confirmada por código como
+  `0032_vinculousuariopessoa`.
+- `0033_expand_sessoes_formativas` foi criada de forma exclusivamente
+  expansiva com `SessaoFormativa` e `PalestranteSessao`.
+- Não há tabela/seed de catálogo, `RunPython`, alteração ou remoção do model
+  `Palestra`.
 
 ## Testes e validações
 
-- Nenhum teste de código ou banco foi executado na análise documental D.4A.
-- O plano de testes por bloco foi fechado no relatório técnico.
-- A validação desta etapa limita-se a `git diff --check` e ao estado do
-  repositório.
+- A D.4A foi exclusivamente documental. Na D.4B, os 11 testes focados
+  passaram; a suíte backend executou 392 testes com resultado OK e 7 ignorados
+  conforme suas condições próprias.
+- `check` e `makemigrations --check --dry-run` passaram sem apontamentos.
+- PostgreSQL e concorrência real permanecem reservados ao fechamento D.4E.
 
 ## Débitos
 
 - Conteúdo real do catálogo fixo, deliberadamente adiado.
-- Implementação e validação dos blocos D.4B–D.4E.
+- Services, regras por tipo e histórico derivado da D.4C.
+- API, autorização, compatibilidade e cutover da D.4D.
+- Validação PostgreSQL, regressão final e fechamento da D.4E.
 - Reconciliação humana do legado e futura depreciação do model `Palestra`.
 - Inventário de consumidores externos ao repositório antes da remoção física.
 
@@ -341,6 +396,9 @@ write API, service, admin, transformador legado ou consumidor frontend fonte.
   `TrabalhoEncontro`, especialmente no AVC.
 - `docs/AUTHORIZATION_MATRIX.md`, somente quando a tarefa envolver permissões.
 - `backend/core/models.py`
+- `backend/core/formacao_catalogo.py`
+- `backend/core/migrations/0033_expand_sessoes_formativas.py`
+- `backend/core/tests/test_encontro_formacao_models.py`
 - `backend/core/serializers.py`
 - `backend/core/views.py`
 - `backend/core/permissions.py`
@@ -356,9 +414,9 @@ write API, service, admin, transformador legado ou consumidor frontend fonte.
 
 ## Próximo passo
 
-D.4B — implementar o catálogo estrutural vazio, `SessaoFormativa`,
-`PalestranteSessao`, migration expansiva e testes estruturais, sem seed,
-services de fluxo ou cutover legado.
+D.4C — implementar services transacionais, regras por tipo de Encontro e
+histórico formativo derivado, incluindo a guarda bloqueante do AVC, sem API ou
+cutover legado.
 
 ## Histórico de execução
 
@@ -369,3 +427,7 @@ services de fluxo ou cutover legado.
   foram inventariados, o desenho do catálogo/models/services/compatibilidade
   foi fechado, nenhum backfill seguro foi identificado e D.4B foi definido
   como próximo bloco.
+- 2026-10-05 — D.4B concluída com registry estrutural vazio, models,
+  migration expansiva `0033`, constraints, índices e 11 testes novos. A suíte
+  backend de 392 testes, os checks do Django e o autodetector de migrations
+  passaram; D.4C foi definida como próximo bloco.

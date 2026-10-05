@@ -1,6 +1,7 @@
 from django.db import models
 from django.contrib.auth.models import User
 
+from .formacao_catalogo import TIPO_CONTEUDO_FORMATIVO_CHOICES
 from .validators import normalize_cpf, validate_cpf, validate_image_upload_size
 
 class Pessoa(models.Model):
@@ -579,6 +580,165 @@ class Palestra(models.Model):
 
     def __str__(self):
         return f'{self.titulo} - {self.alpinista.nome} em {self.encontro.encontro}'
+
+
+class SessaoFormativa(models.Model):
+    class Status(models.TextChoices):
+        PLANEJADA = 'planejada', 'Planejada'
+        REALIZADA = 'realizada', 'Realizada'
+        CANCELADA = 'cancelada', 'Cancelada'
+
+    encontro = models.ForeignKey(
+        Encontro,
+        on_delete=models.PROTECT,
+        related_name='sessoes_formativas',
+    )
+    tema_codigo = models.SlugField(max_length=100)
+    tipo_conteudo = models.CharField(
+        max_length=20,
+        choices=TIPO_CONTEUDO_FORMATIVO_CHOICES,
+    )
+    titulo_snapshot = models.CharField(max_length=255)
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.PLANEJADA,
+    )
+    realizada_em = models.DateTimeField(null=True, blank=True)
+    criado_em = models.DateTimeField(auto_now_add=True)
+    atualizado_em = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['encontro', 'id']
+        indexes = [
+            models.Index(
+                fields=['encontro', 'status'],
+                name='sess_form_enc_status_idx',
+            ),
+            models.Index(
+                fields=['tema_codigo', 'status'],
+                name='sess_form_tema_status_idx',
+            ),
+        ]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(
+                    tipo_conteudo__in=('palestra', 'bate_papo'),
+                ),
+                name='sessao_formativa_tipo_valido',
+            ),
+            models.CheckConstraint(
+                condition=models.Q(
+                    status__in=('planejada', 'realizada', 'cancelada'),
+                ),
+                name='sessao_formativa_status_valido',
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(
+                        status='realizada',
+                        realizada_em__isnull=False,
+                    )
+                    | models.Q(
+                        status__in=('planejada', 'cancelada'),
+                        realizada_em__isnull=True,
+                    )
+                ),
+                name='sessao_formativa_realizacao_coerente',
+            ),
+        ]
+
+    def __str__(self):
+        return f'{self.titulo_snapshot} — {self.encontro.encontro}'
+
+
+class PalestranteSessao(models.Model):
+    class Status(models.TextChoices):
+        PREVISTO = 'previsto', 'Previsto'
+        MINISTROU = 'ministrou', 'Ministrou'
+        NAO_MINISTROU = 'nao_ministrou', 'Não ministrou'
+
+    sessao_formativa = models.ForeignKey(
+        SessaoFormativa,
+        on_delete=models.PROTECT,
+        related_name='palestrantes',
+    )
+    perfil_alpinista = models.ForeignKey(
+        PerfilAlpinista,
+        on_delete=models.PROTECT,
+        related_name='atuacoes_formativas',
+        null=True,
+        blank=True,
+    )
+    nome_externo = models.CharField(max_length=255, blank=True, default='')
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.PREVISTO,
+    )
+    ministrou_em = models.DateTimeField(null=True, blank=True)
+    criado_em = models.DateTimeField(auto_now_add=True)
+    atualizado_em = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['sessao_formativa', 'id']
+        indexes = [
+            models.Index(
+                fields=['sessao_formativa', 'status'],
+                name='pal_sessao_status_idx',
+            ),
+            models.Index(
+                fields=['perfil_alpinista', 'status'],
+                name='pal_perfil_status_idx',
+            ),
+        ]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(
+                    status__in=('previsto', 'ministrou', 'nao_ministrou'),
+                ),
+                name='palestrante_sessao_status_valido',
+            ),
+            models.CheckConstraint(
+                condition=(
+                    (
+                        models.Q(perfil_alpinista__isnull=False)
+                        & models.Q(nome_externo='')
+                    )
+                    | (
+                        models.Q(perfil_alpinista__isnull=True)
+                        & ~models.Q(nome_externo='')
+                    )
+                ),
+                name='palestrante_sessao_origem_xor',
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(
+                        status='ministrou',
+                        ministrou_em__isnull=False,
+                    )
+                    | models.Q(
+                        status__in=('previsto', 'nao_ministrou'),
+                        ministrou_em__isnull=True,
+                    )
+                ),
+                name='palestrante_sessao_atuacao_coerente',
+            ),
+            models.UniqueConstraint(
+                fields=['sessao_formativa', 'perfil_alpinista'],
+                condition=models.Q(perfil_alpinista__isnull=False),
+                name='palestrante_alpinista_unico_sessao',
+            ),
+        ]
+
+    def __str__(self):
+        identidade = (
+            f'Perfil {self.perfil_alpinista_id}'
+            if self.perfil_alpinista_id is not None
+            else self.nome_externo
+        )
+        return f'{identidade} — Sessão {self.sessao_formativa_id}'
 
 
 class FotoEncontro(models.Model):
