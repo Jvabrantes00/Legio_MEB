@@ -2,10 +2,10 @@
 
 ## Status geral
 
-D.6A, D.6B e D.6C concluídas. Projeção, leitura e comandos temporais canônicos
-estão implementados e validados, com autorização, auditoria e compatibilidade
-legada preservadas. Aguardando checkpoint humano de UX/UI na D.6D; nenhum
-frontend ou PDF pode começar antes dele.
+D.6A–D.6D concluídas. Projeção, leitura, comandos e definição humana de UX/UI
+estão fechados. A D.6D identificou suporte canônico adicional de Agenda que
+deve anteceder o frontend. Próximo bloco: D.6E — suporte backend à Agenda
+aprovada.
 
 ## Objetivo
 
@@ -65,34 +65,41 @@ delegando aos services canônicos com auditoria transacional.
 
 ### D.6D — Definição de UX/UI
 
-Status: aguardando checkpoint humano.
+Status: concluída em 2026-10-06.
 
-Checkpoint humano obrigatório. O trabalho deve parar para apresentar o estado
-técnico e obter decisões do usuário. Nenhum frontend, design final de PDF ou
-aplicação de paleta pode ser implementado antes da aprovação e do registro da
-especificação visual.
+O checkpoint humano aprovou visões, navegação, criação, Agenda agregada,
+identidade, responsividade, filtros e modalidades de PDF. A escolha do modelo
+anual definitivo permanece como checkpoint posterior entre dois protótipos.
 
-### D.6E — Implementação do frontend personalizado
-
-Status: pendente.
-
-Implementará somente a especificação visual aprovada na D.6D, usando o BFF,
-as capabilities e os contratos entregues em D.6B/D.6C.
-
-### D.6F — PDF mensal/anual e histórico de divulgação
+### D.6E — Suporte backend à Agenda aprovada
 
 Status: pendente.
 
-Implementará a exportação e a preservação das publicações somente depois do
-design aprovado na D.6D.
+Implementará somente os deltas técnicos revelados pela D.6D: rótulos públicos,
+reuniões preparatórias na projeção/Agenda, avaliação simples, agregação
+canônica, visibilidade e contrato heterogêneo, antes do frontend.
 
-### D.6G — Integração, PostgreSQL, regressão e fechamento
+### D.6F — Frontend personalizado
 
 Status: pendente.
 
-Validará integração, migrations limpas, concorrência de publicação e
-alteração temporal em PostgreSQL, regressão backend/frontend, storage
-temporário e remoção de recursos efêmeros.
+Implementará a especificação visual aprovada na D.6D sobre os contratos
+entregues em D.6B–D.6E.
+
+### D.6G — PDF mensal/anual e histórico de divulgação
+
+Status: pendente.
+
+Começará pelo spike dos dois modelos anuais com os mesmos dados e checkpoint
+humano antes do renderer anual definitivo. Depois implementará PDFs públicos
+e internos, preview, publicação e histórico imutável.
+
+### D.6H — Integração, PostgreSQL, regressão e fechamento
+
+Status: pendente.
+
+Validará integração, migrations, os cinco testes concorrentes preparados na
+D.6C, publicação/storage e regressão backend/frontend.
 
 ## Resultado da D.6B
 
@@ -232,7 +239,7 @@ equipes, formação ou MME.
 - Cinco testes reais de concorrência foram preparados e condicionados a
   PostgreSQL: edição simultânea, oficialização simultânea, reprogramação
   simultânea, edição versus oficialização e edição versus cancelamento. Sua
-  execução fica reservada à D.6G.
+  execução fica reservada à D.6H.
 - A D.6C adicionou 19 testes, dos quais 14 passaram em SQLite e cinco foram
   corretamente ignorados. A suíte backend total passou com 525 testes e 19
   skips. `manage.py check` passou e `makemigrations --check --dry-run` retornou
@@ -268,10 +275,15 @@ equipes, formação ou MME.
   superuser permanece bypass técnico.
 - PDFs mensal/anual usam linguagem de grade de calendário. Data provisória
   recebe `*` e legenda.
+- PDFs possuem modalidades pública e interna, sem ampliar acesso a dados
+  pessoais ou sensíveis.
 - Publicações efetivas são históricas e não podem ser sobrescritas.
-- D.6D é gate humano antes do frontend e da apresentação final dos PDFs.
+- D.6D foi concluída; o suporte backend da Agenda em D.6E é o gate técnico
+  antes do frontend.
+- O renderer anual depende de checkpoint humano entre os modelos A e B na
+  D.6G.
 
-## Descobertas técnicas
+## Descobertas técnicas da D.6A — baseline auditado
 
 ### Models e semântica temporal real
 
@@ -348,7 +360,7 @@ equipes, formação ou MME.
 - Não há testes de projeção por período, conflitos, autorização do
   Calendário, PDF ou publicação.
 - A estrutura temporal nasceu em `0028_nucleo_encontros`; a migration mais
-  recente do projeto é `0034_expand_propostas_violeiros`.
+  recente do projeto é `0035_diaencontro_data_index`.
 - Não há arquivo Excel/PDF de calendário no repositório nem biblioteca de
   geração de PDF instalada como dependência direta.
 
@@ -504,30 +516,141 @@ Encontros.
 
 ## UX/UI aprovado
 
-Pendente do checkpoint humano D.6D. O contrato técnico acima é suficiente
-para D.6B/D.6C e não congela aparência.
+D.6D foi concluída por decisão humana. Não há visão Lista como modo principal.
 
-Perguntas reservadas ao checkpoint:
+### Visões e navegação
 
-- visual principal mensal, semanal ou lista e combinação entre eles;
-- navegação, desktop/mobile, densidade, filtros e interação com dias;
-- cards, páginas, modais ou drawers para criação e edição;
-- apresentação de múltiplos dias, status, conflito e datas provisórias;
-- se Encontros `ADIADO` sem agenda vigente precisam de uma lista auxiliar
-  sem data, pois eles corretamente não entram na projeção por intervalo;
-- acessibilidade, hierarquia e eventual uso da paleta candidata `#001C38`,
-  `#005EE9`, `#FD1E2E`, `#FFFFFF`, `#F6FAFD`, `#EAF1F7` e `#DCE4EC`;
-- papel, orientação, cabeçalho, fontes, densidade, nomes longos e múltiplos
-  compromissos nos PDFs;
-- se consulta/download das publicações históricas deve continuar restrita a
-  Suporte/Diretoria ou ser aberta a todas as roles leitoras;
-- como o usuário alterna entre preview e publicação. A distinção técnica é
-  recomendada, mas o fluxo visual não será presumido.
+- A entrada padrão é o mês atual. O cabeçalho oferece mês anterior, próximo
+  mês, `Hoje` e alternância `Mês | Ano`.
+- A visão mensal usa grade tradicional de segunda a domingo, número no canto
+  superior, itens centralizados e dias adjacentes esmaecidos. O dia atual
+  destaca somente o número em pequeno círculo azul.
+- A visão anual mostra 12 meses em grade 3 × 4. Alternar Mês → Ano comunica
+  zoom out; clicar em um mês comunica expansão para a visão mensal.
+- O mês atual recebe borda/sombra discreta. Dias ocupados têm indicador e o
+  mês pode mostrar contagem discreta, sem listar todos os nomes completos.
 
-Nenhuma dessas perguntas bloqueia a D.6B. A política conservadora até D.6D é
-default deny para download histórico fora de Suporte/Diretoria.
+### Identidade, ícones e cards
+
+- A personalidade é jovem, moderna e institucional, sem aparência corporativa
+  rígida ou categorias baseadas em cores aleatórias.
+- Paleta de referência: `#001C38`, `#005EE9`, `#FD1E2E`, `#FFFFFF`,
+  `#F6FAFD`, `#EAF1F7` e `#DCE4EC`. Encontro começa com identidade
+  `#005EE9`, sempre acompanhada de texto/ícone/forma acessível; `#FD1E2E`
+  fica reservado a comunicação semântica forte ou destrutiva.
+- A identidade principal usa uma família pequena de SVGs locais próprios do
+  SIA, com traço e proporção coerentes, e não ícones genéricos de bibliotecas
+  como identidade de categoria. A D.6F cria inicialmente apenas o ícone de
+  Encontro; Eventos/Outros recebem ícones quando seus módulos surgirem.
+- Dentro da célula, o item é mini-card leve: cantos arredondados, fundo azul
+  suave, detalhe `#005EE9`, texto centralizado e rótulo complementar discreto.
+  Bloco totalmente azul não é o padrão. No desktop, hover eleva cerca de
+  2–3 px e reforça suavemente a sombra.
+- Data provisória acrescenta `*` ao nome e usa a legenda
+  `* Data ainda sujeita a confirmação.`; data oficial não exibe texto extra.
+- Quando faltar espaço, a célula limita itens e mostra `+N`, que abre os
+  compromissos restantes sem aumentar indefinidamente sua altura.
+
+### Drawer e navegação ao domínio
+
+- Clicar no compromisso abre drawer lateral enxuto com nome, categoria/tipo,
+  dias e respectivos rótulos.
+- Status operacional como `EM_PREPARACAO` não vira bloco principal apenas por
+  existir no domínio.
+- Gestores veem a ação discreta `Editar calendário`. A ação principal para
+  todos os autorizados é `Abrir Encontro completo`, apontando à página
+  canônica para participantes, equipes, formação, MME e demais operações.
+- O Calendário não replica o módulo completo de Encontros.
+
+### Criação e edição
+
+- Diretoria, Suporte e superuser veem `Novo compromisso` e um `+` contextual
+  por dia; demais papéis não veem ações de criação.
+- O `+` preenche a data selecionada, mas permite acrescentar outras datas. O
+  comando cria um único Encontro com toda a agenda inicial.
+- No mobile, o `+` aparece depois da seleção do dia, pois não há hover.
+
+### Filtros, cabeçalho e mobile
+
+- Filtros visíveis: `Todos`, `Encontros`, `Eventos`, `Outros`. Nesta fase,
+  Todos e Encontros estão ativos; Eventos e Outros aparecem desabilitados.
+- Não existem filtros de confirmado, a confirmar, adiado ou cancelado.
+- O cabeçalho reúne título, período/navegação, Hoje, Mês/Ano, filtros,
+  `Exportar` e `Novo compromisso`; as duas ações aparecem somente para
+  gestores.
+- Desktop/tablet preservam a grade completa. No mobile, o mês é adaptado e a
+  seleção de um dia mostra abaixo uma lista legível dos seus compromissos.
+
+## Agenda do Encontro aprovada
+
+A Agenda exibida cronologicamente reúne sem duplicação:
+
+- **Dias do Encontro:** `DiaEncontro` com rótulo público curto/editável, como
+  `Pré-Escalada`, `Sexta-feira`, `Sábado` ou `Domingo`;
+- **Preparação:** `ReuniaoPreparatoriaEncontro` real, preservando presença e
+  regras da D.3;
+- **Pós-Encontro:** item simples `Avaliação`, vinculado ao Encontro.
+
+Sugestões de rótulo por tipo são editáveis, não obrigatórias e nunca inferidas
+automaticamente pelo índice da data. Reuniões podem receber complemento de
+agenda, como `Missa de Entrega`, sem criar novo tipo de compromisso. A criação
+inicial pode incluir reuniões preparatórias junto com os dias.
+
+A futura página canônica do Encontro terá uma seção `Agenda` com as mesmas
+fontes. `Editar calendário` modifica os objetos reais, de modo que página e
+Calendário refletem automaticamente a mesma informação.
+
+## Deltas técnicos para D.6E
+
+A implementação de frontend está bloqueada até estes pontos serem fechados no
+backend:
+
+- confirmar/adaptar o suporte de `DiaEncontro` ao rótulo público editável;
+- projetar `ReuniaoPreparatoriaEncontro` no Calendário;
+- criar/editar reuniões reais através da Agenda, inclusive na criação inicial;
+- suportar complemento público de reunião quando o model atual não bastar;
+- modelar expansivamente o item simples `Avaliação` vinculado ao Encontro;
+- criar query/DTO da Agenda agregada para Calendário e página do Encontro;
+- representar itens heterogêneos sem duplicar os domínios de origem;
+- distinguir, onde apropriado, conteúdo `PUBLICÁVEL` e `INTERNO`;
+- ampliar comandos, autorização, auditoria, conflitos e testes apenas na
+  medida necessária a essas fontes.
+
+Não serão criados item visual genérico, sincronização entre cópias ou outros
+tipos genéricos de compromisso nesta fase.
 
 ## Exportação PDF
+
+### Modalidades e conteúdo
+
+- **Público Mensal** e **Público Anual:** somente itens publicáveis
+  externamente, inicialmente dias dos Encontros. Excluem reuniões
+  preparatórias, avaliação interna, pessoas, equipes, presença e operação.
+- **Interno Mensal** e **Interno Anual:** podem incluir dias, reuniões e
+  avaliação. Recebem `USO INTERNO`, mas continuam sem dados pessoais ou
+  sensíveis por padrão.
+- Não existe Excel. PDF é saída de divulgação e nunca fonte de edição.
+- A decisão publicável/interno pertence ao item/domínio apropriado; o renderer
+  não será acoplado a uma lista fixa de classes.
+
+### Composição mensal
+
+- A4 paisagem, digital-first, grade de segunda a domingo e itens
+  centralizados.
+- Cabeçalho jovem/institucional e logo real do movimento/paróquia no canto
+  superior direito.
+- Provisório usa `*` e legenda. O interno também identifica `USO INTERNO`.
+
+### Composição anual e checkpoint
+
+- Digital-first, com A4 paisagem como ponto inicial e 12 meses em 3 × 4.
+- **Modelo A:** mini-calendários com nomes curtos nas datas e
+  legenda/overflow quando necessário.
+- **Modelo B:** mini-calendários mais limpos, datas destacadas e lista curta
+  abaixo de cada mês.
+- A D.6G começa com os dois protótipos usando exatamente os mesmos dados. Um
+  checkpoint humano escolhe o modelo antes do renderer anual oficial; nenhuma
+  escolha automática foi feita na D.6D.
 
 ### Snapshot publicável
 
@@ -540,17 +663,17 @@ pessoais, saúde, observações internas e capabilities não entram.
 ### Renderer recomendado
 
 - Gerar no backend a partir de template HTML/CSS de impressão e converter com
-  WeasyPrint ou mecanismo equivalente aprovado em spike técnico na D.6F.
+  WeasyPrint ou mecanismo equivalente aprovado em spike técnico na D.6G.
 - Essa abordagem oferece melhor manutenção de grade, tipografia, quebra de
   página e composição anual que desenho manual de PDF.
 - ReportLab exigiria layout de baixo nível; browser/Playwright adicionaria
   runtime Chromium e superfície operacional maior. Nenhuma das bibliotecas
   está instalada diretamente hoje.
-- D.6F deverá fixar a dependência escolhida, validar bibliotecas de sistema no
+- D.6G deverá fixar a dependência escolhida, validar bibliotecas de sistema no
   servidor e impedir busca de recursos remotos. Templates escapam títulos e
   usam apenas assets/fontes locais controlados.
-- Aparência e dimensões permanecem bloqueadas até D.6D. O mesmo renderer
-  receberá snapshots mensal e anual.
+- O renderer mensal segue a decisão aprovada; o anual aguarda a escolha entre
+  os dois protótipos.
 
 ### Preview e publicação
 
@@ -558,7 +681,13 @@ pessoais, saúde, observações internas e capabilities não entram.
   imediato do arquivo temporário.
 - Publicar é comando explícito: captura um snapshot novo, renderiza, calcula
   hash e persiste a versão imutável. Somente essa operação compõe o histórico.
-- A D.6D decidirá a experiência dessa distinção, não sua garantia técnica.
+- A UX exata de preview/publicar será definida no spike, preservando essa
+  separação.
+- A implementação precisa da logo real do movimento/paróquia, preferencialmente
+  SVG ou PNG em boa resolução. Não haverá placeholder como artefato final.
+- Toda versão publicada usa rodapé discreto
+  `Gerado pelo SIA • Versão publicada em DD/MM/AAAA`; a modalidade interna
+  também traz `USO INTERNO`.
 
 ## Histórico de divulgação
 
@@ -571,7 +700,7 @@ pessoais, saúde, observações internas e capabilities não entram.
 - **PDF + snapshot estruturado** preserva o material exato e a semântica que o
   originou. O custo de armazenamento é pequeno para calendários e justificado
   por fidelidade histórica, auditoria e backup. Esta é a arquitetura aprovada
-  tecnicamente para D.6F.
+  tecnicamente para D.6G.
 
 ### Model proposto
 
@@ -627,14 +756,15 @@ material publicado; eventual retenção exigirá política explícita.
 
 ## Migrations previstas
 
-- **D.6B:** provável migration exclusivamente aditiva para índice B-tree em
-  `DiaEncontro.data`. A projeção em si não cria tabela.
-- **D.6C:** nenhuma mudança de schema é esperada; comandos reutilizam a
-  estrutura existente. Qualquer necessidade real deverá ser demonstrada por
-  implementação/teste, não antecipada.
-- **D.6F:** migration expansiva para `PublicacaoCalendarioInstitucional`,
+- **D.6B:** concluída com a migration aditiva `0035`, que criou o índice
+  B-tree em `DiaEncontro.data`.
+- **D.6C:** concluída sem mudança de schema.
+- **D.6E:** deve inspecionar primeiro os campos atuais e criar apenas as
+  migrations expansivas necessárias para rótulo público, complemento de
+  reunião, avaliação e visibilidade. Não antecipar fields sem essa auditoria.
+- **D.6G:** migration expansiva para `PublicacaoCalendarioInstitucional`,
   checks de tipo/período, índice histórico, FK protegida, snapshot e arquivo.
-- A migration atual mais recente é `0034_expand_propostas_violeiros`. As
+- A migration atual mais recente é `0035_diaencontro_data_index`. As
   próximas devem confirmar novamente a folha da cadeia antes de receber número.
 - Não haverá `RunPython`, seed, backfill ou alteração destrutiva.
 
@@ -665,12 +795,31 @@ material publicado; eventual retenção exigirá política explícita.
 - `data_referencia`/`data_exato` compatíveis sem se tornarem fonte canônica;
 - nenhuma gestão de participantes, equipes, saúde ou Eventos.
 
-### D.6E/D.6F — frontend, PDF e histórico
+### D.6E — suporte backend à Agenda
+
+- rótulos públicos editáveis sem inferência obrigatória;
+- projeção e comandos de reuniões reais, preservando presença e autorização;
+- avaliação simples vinculada, sem confusão com outros domínios;
+- agregação cronológica e itens heterogêneos sem N+1 ou cópia visual;
+- visibilidade publicável/interna, allowlists, conflitos e auditoria;
+- criação inicial atômica com dias e reuniões, rollback e compatibilidade.
+
+### D.6F — frontend
 
 - capabilities e navegação para todas as roles sem ampliar comandos;
 - comportamento responsivo e acessível definido pela D.6D;
+- visões mensal/anual, zoom conceitual, drawer, `+N`, criação multiday,
+  filtros ativos/desabilitados e lista mobile;
+- SVG próprio de Encontro, tokens da paleta e comunicação não dependente só
+  de cor;
+- Agenda na página canônica do Encontro lendo as mesmas fontes.
+
+### D.6G — PDF e histórico
+
 - snapshots mensal/anual, data provisória com marcador e ausência de campos
   privados;
+- separação público/interno e marca `USO INTERNO`;
+- protótipos anuais A/B com os mesmos dados e checkpoint humano;
 - preview transitório, publicação imutável, duas publicações do mesmo período
   coexistindo e PDF antigo preservado após mudança canônica;
 - hash, download autenticado, IDOR, content type, filename seguro, falhas de
@@ -679,24 +828,31 @@ material publicado; eventual retenção exigirá política explícita.
   validação visual segue o design aprovado, sem depender apenas de snapshot
   binário frágil.
 
-### D.6G — PostgreSQL e regressão
+### D.6H — PostgreSQL e regressão
 
+- cinco cenários concorrentes de comandos preparados na D.6C;
 - publicações simultâneas não se sobrescrevem;
 - alteração/reprogramação durante captura não produz snapshot misto;
 - locks e constraints preservam versões temporais e publicações consistentes;
 - migrations limpas, suítes backend/frontend, check, lint, TypeScript, build e
   `git diff --check`.
 
-Os três cenários concorrentes acima exigem PostgreSQL real. Testes funcionais,
-contratos, renderer com storage temporário e autorização podem usar os
+Os cenários concorrentes exigem PostgreSQL real. Testes funcionais, contratos,
+frontend, renderer com storage temporário e autorização podem usar os
 ambientes isolados normais.
 
 ## Pendências humanas
 
-As perguntas visuais e a política de download histórico estão reservadas à
-D.6D. Projeção e comandos usam contratos neutros, mas esse checkpoint humano é
-agora bloqueante para a D.6E e para o design final dos PDFs. Aguardando
-checkpoint humano de UX/UI.
+- Escolher na D.6G entre os modelos anuais A e B depois de comparar
+  protótipos com os mesmos dados.
+- Fornecer a logo real do movimento/paróquia quando a prototipagem de PDF
+  começar; não usar placeholder final.
+- Refinar no spike a UX de preview/publicar sem permitir que preview entre no
+  histórico.
+- A política de consulta/download histórico permanece conservadoramente
+  restrita a Suporte/Diretoria/superuser até decisão explícita diferente.
+
+Nenhuma dessas pendências bloqueia o suporte backend da D.6E.
 
 ## Débitos
 
@@ -708,7 +864,7 @@ checkpoint humano de UX/UI.
 - Publicações exigem backup conjunto de banco e media; automação operacional
   de backup não pertence à D.6.
 - A dependência de PDF e seus pacotes de sistema precisam de spike no ambiente
-  real antes da D.6F, sem instalação antecipada na D.6A.
+  real na D.6G, sem instalação antecipada.
 - Eventos, compromissos genéricos, saúde, atividade canônica, frontends
   D.2–D.5, Excel e integrações externas permanecem fora do escopo, não débitos
   a resolver nesta fase.
@@ -749,11 +905,9 @@ checkpoint humano de UX/UI.
 
 ## Próximo passo
 
-**Aguardando checkpoint humano de UX/UI.**
-
-D.6D deve coletar e registrar as decisões visuais e de produto já reservadas
-no workplan. Não iniciar frontend, design final de PDF ou aplicação de paleta
-antes dessa conversa.
+D.6E — implementar o suporte backend mínimo à Agenda aprovada: rótulos,
+reuniões reais, avaliação, agregação, visibilidade e contrato heterogêneo.
+Não iniciar frontend, renderer de PDF ou publicação neste bloco.
 
 ## Histórico de execução
 
@@ -769,4 +923,8 @@ antes dessa conversa.
 - 2026-10-06 — D.6C concluída. Comandos temporais, autorização de gestão,
   auditoria, avisos de conflito e sincronização compatível implementados; suíte
   backend com 525 testes aprovados e cinco cenários novos de concorrência
-  reservados ao PostgreSQL na D.6G. Aguardando checkpoint humano de UX/UI.
+  reservados ao PostgreSQL na D.6H. Aguardando checkpoint humano de UX/UI.
+- 2026-10-06 — D.6D concluída documentalmente por decisão humana. Aprovadas
+  visões Mês/Ano, Agenda agregada, criação multiday, identidade visual, mobile,
+  PDFs público/interno e dois protótipos anuais. D.6E foi inserida antes do
+  frontend para implementar os deltas canônicos revelados pelo produto.

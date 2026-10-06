@@ -53,6 +53,32 @@ alteração no SIA
   nova versão.
 - Dias podem ser não consecutivos. Cada `DiaEncontro` é projetado no
   Calendário sem transformar um Encontro em vários objetos.
+- Cada dia próprio do Encontro pode possuir um rótulo público curto e
+  editável. Sugestões por tipo podem ser oferecidas, mas não são obrigatórias
+  nem inferidas automaticamente pela posição da data.
+
+## Agenda agregada do Encontro
+
+A Agenda apresentada ao usuário é uma composição cronológica de fontes
+canônicas, sem tabela visual duplicada:
+
+- dias próprios, vindos de `DiaEncontro`;
+- reuniões preparatórias, vindas de `ReuniaoPreparatoriaEncontro`;
+- avaliação pós-Encontro, como item simples de agenda vinculado ao Encontro.
+
+Criar ou editar uma reunião pela Agenda atua sobre a reunião real e preserva
+as regras de presença do domínio de trabalho. Um rótulo complementar pode
+qualificar a reunião sem transformar esse complemento em novo tipo de
+compromisso.
+
+A avaliação não é reunião, dia do Encontro, presença, participação, trabalho
+ou equipe. Ela existe apenas para compor a cronologia do Encontro e deve ter
+modelagem mínima própria e expansiva. Não serão generalizados outros tipos de
+compromisso nesta fase.
+
+O Calendário Institucional e a futura seção Agenda da página canônica do
+Encontro leem esses mesmos objetos. Não haverá sincronização, cópia ou
+dual-write entre as duas interfaces.
 
 ## Lifecycle, adiamento e reprogramação
 
@@ -86,27 +112,31 @@ conforme os services canônicos.
 - Comandos expostos pelo Calendário devem reutilizar os services de Encontro;
   lifecycle e regras temporais não serão duplicados na API de projeção.
 
-A D.6A definirá quais comandos canônicos serão expostos diretamente sem
-replicar todo o módulo de Encontros.
+Os comandos expostos se limitam a criação, dados básicos, planejamento,
+oficialização, reprogramação, adiamento, novo planejamento e cancelamento.
+Preparação, início, finalização e operações internas permanecem no módulo de
+Encontros.
 
-## Categoria, status e conflitos
+## Categoria, status, visibilidade e conflitos
 
 - Categoria e status são dimensões diferentes. Nesta fase a única categoria
   é `ENCONTRO`; a arquitetura deve admitir categorias futuras.
 - Nenhuma dessas dimensões pode ser comunicada somente por cor. Texto, badge,
   ícone, forma ou outro marcador acessível deve acompanhar a cor.
-- Cores exatas não estão definidas nesta etapa.
+- Itens apropriados distinguem visibilidade `PUBLICÁVEL` e `INTERNO` de forma
+  coerente com o domínio. O renderer não decide visibilidade por uma lista
+  fixa de classes.
 - Sobreposições de agenda produzem avisos consultivos e não bloqueiam
   automaticamente criação ou edição.
-- A D.6A definirá o mecanismo técnico mínimo de detecção de conflitos.
 
 ## PDFs de divulgação
 
-Existem duas modalidades aprovadas:
+Existem quatro modalidades aprovadas:
 
-- PDF mensal, com o mês completo em grade e o nome do Encontro dentro da
-  célula correspondente;
-- PDF anual, preservando a linguagem visual de calendário e de meses.
+- PDF Público Mensal;
+- PDF Público Anual;
+- PDF Interno Mensal;
+- PDF Interno Anual.
 
 O PDF é artefato de divulgação, não fonte de verdade ou edição. Não haverá
 exportação Excel, importação de planilha nem sincronização externa nesta
@@ -116,14 +146,22 @@ Datas provisórias podem ser divulgadas, mas devem receber `*` e uma legenda
 discreta equivalente a "* Data ainda sujeita a confirmação." A redação e a
 apresentação finais pertencem ao checkpoint de UX/UI.
 
-O conteúdo publicável fica limitado ao necessário para divulgação
-institucional, inicialmente data e nome do Encontro. PDFs não incluem
-participantes, equipes, dados pessoais, saúde, preparação interna, permissões
-ou observações administrativas privadas.
+O PDF público contém somente itens publicáveis externamente, inicialmente os
+dias publicáveis dos Encontros. Por padrão, não inclui reuniões preparatórias,
+avaliação interna, dados pessoais, equipes, presença ou informações
+operacionais.
+
+O PDF interno pode reunir dias, reuniões preparatórias e avaliação e recebe
+identificação discreta `USO INTERNO`. Interno significa agenda operacional
+mais completa, não autorização irrestrita para dados pessoais ou sensíveis.
+
+As modalidades mensal e anual preservam linguagem de calendário. O mensal
+parte de A4 paisagem. A composição anual definitiva depende de comparação
+humana entre os dois protótipos registrados no workplan.
 
 Somente Diretoria, Suporte e o bypass técnico do superuser podem gerar ou
-publicar PDFs. A política de consulta e download do histórico será refinada na
-fase, se necessário.
+publicar PDFs. Consulta e download do histórico permanecem restritos a esses
+gestores até decisão explícita diferente.
 
 ## Histórico de divulgação
 
@@ -131,22 +169,23 @@ fase, se necessário.
 - Nova publicação não sobrescreve material divulgado anteriormente.
 - O registro deve preservar o conteúdo exato publicado naquele momento;
   consultar apenas o estado canônico atual não é suficiente.
-- A D.6A escolherá a estratégia mínima segura entre artefato imutável,
-  snapshot estruturado, combinação de ambos, metadados e integridade/hash.
+- Cada publicação preserva PDF imutável, snapshot estruturado allowlist,
+  metadados e hash de integridade. Preview não integra o histórico.
 
-## Checkpoint obrigatório de UX/UI
+## Diretrizes de produto aprovadas
 
-A D.6D é uma pausa humana obrigatória. Antes da aprovação nela:
-
-- não será implementado o frontend personalizado;
-- não serão definidos o design final ou a composição final dos PDFs;
-- não serão fixados cores, papel, orientação, fontes, dimensões, densidade,
-  tratamento de nomes longos ou de muitas atividades no mesmo dia.
-
-Navegação, visualizações, desktop/mobile, interações, criação/edição,
-múltiplos dias, provisoriedade, filtros, acessibilidade e identidade visual
-serão discutidos com o usuário. A paleta candidata registrada para essa
-conversa não deve ser aplicada automaticamente.
+- O sistema oferece visões Mês e Ano; mês atual é a entrada padrão.
+- A visão anual é síntese e navegação, não lista completa de nomes.
+- No mobile, selecionar um dia revela abaixo uma lista legível dos seus itens.
+- A data provisória usa `*` e legenda; não exibe texto de confirmação dentro
+  da célula.
+- O detalhe do calendário é enxuto e direciona operações completas para a
+  página canônica do Encontro.
+- Somente gestores visualizam ações de criação, edição e exportação.
+- Filtros de Eventos e Outros permanecem desabilitados até seus domínios
+  existirem; status e confirmação não viram filtros nesta fase.
+- Categoria nunca é comunicada apenas por cor e a identidade principal usa
+  ícones locais próprios conforme cada módulo for implementado.
 
 ## Fora de escopo
 
@@ -154,4 +193,4 @@ conversa não deve ser aplicada automaticamente.
 - Saúde e fonte canônica de atividade.
 - Frontend canônico das D.2–D.5.
 - Excel, importação ou sincronização de calendário externo.
-- Decisões visuais finais antes da D.6D.
+- Tipos genéricos adicionais de compromisso além da avaliação aprovada.
