@@ -2,9 +2,9 @@
 
 ## Status geral
 
-D.5A concluída em 2026-10-06. O legado foi inventariado e o desenho técnico
-foi fechado sem decisão de produto bloqueante. D.5B — propostas, itens e
-fundação estrutural — é o próximo bloco.
+D.5A e D.5B concluídas em 2026-10-06. A fundação estrutural de propostas e
+itens foi implementada em migration expansiva e validada pela suíte backend.
+D.5C — services, disponibilidade e encerramento — é o próximo bloco.
 
 ## Objetivo
 
@@ -42,10 +42,10 @@ Status: concluída em 2026-10-06.
 
 ### D.5B — Propostas, itens e fundação estrutural
 
-Status: pendente.
+Status: concluída em 2026-10-06.
 
-Implementará os dois models aprovados, choices, constraints, índices, migration
-expansiva e testes estruturais. Não implementará services, API ou backfill.
+Implementou os dois models aprovados, choices, constraints, índices, migration
+expansiva e testes estruturais, sem services, API ou backfill.
 
 ### D.5C — Services, disponibilidade e encerramento operacional
 
@@ -144,8 +144,7 @@ de migrations, fechamento documental e atualização do estado global.
 ### `PropostaVioleiros`
 
 - FK `encontro` com `PROTECT` e `related_name='propostas_violeiros'`.
-- `nome` obrigatório, com tamanho limitado, para distinguir as múltiplas
-  combinações do mesmo Encontro.
+- `nome` opcional e com tamanho limitado; é apresentação, não identidade.
 - `status` com apenas `ABERTA` e `ENCERRADA`.
 - `encerrada_em` nulo enquanto aberta e obrigatório quando encerrada.
 - Timestamps de criação e atualização.
@@ -185,10 +184,11 @@ substituído, o service marca a linha anterior como não vigente e preenche o
 mesmo slot com nova linha, sem relação entre elas. Linhas antigas permanecem
 consultáveis e a proposta pode acumular mais de cinco itens ao longo do tempo.
 
-A mesma Pessoa não pode reaparecer em outro item da mesma proposta, inclusive
-depois de retirada; a unicidade total por proposta e perfil preserva essa
-regra sem ambiguidades. O mesmo perfil pode integrar propostas diferentes do
-mesmo Encontro porque não existe unicidade perfil/Encontro.
+A mesma Pessoa não pode ocupar simultaneamente dois itens vigentes da mesma
+proposta. Uma unicidade parcial por proposta e perfil aplica essa regra sem
+impedir a preservação ou o reaproveitamento de linhas históricas. O mesmo
+perfil pode integrar propostas diferentes do mesmo Encontro porque não existe
+unicidade perfil/Encontro.
 
 ### Disponibilidade derivada
 
@@ -223,8 +223,8 @@ O comando recebe proposta, perfil, papel e posição. Ele:
 
 1. valida proposta aberta, slot permitido, perfil canônico e Encontro;
 2. reaproveita o evaluator de elegibilidade da D.3;
-3. rejeita perfil não violeiro, não disponível para MME, bloqueado ou já usado
-   na mesma proposta;
+3. rejeita perfil não violeiro, não disponível para MME, bloqueado ou já
+   vigente na mesma proposta;
 4. consulta a escala oficial sob lock;
 5. se o slot estiver ocupado por candidato ainda disponível, rejeita;
 6. se o ocupante estiver indisponível, torna a linha anterior histórica e cria
@@ -232,9 +232,8 @@ O comando recebe proposta, perfil, papel e posição. Ele:
 7. traduz corrida de constraint para erro de domínio previsível.
 
 Também haverá comando explícito para retirar um item vigente sem preencher o
-slot. Não haverá remoção física em fluxo normal. Reativar uma Pessoa já
-histórica na mesma proposta fica proibido; ela pode ser escolhida oficialmente
-sem voltar à proposta ou integrar outra proposta.
+slot. Não haverá remoção física em fluxo normal. Uma Pessoa histórica poderá
+voltar em nova linha somente quando não possuir outro item vigente na proposta.
 
 ### Encerramento
 
@@ -287,8 +286,8 @@ Pertencem ao banco:
 
 - choices válidos de status da proposta e papel sugerido;
 - coerência `ABERTA/encerrada_em nulo` e `ENCERRADA/encerrada_em preenchido`;
-- unicidade exata de `encontro/nome` para identificar propostas;
-- unicidade total de proposta/perfil;
+- nome opcional, sem unicidade ou papel de identidade;
+- unicidade parcial de proposta/perfil quando o item está vigente;
 - check local entre papel e faixa da posição;
 - unicidade parcial de slot vigente por proposta/papel/posição;
 - coerência entre `vigente` e `retirado_em`;
@@ -332,18 +331,66 @@ indisponível; se a proposta vencer, uma alocação imediatamente posterior o
 torna indisponível na projeção e o resumo passa a indicar a vaga livre. Não há
 signal nem atualização em massa das propostas.
 
-## Migration prevista
+## Migration
 
-A D.5B deve criar `0034_expand_propostas_violeiros`, dependente de
+A D.5B criou `0034_expand_propostas_violeiros`, dependente de
 `0033_expand_sessoes_formativas`, contendo apenas:
 
 - `PropostaVioleiros`;
 - `ItemPropostaVioleiros`;
 - FKs, choices, índices e constraints aprovados.
 
-A migration será expansiva, sem `RunPython`, seed, alteração de models
-legados ou dados. Os campos de `PerfilAlpinista` já existem e não exigem
-mudança de schema.
+A migration é expansiva, sem `RunPython`, seed, alteração de models legados ou
+dados. Os campos de `PerfilAlpinista` já existiam e não exigiram mudança de
+schema. **nenhum backfill automático nesta etapa**.
+
+## Resultado da D.5B
+
+### Models e cinco slots
+
+- `PropostaVioleiros` foi implementada com Encontro protegido, nome opcional,
+  estados `ABERTA`/`ENCERRADA`, timestamp coerente de encerramento e índice de
+  consulta por Encontro/status.
+- `ItemPropostaVioleiros` reutiliza `PerfilAlpinista`, registra papel, posição,
+  vigência, retirada e timestamps, com FKs protegidas.
+- Os slots vigentes são limitados estruturalmente a coordenador `1` e
+  integrantes `1–4`. Unicidades parciais impedem colisão de slot e duplicação
+  simultânea do perfil na mesma proposta.
+- Itens não vigentes permanecem armazenados e podem elevar o total histórico
+  acima de cinco sem ampliar os cinco slots vigentes.
+- Nenhum campo de trabalho, equipe, disponibilidade, substituição ou histórico
+  permanente foi duplicado.
+
+### Constraints e índices
+
+- Checks de status, papel, formato do slot, encerramento e coerência entre
+  vigência/retirada.
+- Unicidades condicionais de slot vigente e perfil vigente por proposta.
+- Índices para proposta por Encontro/status, slots vigentes e consulta de
+  itens por perfil.
+- Disponibilidade, elegibilidade, proposta encerrada e relação com a escala
+  continuam fora do banco e pertencem à D.5C.
+
+### Testes e validações
+
+- Adicionados 16 testes estruturais cobrindo múltiplas propostas, nome
+  opcional, estados, cinco slots, colisões, histórico acima de cinco linhas,
+  perfil vigente único, uso em propostas diferentes, FKs protegidas, ausência
+  de campos redundantes, ausência de efeitos externos e preservação do legado.
+- Testes novos: 16/16 aprovados.
+- Suíte backend: 445/445 aprovados, com 9 skips condicionais já previstos.
+- `python manage.py check --settings=setup.test_settings`: aprovado.
+- `python manage.py makemigrations --check --dry-run
+  --settings=setup.test_settings`: nenhuma mudança detectada.
+- PostgreSQL não foi necessário nesta etapa. As corridas reservadas permanecem
+  para D.5E.
+
+### Arquivos alterados na D.5B
+
+- `backend/core/models.py`
+- `backend/core/migrations/0034_expand_propostas_violeiros.py`
+- `backend/core/tests/test_encontro_mme_models.py`
+- `docs/workplans/PHASE_1B_D5.md`
 
 ## Estratégia incremental e compatibilidade
 
@@ -453,8 +500,8 @@ Nenhuma dessas pendências exige nova decisão de produto para iniciar a D.5B.
 
 ## Próximo passo
 
-D.5B — implementar `PropostaVioleiros`, `ItemPropostaVioleiros`, a migration
-expansiva `0034` e os testes estruturais, sem services, API ou backfill.
+D.5C — implementar services transacionais, disponibilidade derivada, resumo
+`n/5`, preenchimento de posições e encerramento operacional.
 
 ## Histórico de execução
 
@@ -464,3 +511,6 @@ expansiva `0034` e os testes estruturais, sem services, API ou backfill.
   slots, disponibilidade derivada, encerramento, autorização, concorrência,
   migration, compatibilidade e testes. Nenhum código, banco ou migration foi
   alterado.
+- 2026-10-06 — D.5B concluída. Models, migration expansiva e 16 testes
+  estruturais implementados; suíte backend com 445 testes aprovada. Nenhum
+  backfill, service, API ou acesso ao PostgreSQL foi realizado.

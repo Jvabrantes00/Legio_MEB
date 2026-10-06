@@ -1279,6 +1279,140 @@ class TrabalhoEncontro(models.Model):
         return f'{self.pessoa.nome} — {self.encontro.encontro}'
 
 
+# Fundação estrutural de propostas de Violeiros do MME.
+class PropostaVioleiros(models.Model):
+    class Status(models.TextChoices):
+        ABERTA = 'aberta', 'Aberta'
+        ENCERRADA = 'encerrada', 'Encerrada'
+
+    encontro = models.ForeignKey(
+        Encontro,
+        on_delete=models.PROTECT,
+        related_name='propostas_violeiros',
+    )
+    nome = models.CharField(max_length=100, blank=True, default='')
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.ABERTA,
+    )
+    encerrada_em = models.DateTimeField(null=True, blank=True)
+    criada_em = models.DateTimeField(auto_now_add=True)
+    atualizada_em = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['encontro', 'criada_em', 'id']
+        indexes = [
+            models.Index(
+                fields=['encontro', 'status'],
+                name='prop_vio_enc_status_idx',
+            ),
+        ]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(status__in=('aberta', 'encerrada')),
+                name='proposta_violeiros_status_valido',
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(status='aberta', encerrada_em__isnull=True)
+                    | models.Q(status='encerrada', encerrada_em__isnull=False)
+                ),
+                name='proposta_violeiros_encerramento_coerente',
+            ),
+        ]
+
+    def __str__(self):
+        return self.nome or str(self.pk)
+
+
+class ItemPropostaVioleiros(models.Model):
+    class PapelSugerido(models.TextChoices):
+        COORDENADOR = 'coordenador', 'Coordenador'
+        INTEGRANTE = 'integrante', 'Integrante'
+
+    proposta = models.ForeignKey(
+        PropostaVioleiros,
+        on_delete=models.PROTECT,
+        related_name='itens',
+    )
+    perfil_alpinista = models.ForeignKey(
+        PerfilAlpinista,
+        on_delete=models.PROTECT,
+        related_name='itens_propostas_violeiros',
+    )
+    papel_sugerido = models.CharField(
+        max_length=20,
+        choices=PapelSugerido.choices,
+    )
+    posicao = models.PositiveSmallIntegerField()
+    vigente = models.BooleanField(default=True)
+    retirado_em = models.DateTimeField(null=True, blank=True)
+    criado_em = models.DateTimeField(auto_now_add=True)
+    atualizado_em = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = [
+            'proposta',
+            '-vigente',
+            'papel_sugerido',
+            'posicao',
+            'id',
+        ]
+        indexes = [
+            models.Index(
+                fields=['proposta', 'vigente', 'papel_sugerido', 'posicao'],
+                name='item_prop_slot_idx',
+            ),
+            models.Index(
+                fields=['perfil_alpinista', 'vigente'],
+                name='item_prop_perfil_idx',
+            ),
+        ]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(
+                    papel_sugerido__in=('coordenador', 'integrante')
+                ),
+                name='item_proposta_papel_valido',
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(papel_sugerido='coordenador', posicao=1)
+                    | models.Q(
+                        papel_sugerido='integrante',
+                        posicao__gte=1,
+                        posicao__lte=4,
+                    )
+                ),
+                name='item_proposta_slot_valido',
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(vigente=True, retirado_em__isnull=True)
+                    | models.Q(vigente=False, retirado_em__isnull=False)
+                ),
+                name='item_proposta_vigencia_coerente',
+            ),
+            models.UniqueConstraint(
+                fields=['proposta', 'papel_sugerido', 'posicao'],
+                condition=models.Q(vigente=True),
+                name='item_proposta_slot_vigente_unico',
+            ),
+            models.UniqueConstraint(
+                fields=['proposta', 'perfil_alpinista'],
+                condition=models.Q(vigente=True),
+                name='item_proposta_perfil_vigente_unico',
+            ),
+        ]
+
+    def __str__(self):
+        return (
+            f'{self.get_papel_sugerido_display()} {self.posicao} — '
+            f'{self.perfil_alpinista.pessoa.nome}'
+        )
+
+
 class ReuniaoPreparatoriaEncontro(models.Model):
     encontro = models.ForeignKey(
         Encontro,
