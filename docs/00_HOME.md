@@ -23,7 +23,8 @@ substitui os documentos de referência nem os `AGENTS.md` aplicáveis.
   autorização e validação PostgreSQL.
 - 1B.3D.5 — MME e Propostas de Violeiros concluída, com services, API,
   autorização, compatibilidade e validação de concorrência em PostgreSQL.
-- A próxima frente global da Fase 1 ainda precisa ser formalizada.
+- 1B.3D.6 — Calendário Institucional: fatia de Encontros preparada
+  documentalmente; próximo bloco: D.6A, auditoria e desenho técnico.
 
 O estado vivo e o roadmap estão em [[PROJECT_STATE]].
 
@@ -47,6 +48,20 @@ O estado vivo e o roadmap estão em [[PROJECT_STATE]].
   débitos e histórico de uma fase.
 - Não carregue documentos desses dois grupos indiscriminadamente em tarefas de
   outros domínios.
+
+### Calendário Institucional — fatia de Encontros
+
+Se a tarefa envolver Calendário Institucional, projeção ou agenda de
+Encontros, `CalendarioEncontro`, `DiaEncontro`, criação/edição pelo
+Calendário, frontend do Calendário, PDF mensal/anual, versões divulgadas ou
+histórico de divulgação, leia nesta ordem:
+
+1. `docs/decisions/ADR-001-calendario-institucional.md`;
+2. `docs/domain/INSTITUTIONAL_CALENDAR.md`;
+3. `docs/workplans/PHASE_1B_D6.md`.
+
+Consulte a documentação e o código do núcleo de Encontros somente quando a
+tarefa exigir. Não carregue D.2–D.5 sem dependência real.
 
 ### Inscrição, convite e participação em Encontros
 
