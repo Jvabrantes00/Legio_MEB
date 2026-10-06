@@ -12,25 +12,25 @@
 Esta matriz descreve somente o que está implementado. Capabilities do
 frontend orientam a interface, mas o backend é a autoridade final.
 
-A seção de Calendário Institucional ao final registra uma decisão futura,
-ainda não implementada, sem alterar as permissões da matriz corrente.
+A leitura do Calendário Institucional já está implementada como projeção
+allowlist. Os comandos de gestão continuam reservados à fase seguinte.
 
 ## Matriz
 
-| Papel | API root | Admin | Alpinista | Escrita Alpinista | Foto perfil | Música | Propostas MME | Formação em Encontros | Encontros | Galeria | Funções / participações | Eventos / participações | Materiais / entregas | Dashboard | Logs |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| Superuser técnico | R | RW | Full | RW | RW | RW | RW | RW | Full/RW | RW | RW | RW | RW | R | R |
-| Suporte | — | — | Full | RW | RW | RW | RW | RW | Full/RW | RW | RW | RW | RW | R | R |
-| Diretoria | — | — | Full | RW | RW | RW | RW | RW | Full/RW | RW | RW | RW | RW | R | R |
-| Fichas | — | — | Full | RW | RW | RW | R | R | Full/RW | — | RW | — | — | R | — |
-| MME | — | — | Summary | — | R | RW | RW | — | — | — | — | — | — | — | — |
-| Formação | — | — | Summary | — | R | — | — | RW | — | — | — | — | — | — | — |
-| Secretaria | — | — | Summary | — | R | — | — | — | — | — | — | — | RW | — | — |
-| Ação Social | — | — | Summary | — | R | — | — | — | — | — | — | — | — | — | — |
-| Liturgia | — | — | Summary | — | R | — | — | — | — | — | — | — | — | — | — |
-| Eventos | — | — | Summary | — | R | — | — | — | — | — | — | RW | — | — | — |
-| Comunicação | — | — | Summary | — | RW | — | — | — | Summary/R | RW | — | — | — | — | — |
-| Usuário sem role | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — |
+| Papel | API root | Admin | Alpinista | Escrita Alpinista | Foto perfil | Música | Propostas MME | Formação em Encontros | Encontros | Calendário | Galeria | Funções / participações | Eventos / participações | Materiais / entregas | Dashboard | Logs |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| Superuser técnico | R | RW | Full | RW | RW | RW | RW | RW | Full/RW | R | RW | RW | RW | RW | R | R |
+| Suporte | — | — | Full | RW | RW | RW | RW | RW | Full/RW | R | RW | RW | RW | RW | R | R |
+| Diretoria | — | — | Full | RW | RW | RW | RW | RW | Full/RW | R | RW | RW | RW | RW | R | R |
+| Fichas | — | — | Full | RW | RW | RW | R | R | Full/RW | R | — | RW | — | — | R | — |
+| MME | — | — | Summary | — | R | RW | RW | — | — | R | — | — | — | — | — | — |
+| Formação | — | — | Summary | — | R | — | — | RW | — | R | — | — | — | — | — | — |
+| Secretaria | — | — | Summary | — | R | — | — | — | — | R | — | — | — | RW | — | — |
+| Ação Social | — | — | Summary | — | R | — | — | — | — | R | — | — | — | — | — | — |
+| Liturgia | — | — | Summary | — | R | — | — | — | — | R | — | — | — | — | — | — |
+| Eventos | — | — | Summary | — | R | — | — | — | — | R | — | — | RW | — | — | — |
+| Comunicação | — | — | Summary | — | RW | — | — | — | Summary/R | R | RW | — | — | — | — | — |
+| Usuário sem role | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — |
 
 ## Detalhes importantes
 
@@ -128,19 +128,19 @@ ainda não implementada, sem alterar as permissões da matriz corrente.
   entregas; Entrega oferece criar, listar e recuperar, não update/delete.
 - Logs: Suporte e Diretoria têm leitura; o ViewSet é read-only.
 
-### Calendário Institucional — decisão futura
+### Calendário Institucional
 
-- Todas as roles funcionais reconhecidas poderão visualizar o calendário
-  institucional completo.
-- Somente Suporte e Diretoria poderão criar ou alterar objetos através do
-  calendário.
+- Todas as roles funcionais reconhecidas visualizam a projeção allowlist do
+  Calendário Institucional. Ela não contém participantes, equipes, saúde,
+  inscrições, convites, formação ou observações internas.
+- O endpoint implementado nesta etapa é somente leitura. A capability de
+  gestão reflete a política já aprovada para Suporte e Diretoria, mas não
+  expõe comandos antes da fase correspondente.
 - O superuser permanece como bypass técnico separado.
 - Visualizar um item no calendário não concede permissão de gestão sobre o
   objeto de origem.
 - Encontros, Eventos, equipes e demais recursos continuarão sujeitos às
   permissões de seus próprios módulos.
-- Esta política somente entrará na matriz implementada junto com backend,
-  frontend e testes de autorização correspondentes.
 
 ## Semântica de negação
 

@@ -44,6 +44,8 @@ from .serializers import (
     HistoricoFormativoSerializer,
     PalestranteSessaoCommandSerializer,
     PalestranteSessaoSerializer,
+    PeriodoCalendarioQuerySerializer,
+    ConsultaCalendarioInstitucionalSerializer,
     RealizacaoSessaoCommandSerializer,
     RemocaoPalestranteCommandSerializer,
     SessaoFormativaSerializer,
@@ -66,6 +68,7 @@ from .services.reunioes_preparatorias import corrigir_presenca_preparatoria
 from .services import trabalhos as trabalho_services
 from .services import formacoes as formacao_services
 from .services import propostas_violeiros as proposta_violeiros_services
+from .services import calendario_institucional as calendario_services
 from .serializers import _erro_de_dominio, _erro_de_trabalho
 from .formacao_catalogo import TEMAS_FORMATIVOS
 from .roles import (
@@ -76,6 +79,8 @@ from .roles import (
     FORMATION_HISTORY_ROLES,
     FORMATION_MANAGEMENT_ROLES,
     FULL_ADMIN_ROLES,
+    INSTITUTIONAL_CALENDAR_MANAGEMENT_ROLES,
+    INSTITUTIONAL_CALENDAR_READ_ROLES,
     RECOGNIZED_ROLES,
     MUSIC_MANAGEMENT_ROLES,
     MME_PROPOSAL_MANAGEMENT_ROLES,
@@ -132,6 +137,28 @@ def protected_image_response(image_field, filename):
 def current_user(request):
     """Return the minimal authenticated identity required by the future BFF."""
     return Response(CurrentUserSerializer(request.user).data)
+
+
+@api_view(['GET'])
+@permission_classes([
+    require_sia_roles(*INSTITUTIONAL_CALENDAR_READ_ROLES),
+])
+def calendario_institucional(request):
+    query = PeriodoCalendarioQuerySerializer(data=request.query_params)
+    query.is_valid(raise_exception=True)
+    resultado = calendario_services.consultar_calendario_institucional(
+        query.validated_data['inicio'],
+        query.validated_data['fim'],
+    )
+    pode_gerir = request.user.is_superuser or user_has_any_role(
+        request.user,
+        *INSTITUTIONAL_CALENDAR_MANAGEMENT_ROLES,
+    )
+    serializer = ConsultaCalendarioInstitucionalSerializer(
+        resultado,
+        context={'pode_gerir_calendario': pode_gerir},
+    )
+    return Response(serializer.data)
 
 
 @api_view(['GET'])

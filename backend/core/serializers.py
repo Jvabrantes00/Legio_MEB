@@ -19,6 +19,7 @@ from .services import reunioes_preparatorias as reuniao_services
 from .services import trabalhos as trabalho_services
 from .services import formacoes as formacao_services
 from .services import propostas_violeiros as proposta_violeiros_services
+from .services.calendario_institucional import MAXIMO_DIAS_INTERVALO
 from .services.elegibilidade_trabalho import (
     avaliar_capacidade_equipe,
     avaliar_composicao_estrutural,
@@ -558,6 +559,85 @@ class EncontroComunicacaoSerializer(serializers.ModelSerializer):
         model = Encontro
         fields = ('id', 'encontro', 'tipo', 'data_referencia')
         read_only_fields = fields
+
+
+class PeriodoCalendarioQuerySerializer(StrictCommandSerializer):
+    inicio = serializers.DateField(required=True)
+    fim = serializers.DateField(required=True)
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        inicio = attrs['inicio']
+        fim = attrs['fim']
+        if inicio > fim:
+            raise serializers.ValidationError({
+                'periodo': [
+                    'A data inicial não pode ser posterior à data final.'
+                ]
+            })
+        if (fim - inicio).days >= MAXIMO_DIAS_INTERVALO:
+            raise serializers.ValidationError({
+                'periodo': [
+                    'O intervalo não pode ultrapassar um ano civil completo.'
+                ]
+            })
+        return attrs
+
+
+class ConflitoCalendarioSerializer(serializers.Serializer):
+    data = serializers.DateField(read_only=True)
+    encontro_ids = serializers.ListField(
+        child=serializers.IntegerField(),
+        read_only=True,
+    )
+    quantidade = serializers.IntegerField(read_only=True)
+
+
+class DiaCalendarioSerializer(serializers.Serializer):
+    id = serializers.IntegerField(read_only=True, allow_null=True)
+    data = serializers.DateField(read_only=True)
+    ordem = serializers.IntegerField(read_only=True)
+    conflito = ConflitoCalendarioSerializer(read_only=True, allow_null=True)
+
+
+class ItemCalendarioEncontroSerializer(serializers.Serializer):
+    categoria = serializers.CharField(read_only=True)
+    encontro_id = serializers.IntegerField(read_only=True)
+    titulo = serializers.CharField(read_only=True)
+    tipo = serializers.CharField(read_only=True)
+    status = serializers.CharField(read_only=True)
+    calendario_id = serializers.IntegerField(read_only=True, allow_null=True)
+    calendario_versao = serializers.IntegerField(
+        read_only=True,
+        allow_null=True,
+    )
+    origem_agenda = serializers.CharField(read_only=True)
+    confirmacao = serializers.CharField(read_only=True)
+    dias = DiaCalendarioSerializer(many=True, read_only=True)
+    pode_editar_calendario = serializers.SerializerMethodField()
+
+    def get_pode_editar_calendario(self, obj):
+        return self.context.get('pode_gerir_calendario', False)
+
+
+class PeriodoCalendarioSerializer(serializers.Serializer):
+    inicio = serializers.DateField(read_only=True)
+    fim = serializers.DateField(read_only=True)
+
+
+class ConsultaCalendarioInstitucionalSerializer(serializers.Serializer):
+    periodo = PeriodoCalendarioSerializer(read_only=True)
+    itens = ItemCalendarioEncontroSerializer(many=True, read_only=True)
+    conflitos = ConflitoCalendarioSerializer(many=True, read_only=True)
+    capabilities = serializers.SerializerMethodField()
+
+    def get_capabilities(self, obj):
+        pode_gerir = self.context.get('pode_gerir_calendario', False)
+        return {
+            'pode_visualizar': True,
+            'pode_criar_encontro': pode_gerir,
+            'pode_publicar': pode_gerir,
+        }
 
 
 class FotoEncontroSerializer(serializers.ModelSerializer):

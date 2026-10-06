@@ -19,6 +19,10 @@ RECOGNIZED_ROLES = tuple(role.value for role in SiaRole)
 # Papéis com administração ampla dos recursos atuais do SIA.
 FULL_ADMIN_ROLES = (SiaRole.SUPORTE, SiaRole.DIRETORIA)
 
+# O calendário compartilha somente sua projeção allowlist com todos os papéis.
+INSTITUTIONAL_CALENDAR_READ_ROLES = RECOGNIZED_ROLES
+INSTITUTIONAL_CALENDAR_MANAGEMENT_ROLES = FULL_ADMIN_ROLES
+
 # Administração de pessoas e da operação dos encontros.
 FICHAS_MANAGEMENT_ROLES = (*FULL_ADMIN_ROLES, SiaRole.FICHAS)
 

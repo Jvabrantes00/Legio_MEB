@@ -532,6 +532,9 @@ class DiaEncontro(models.Model):
     descricao = models.CharField(max_length=255, blank=True, default='')
 
     class Meta:
+        indexes = [
+            models.Index(fields=['data'], name='dia_encontro_data_idx'),
+        ]
         constraints = [
             models.CheckConstraint(
                 condition=models.Q(ordem__gt=0),

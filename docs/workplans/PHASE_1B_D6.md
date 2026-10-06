@@ -2,10 +2,10 @@
 
 ## Status geral
 
-D.6A concluída em 2026-10-06 por auditoria estática do código. O desenho de
-projeção, conflitos, comandos, autorização, publicação imutável e geração de
-PDF foi fechado sem implementar. D.6B — projeção, consultas e API — é o
-próximo bloco.
+D.6A e D.6B concluídas. A projeção canônica de Encontros, consulta por período,
+fallback legado controlado, conflitos consultivos, API allowlist, autorização
+de leitura e índice de data estão implementados e validados. D.6C — comandos,
+criação/edição e autorização — é o próximo bloco.
 
 ## Objetivo
 
@@ -49,10 +49,10 @@ implementar.
 
 ### D.6B — Projeção, consultas e API
 
-Status: pendente.
+Status: concluída em 2026-10-06.
 
-Implementará o query service, DTOs, serializer allowlist, consulta inclusiva
-por período, conflito consultivo, capabilities de leitura e índice de data,
+Implementou query service, DTOs imutáveis, serializer allowlist, consulta
+inclusiva por período, conflito consultivo, capabilities e índice de data,
 sem comandos de escrita nem tabela duplicada de calendário.
 
 ### D.6C — Comandos, criação/edição e autorização
@@ -93,6 +93,76 @@ Status: pendente.
 Validará integração, migrations limpas, concorrência de publicação e
 alteração temporal em PostgreSQL, regressão backend/frontend, storage
 temporário e remoção de recursos efêmeros.
+
+## Resultado da D.6B
+
+### Projeção, período e performance
+
+- `core.services.calendario_institucional` concentra a projeção em DTOs
+  imutáveis; views e serializers não reconstruem regras de agenda.
+- A consulta recebe `inicio` e `fim` inclusivos, suporta mês, ano e intervalos
+  arbitrários e limita a resposta a no máximo 366 datas inclusivas.
+- Um Encontro forma um único item com os seus dias pertencentes ao período.
+  A ordenação por data, ordem, título, Encontro e dia é determinística.
+- A consulta canônica parte de `DiaEncontro.data`, filtra agenda vigente e usa
+  `select_related`. O fallback é uma segunda consulta constante; o teste de
+  desempenho confirma duas queries, sem N+1.
+
+### Agenda, fallback e conflitos
+
+- Agenda vigente canônica prevalece sempre. `oficializado_em` distingue
+  `PROVISORIA` de `OFICIAL`; a projeção usa somente o lifecycle `status`.
+- Somente Encontro sem qualquer calendário usa `data_referencia`, com origem
+  `LEGADO`, confirmação `INDETERMINADA` e sem interpretar `data_exato`.
+- Agenda histórica não vigente não é projetada. Assim, `ADIADO` sem agenda
+  atual permanece fora do intervalo, enquanto `CANCELADO` e `FINALIZADO` com
+  agenda vigente continuam visíveis com seu status canônico.
+- Conflitos são derivados em memória das mesmas ocorrências, agrupam
+  Encontros distintos por data e aparecem na coleção global e no dia afetado.
+  Não persistem dados, não alteram domínio e não bloqueiam operações.
+
+### API e autorização
+
+- `GET /api/calendario-institucional/?inicio=YYYY-MM-DD&fim=YYYY-MM-DD`
+  retorna `periodo`, `itens`, `conflitos` e `capabilities`, sem paginação.
+- Serializers explícitos expõem somente identificação, nome, tipo, status,
+  agenda, confirmação, dias, conflitos e capabilities. Dados pessoais e
+  operacionais permanecem ausentes.
+- Formatos inválidos, parâmetros ausentes/extras, intervalo invertido ou
+  excessivo retornam `400`; métodos não expostos retornam `405`.
+- Todos os papéis reconhecidos e o superuser leem. Usuário autenticado sem
+  role recebe `403` e anônimo recebe `401`. A leitura não amplia permissões do
+  endpoint de Encontros.
+- Capabilities de gestão refletem a política aprovada para Suporte/Diretoria e
+  superuser; nenhum comando de escrita foi criado nesta etapa.
+
+### Migration, testes e compatibilidade
+
+- `0035_diaencontro_data_index` adiciona somente o índice B-tree
+  `dia_encontro_data_idx` em `DiaEncontro.data`, sem dados, `RunPython` ou
+  backfill.
+- Foram adicionados 16 testes de projeção, período, agenda/fallback,
+  reprogramação, estados, conflitos, query count, contrato, HTTP e roles.
+- A suíte backend encerrou com 506 testes aprovados e 14 skips preexistentes.
+  `manage.py check` passou; `makemigrations --check --dry-run` retornou
+  `No changes detected`, com apenas o aviso esperado de PostgreSQL inacessível
+  na sandbox.
+- Endpoints e serializers legados não foram alterados. Não houve dual-write,
+  backfill, frontend, PDF, publicação nem acesso ao PostgreSQL.
+
+### Arquivos alterados na D.6B
+
+- `backend/core/services/calendario_institucional.py`;
+- `backend/core/models.py`;
+- `backend/core/roles.py`;
+- `backend/core/serializers.py`;
+- `backend/core/views.py`;
+- `backend/core/urls.py`;
+- `backend/core/migrations/0035_diaencontro_data_index.py`;
+- `backend/core/tests/test_calendario_institucional.py`;
+- `docs/00_HOME.md`;
+- `docs/AUTHORIZATION_MATRIX.md`;
+- `docs/workplans/PHASE_1B_D6.md`.
 
 ## Decisões da fase
 
@@ -535,9 +605,9 @@ ambientes isolados normais.
 ## Pendências humanas
 
 As perguntas visuais e a política de download histórico estão reservadas à
-D.6D. Elas não bloqueiam a D.6B, cuja leitura usará o contrato neutro e a
-política conservadora documentada. Não há decisão humana ou bloqueio técnico
-pendente antes da projeção.
+D.6D. Elas não bloqueiam a D.6C; a projeção já usa contrato neutro e a política
+conservadora documentada. Não há decisão humana ou bloqueio técnico pendente
+antes dos comandos.
 
 ## Débitos
 
@@ -563,6 +633,7 @@ pendente antes da projeção.
 - `docs/PROJECT_STATE.md`
 - `backend/core/models.py`
 - `backend/core/services/encontros.py`
+- `backend/core/services/calendario_institucional.py`
 - `backend/core/serializers.py`
 - `backend/core/views.py`
 - `backend/core/urls.py`
@@ -570,7 +641,9 @@ pendente antes da projeção.
 - `backend/core/permissions.py`
 - `backend/core/migrations/0028_nucleo_encontros.py`
 - `backend/core/migrations/0034_expand_propostas_violeiros.py`
+- `backend/core/migrations/0035_diaencontro_data_index.py`
 - `backend/core/tests/test_nucleo_encontros.py`
+- `backend/core/tests/test_calendario_institucional.py`
 - `backend/core/tests/test_authorization.py`
 - `backend/core/tests/test_authorization_paths.py`
 - `backend/setup/settings.py`
@@ -587,9 +660,9 @@ pendente antes da projeção.
 
 ## Próximo passo
 
-D.6B — implementar projeção, consulta inclusiva por período, fallback legado,
-conflitos consultivos, serializer/API allowlist, autorização de leitura e o
-índice necessário, sem comandos de escrita ou frontend.
+D.6C — implementar comandos explícitos de criação e edição pelo Calendário,
+delegação aos services temporais, auditoria e autorização de gestão, sem
+frontend, PDF ou publicação.
 
 ## Histórico de execução
 
@@ -599,3 +672,6 @@ conflitos consultivos, serializer/API allowlist, autorização de leitura e o
   DTO/serializer, consulta por período, fallback legado, conflitos, comandos,
   roles, publicação com PDF + snapshot, private media, renderer recomendado,
   migrations e testes. Nenhum código, banco, migration ou PDF foi alterado.
+- 2026-10-06 — D.6B concluída. Projeção, API de leitura, conflitos,
+  autorização e índice implementados; 16 testes novos e suíte backend com 506
+  testes aprovados, sem PostgreSQL, frontend ou comandos de escrita.

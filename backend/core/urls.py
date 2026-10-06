@@ -19,6 +19,7 @@ from .views import (
 from .views import dashboard_stats
 from .views import current_user
 from .views import catalogo_formacao
+from .views import calendario_institucional
 from .authentication import SiaTokenRefreshSerializer
 from .permissions import IsSiaSuperuser
 
@@ -91,6 +92,11 @@ router.register(r'entregas-materiais', EntregaMaterialViewSet)
 
 # Exporta as rotas 
 urlpatterns = [
+    path(
+        'calendario-institucional/',
+        calendario_institucional,
+        name='calendario-institucional',
+    ),
     path('', include(router.urls)),
     path('dashboard-stats/', dashboard_stats, name='dashboard-stats'),
     path('catalogo-formacao/', catalogo_formacao, name='catalogo-formacao'),
