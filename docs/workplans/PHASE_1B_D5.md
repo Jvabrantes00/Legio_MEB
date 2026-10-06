@@ -2,9 +2,9 @@
 
 ## Status geral
 
-D.5A, D.5B e D.5C concluídas em 2026-10-06. A fundação e os services
-transacionais de propostas foram implementados e validados pela suíte backend.
-D.5D — API, autorização e compatibilidade — é o próximo bloco.
+D.5A a D.5D concluídas em 2026-10-06. Fundação, services, API, autorização e
+compatibilidade de propostas foram implementados e validados pela suíte
+backend. D.5E — PostgreSQL, regressão e fechamento — é o próximo bloco.
 
 ## Objetivo
 
@@ -57,9 +57,9 @@ escala oficial.
 
 ### D.5D — API, autorização e compatibilidade
 
-Status: pendente.
+Status: concluída em 2026-10-06.
 
-Implementará contratos explícitos de leitura e comando, autorização por papel,
+Implementou contratos explícitos de leitura e comando, autorização por papel,
 auditoria e convivência com os endpoints legados, sem cutover destrutivo.
 
 ### D.5E — PostgreSQL, regressão e fechamento
@@ -463,6 +463,95 @@ schema. **nenhum backfill automático nesta etapa**.
 - `backend/core/tests/test_encontro_mme_services.py`
 - `docs/workplans/PHASE_1B_D5.md`
 
+## Resultado da D.5D
+
+### API e contratos
+
+- Registrado `/api/propostas-violeiros/` com listagem escopada obrigatoriamente
+  por `encontro`, criação e detalhe.
+- Actions explícitas: `editar-nome`, `preencher-posicao`,
+  `substituir-posicao`, `retirar-item`, `encerrar`, `resumo` e
+  `aproveitar-candidato`.
+- O contrato de leitura usa allowlist e expõe estado, composição `n/5`, vagas,
+  completude, itens vigentes e históricos, papel/posição, situação derivada,
+  flags musicais canônicas e avaliação de elegibilidade quando aplicável.
+- Serializers de comando são estritos e rejeitam campos extras. Não foram
+  expostos `PUT`, `DELETE` ou update genérico dos models.
+- Nested mismatch de item/proposta retorna `404`; erros de entrada e transição
+  dos services permanecem `400`, autorização `401/403` e métodos ausentes
+  `405`.
+
+### Autorização
+
+- Suporte, Diretoria e MME possuem gestão de proposta; Fichas possui somente
+  leitura e a action separada de aproveitamento oficial.
+- A action de aproveitamento usa as roles administrativas canônicas da D.3:
+  Suporte, Diretoria e Fichas. MME não recebe escrita em convite, trabalho ou
+  escala.
+- Demais papéis permanecem negados por default. Superuser continua bypass
+  técnico separado.
+- A role `COORDENADOR` sugerida não participa das permissions e não concede
+  capability contextual.
+- `AUTHORIZATION_MATRIX.md` foi atualizada com a fronteira implementada.
+
+### Aproveitamento oficial
+
+- A action valida que o item pertence à proposta e continua disponível, então
+  delega a `criar_convite_trabalho` da D.3.
+- A operação cria somente `ConviteEncontro(TRABALHAR)` em estado `CONVIDADO`.
+  Não confirma, não cria `TrabalhoEncontro`, não aloca e nunca marca
+  `TRABALHOU`.
+- `role_equipe_id` é opcional e representa a role oficial proposta no convite;
+  ela pode divergir do papel sugerido pelo MME.
+- Candidatos podem ser aproveitados individualmente de propostas diferentes;
+  não existe proposta vencedora ou seleção integral.
+
+### Propostas incompletas
+
+- Leitura e action `resumo` reutilizam integralmente a projeção da D.5C.
+- A listagem aceita `precisa_completar=true` para retornar somente propostas
+  abertas cuja disponibilidade derivada está abaixo de cinco.
+- O aviso permanece consultável; nenhuma notificação, push ou e-mail foi
+  criado.
+
+### Compatibilidade e auditoria
+
+- Os endpoints e writes legados de música, função, participação e histórico
+  de Violeiro permanecem intactos. Não há dual-write, backfill ou reconstrução
+  de propostas.
+- Novos writes usam exclusivamente os services canônicos da D.5C. A escala
+  continua sob os services da D.3.
+- Criação, alteração de nome, preenchimento, substituição, retirada e
+  encerramento geram `LogSistema` apenas com identificadores. O aproveitamento
+  registra a solicitação junto ao convite, sem dados pessoais sensíveis.
+- Situação da mesma Pessoa muda em todas as propostas por leitura de
+  `TrabalhoEncontro`, sem atualização em cascata.
+
+### Testes e validações
+
+- Adicionados 21 testes de API e contratos cobrindo papéis, autenticação,
+  comandos, resumo, filtro de incompletas, todas as situações derivadas,
+  histórico, multi-proposta, aproveitamento oficial, role divergente,
+  auditoria, ausência de efeitos colaterais, nested mismatch, `405` e
+  allowlists.
+- Testes novos: 21/21 aprovados.
+- Suíte backend: 490/490 aprovada, com 14 skips condicionais.
+- `python manage.py check --settings=setup.test_settings`: aprovado.
+- `python manage.py makemigrations --check --dry-run
+  --settings=setup.test_settings`: nenhuma mudança detectada.
+- Nenhuma migration foi criada ou alterada e não houve acesso ao PostgreSQL.
+
+### Arquivos alterados na D.5D
+
+- `backend/core/roles.py`
+- `backend/core/services/propostas_violeiros.py`
+- `backend/core/serializers.py`
+- `backend/core/views.py`
+- `backend/core/urls.py`
+- `backend/core/tests/test_encontro_mme_api.py`
+- `docs/AUTHORIZATION_MATRIX.md`
+- `docs/workplans/PHASE_1B_D5.md`
+
 ## Estratégia incremental e compatibilidade
 
 ### EXPAND — D.5B e D.5C
@@ -554,7 +643,7 @@ legada equivalente. Essa reconciliação permanece débito humano separado.
 - Implementação frontend das propostas fica fora dos blocos backend definidos
   neste workplan, salvo decisão posterior explícita.
 
-Nenhuma dessas pendências exige nova decisão de produto para iniciar a D.5D.
+Nenhuma dessas pendências impede a validação e o fechamento da D.5E.
 
 ## Arquivos relevantes
 
@@ -571,7 +660,8 @@ Nenhuma dessas pendências exige nova decisão de produto para iniciar a D.5D.
 
 ## Próximo passo
 
-D.5D — implementar API, autorização e compatibilidade sem cutover destrutivo.
+D.5E — executar as cinco corridas em PostgreSQL real, regressão final e
+fechamento documental da Fase 1B.3D.5.
 
 ## Histórico de execução
 
@@ -588,3 +678,7 @@ D.5D — implementar API, autorização e compatibilidade sem cutover destrutivo
   resumo `n/5`, substituição segura e encerramento implementados; suíte backend
   com 469 testes aprovada. Cinco corridas aguardam validação PostgreSQL na
   D.5E.
+- 2026-10-06 — D.5D concluída. API canônica, autorização, aproveitamento via
+  convite oficial, filtro de propostas incompletas, auditoria e compatibilidade
+  implementados; suíte backend com 490 testes aprovada. Nenhuma migration ou
+  alteração de legado foi necessária.

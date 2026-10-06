@@ -25,6 +25,14 @@ FICHAS_MANAGEMENT_ROLES = (*FULL_ADMIN_ROLES, SiaRole.FICHAS)
 # Gestão das características musicais e do histórico de Violeiro.
 MUSIC_MANAGEMENT_ROLES = (*FICHAS_MANAGEMENT_ROLES, SiaRole.MME)
 
+# Planejamento de Violeiros: Fichas consulta e usa sugestões na escala oficial,
+# mas somente MME e a administração ampla editam as propostas.
+MME_PROPOSAL_MANAGEMENT_ROLES = (*FULL_ADMIN_ROLES, SiaRole.MME)
+MME_PROPOSAL_READ_ROLES = (
+    *MME_PROPOSAL_MANAGEMENT_ROLES,
+    SiaRole.FICHAS,
+)
+
 # Consulta do histórico legado e canônico por papéis autorizados.
 FORMATION_HISTORY_ROLES = (*FICHAS_MANAGEMENT_ROLES, SiaRole.FORMACAO)
 

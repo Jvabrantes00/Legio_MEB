@@ -438,6 +438,15 @@ def obter_situacao_item_proposta(item):
     return _resultado_item_proposta(item_atual)
 
 
+def obter_candidato_para_aproveitamento(item):
+    resultado = obter_situacao_item_proposta(item)
+    if resultado.situacao != SituacaoItemProposta.DISPONIVEL:
+        raise ValidationError(
+            'Somente candidato disponível pode ser aproveitado pela escala.'
+        )
+    return resultado.item.perfil_alpinista.pessoa
+
+
 def _resultado_item_proposta(item):
     if not item.vigente:
         return ResultadoItemProposta(

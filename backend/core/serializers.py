@@ -9,6 +9,7 @@ from .models import (
     FotoEncontro, FuncaoEncontro, Inscricao, LogSistema, Material, Palestra,
     ParticipacaoEncontro as ResultadoParticipacaoEncontro, ParticipacaoEvento,
     PalestranteSessao, PerfilAlpinista, Pessoa, PresencaPreparatoria,
+    ItemPropostaVioleiros, PropostaVioleiros,
     ReuniaoPreparatoriaEncontro, RoleEquipeEncontro, SessaoFormativa,
     TrabalhoEncontro,
     VinculoEncontroLegado as ParticipacaoEncontro,
@@ -17,12 +18,25 @@ from .services import participacoes as participacao_services
 from .services import reunioes_preparatorias as reuniao_services
 from .services import trabalhos as trabalho_services
 from .services import formacoes as formacao_services
+from .services import propostas_violeiros as proposta_violeiros_services
 from .services.elegibilidade_trabalho import (
     avaliar_capacidade_equipe,
     avaliar_composicao_estrutural,
 )
 from .validators import normalize_cpf, validate_image_upload_size
 from .roles import recognized_user_roles
+
+
+class StrictCommandSerializer(serializers.Serializer):
+    def validate(self, attrs):
+        extra_fields = set(self.initial_data) - set(self.fields)
+        if extra_fields:
+            raise serializers.ValidationError({
+                'campos_extras': [
+                    f"Campos não permitidos: {', '.join(sorted(extra_fields))}."
+                ]
+            })
+        return attrs
 
 
 def calculate_age(birth_date):
@@ -959,6 +973,180 @@ class EquipeEncontroSerializer(serializers.ModelSerializer):
 
     def get_composicao(self, instance):
         return avaliar_composicao_estrutural(instance).as_dict()
+
+
+class ItemPropostaVioleirosSerializer(serializers.Serializer):
+    id = serializers.IntegerField(source='item.pk', read_only=True)
+    perfil_alpinista_id = serializers.IntegerField(
+        source='item.perfil_alpinista_id',
+        read_only=True,
+    )
+    pessoa_id = serializers.IntegerField(
+        source='item.perfil_alpinista.pessoa_id',
+        read_only=True,
+    )
+    pessoa_nome = serializers.CharField(
+        source='item.perfil_alpinista.pessoa.nome',
+        read_only=True,
+    )
+    musica = serializers.SerializerMethodField()
+    papel_sugerido = serializers.CharField(
+        source='item.papel_sugerido',
+        read_only=True,
+    )
+    posicao = serializers.IntegerField(source='item.posicao', read_only=True)
+    vigente = serializers.BooleanField(source='item.vigente', read_only=True)
+    retirado_em = serializers.DateTimeField(
+        source='item.retirado_em',
+        read_only=True,
+        allow_null=True,
+    )
+    situacao = serializers.SerializerMethodField()
+    disponivel = serializers.BooleanField(read_only=True)
+    avaliacao = serializers.SerializerMethodField()
+    criado_em = serializers.DateTimeField(
+        source='item.criado_em',
+        read_only=True,
+    )
+
+    def get_musica(self, resultado):
+        perfil = resultado.item.perfil_alpinista
+        return {
+            'violeiro': perfil.violeiro,
+            'canta': perfil.canta,
+            'disponivel_mme': perfil.disponivel_mme,
+        }
+
+    def get_situacao(self, resultado):
+        return resultado.situacao.value
+
+    def get_avaliacao(self, resultado):
+        avaliacao = resultado.avaliacao_elegibilidade
+        return avaliacao.as_dict() if avaliacao is not None else None
+
+
+class PropostaVioleirosSerializer(serializers.ModelSerializer):
+    encontro_id = serializers.IntegerField(read_only=True)
+    total_posicoes = serializers.SerializerMethodField()
+    total_disponivel = serializers.SerializerMethodField()
+    vagas_disponiveis = serializers.SerializerMethodField()
+    completa = serializers.SerializerMethodField()
+    precisa_completar = serializers.SerializerMethodField()
+    itens = serializers.SerializerMethodField()
+
+    class Meta:
+        model = PropostaVioleiros
+        fields = (
+            'id',
+            'encontro_id',
+            'nome',
+            'status',
+            'encerrada_em',
+            'total_posicoes',
+            'total_disponivel',
+            'vagas_disponiveis',
+            'completa',
+            'precisa_completar',
+            'itens',
+            'criada_em',
+            'atualizada_em',
+        )
+        read_only_fields = fields
+
+    def _resumo(self, proposta):
+        if not hasattr(proposta, '_resumo_violeiros'):
+            proposta._resumo_violeiros = (
+                proposta_violeiros_services.resumir_proposta_violeiros(
+                    proposta
+                )
+            )
+        return proposta._resumo_violeiros
+
+    def get_total_posicoes(self, proposta):
+        return self._resumo(proposta).total_posicoes
+
+    def get_total_disponivel(self, proposta):
+        return self._resumo(proposta).total_disponivel
+
+    def get_vagas_disponiveis(self, proposta):
+        return self._resumo(proposta).vagas_disponiveis
+
+    def get_completa(self, proposta):
+        return self._resumo(proposta).completa
+
+    def get_precisa_completar(self, proposta):
+        return self._resumo(proposta).precisa_completar
+
+    def get_itens(self, proposta):
+        return ItemPropostaVioleirosSerializer(
+            self._resumo(proposta).itens,
+            many=True,
+        ).data
+
+
+class CriacaoPropostaVioleirosCommandSerializer(StrictCommandSerializer):
+    encontro_id = serializers.PrimaryKeyRelatedField(
+        source='encontro',
+        queryset=Encontro.objects.all(),
+    )
+    nome = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        default='',
+        max_length=100,
+    )
+
+
+class EdicaoPropostaVioleirosCommandSerializer(StrictCommandSerializer):
+    nome = serializers.CharField(
+        required=True,
+        allow_blank=True,
+        max_length=100,
+    )
+
+
+class PreenchimentoPropostaVioleirosCommandSerializer(
+    StrictCommandSerializer,
+):
+    perfil_alpinista_id = serializers.PrimaryKeyRelatedField(
+        source='perfil_alpinista',
+        queryset=PerfilAlpinista.objects.all(),
+    )
+    papel_sugerido = serializers.ChoiceField(
+        choices=ItemPropostaVioleiros.PapelSugerido.choices,
+    )
+    posicao = serializers.IntegerField(min_value=1, max_value=4)
+
+
+class ItemPropostaVioleirosCommandSerializer(StrictCommandSerializer):
+    item_id = serializers.PrimaryKeyRelatedField(
+        source='item',
+        queryset=ItemPropostaVioleiros.objects.all(),
+    )
+
+
+class SubstituicaoPropostaVioleirosCommandSerializer(
+    ItemPropostaVioleirosCommandSerializer,
+):
+    perfil_alpinista_id = serializers.PrimaryKeyRelatedField(
+        source='perfil_alpinista',
+        queryset=PerfilAlpinista.objects.all(),
+    )
+
+
+class AproveitamentoPropostaVioleirosCommandSerializer(
+    ItemPropostaVioleirosCommandSerializer,
+):
+    role_equipe_id = serializers.PrimaryKeyRelatedField(
+        source='role_equipe',
+        queryset=RoleEquipeEncontro.objects.all(),
+        required=False,
+        allow_null=True,
+    )
+    confirmar_avisos = serializers.BooleanField(
+        required=False,
+        default=False,
+    )
 
 
 class RespostaConviteEncontroCommandSerializer(serializers.Serializer):

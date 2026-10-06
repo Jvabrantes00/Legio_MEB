@@ -18,6 +18,7 @@ from .models import (
     ParticipacaoEncontro as ResultadoParticipacaoEncontro,
     ParticipacaoEvento, LogSistema, Material, PalestranteSessao,
     PerfilAlpinista, PresencaPreparatoria, SessaoFormativa, TrabalhoEncontro,
+    ItemPropostaVioleiros, PropostaVioleiros,
     VinculoEncontroLegado as ParticipacaoEncontro,
 )
 from .serializers import (
@@ -47,6 +48,13 @@ from .serializers import (
     RemocaoPalestranteCommandSerializer,
     SessaoFormativaSerializer,
     TemaFormativoSerializer,
+    AproveitamentoPropostaVioleirosCommandSerializer,
+    CriacaoPropostaVioleirosCommandSerializer,
+    EdicaoPropostaVioleirosCommandSerializer,
+    ItemPropostaVioleirosCommandSerializer,
+    PreenchimentoPropostaVioleirosCommandSerializer,
+    PropostaVioleirosSerializer,
+    SubstituicaoPropostaVioleirosCommandSerializer,
     )
 from .permissions import (
     AlpinistaQueryPolicy,
@@ -57,6 +65,7 @@ from .permissions import (
 from .services.reunioes_preparatorias import corrigir_presenca_preparatoria
 from .services import trabalhos as trabalho_services
 from .services import formacoes as formacao_services
+from .services import propostas_violeiros as proposta_violeiros_services
 from .serializers import _erro_de_dominio, _erro_de_trabalho
 from .formacao_catalogo import TEMAS_FORMATIVOS
 from .roles import (
@@ -69,6 +78,8 @@ from .roles import (
     FULL_ADMIN_ROLES,
     RECOGNIZED_ROLES,
     MUSIC_MANAGEMENT_ROLES,
+    MME_PROPOSAL_MANAGEMENT_ROLES,
+    MME_PROPOSAL_READ_ROLES,
     MATERIAL_MANAGEMENT_ROLES,
     PROFILE_PHOTO_MANAGEMENT_ROLES,
     user_has_any_role,
@@ -1036,6 +1047,275 @@ class TrabalhoEncontroCommandViewSet(
             'anterior': TrabalhoEncontroCommandSerializer(anterior).data,
             'novo': TrabalhoEncontroCommandSerializer(novo).data,
         })
+
+
+class PropostaVioleirosViewSet(
+    mixins.CreateModelMixin,
+    mixins.ListModelMixin,
+    mixins.RetrieveModelMixin,
+    viewsets.GenericViewSet,
+):
+    permission_classes = [HasAnySiaRole]
+    read_roles = MME_PROPOSAL_READ_ROLES
+    write_roles = MME_PROPOSAL_MANAGEMENT_ROLES
+    action_roles = {
+        'editar_nome': MME_PROPOSAL_MANAGEMENT_ROLES,
+        'preencher_posicao': MME_PROPOSAL_MANAGEMENT_ROLES,
+        'substituir_posicao': MME_PROPOSAL_MANAGEMENT_ROLES,
+        'retirar_item': MME_PROPOSAL_MANAGEMENT_ROLES,
+        'encerrar': MME_PROPOSAL_MANAGEMENT_ROLES,
+        'resumo': MME_PROPOSAL_READ_ROLES,
+        'aproveitar_candidato': FICHAS_MANAGEMENT_ROLES,
+    }
+    pagination_class = None
+
+    def get_queryset(self):
+        queryset = (
+            PropostaVioleiros.objects
+            .select_related('encontro')
+            .order_by('encontro_id', 'criada_em', 'id')
+        )
+        encontro_id = self.request.query_params.get('encontro')
+        if self.action == 'list':
+            if not encontro_id:
+                raise ValidationError({
+                    'encontro': ['Este filtro é obrigatório.'],
+                })
+            queryset = queryset.filter(encontro_id=encontro_id)
+        return queryset
+
+    def get_serializer_class(self):
+        return {
+            'create': CriacaoPropostaVioleirosCommandSerializer,
+            'editar_nome': EdicaoPropostaVioleirosCommandSerializer,
+            'preencher_posicao': (
+                PreenchimentoPropostaVioleirosCommandSerializer
+            ),
+            'substituir_posicao': (
+                SubstituicaoPropostaVioleirosCommandSerializer
+            ),
+            'retirar_item': ItemPropostaVioleirosCommandSerializer,
+            'aproveitar_candidato': (
+                AproveitamentoPropostaVioleirosCommandSerializer
+            ),
+        }.get(self.action, PropostaVioleirosSerializer)
+
+    def _resposta(self, proposta, *, status_code=status.HTTP_200_OK):
+        proposta = self.get_queryset().get(pk=proposta.pk)
+        return Response(
+            PropostaVioleirosSerializer(
+                proposta,
+                context=self.get_serializer_context(),
+            ).data,
+            status=status_code,
+        )
+
+    def _auditar(self, request, proposta, operacao, *, acao='UPDATE'):
+        LogSistema.objects.create(
+            usuario=request.user,
+            acao=acao,
+            modulo='PropostaVioleiros',
+            descricao=f'PropostaVioleiros ID {proposta.pk}: {operacao}.',
+        )
+
+    def list(self, request, *args, **kwargs):
+        precisa_completar = request.query_params.get('precisa_completar')
+        if precisa_completar not in {None, 'true', 'false'}:
+            raise ValidationError({
+                'precisa_completar': ['Use true ou false.'],
+            })
+
+        propostas = list(self.get_queryset())
+        for proposta in propostas:
+            proposta._resumo_violeiros = (
+                proposta_violeiros_services.resumir_proposta_violeiros(
+                    proposta
+                )
+            )
+        if precisa_completar is not None:
+            esperado = precisa_completar == 'true'
+            propostas = [
+                proposta
+                for proposta in propostas
+                if (
+                    proposta.status == PropostaVioleiros.Status.ABERTA
+                    and proposta._resumo_violeiros.precisa_completar
+                ) == esperado
+            ]
+        return Response(PropostaVioleirosSerializer(
+            propostas,
+            many=True,
+            context=self.get_serializer_context(),
+        ).data)
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            with transaction.atomic():
+                proposta = (
+                    proposta_violeiros_services.criar_proposta_violeiros(
+                        **serializer.validated_data,
+                    )
+                )
+                self._auditar(request, proposta, 'criada', acao='CREATE')
+        except django_core_validation_error as error:
+            _erro_de_dominio(error)
+        return self._resposta(proposta, status_code=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=['patch'], url_path='editar-nome')
+    def editar_nome(self, request, pk=None):
+        proposta = self.get_object()
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            with transaction.atomic():
+                proposta = (
+                    proposta_violeiros_services.editar_proposta_violeiros(
+                        proposta,
+                        **serializer.validated_data,
+                    )
+                )
+                self._auditar(request, proposta, 'nome alterado')
+        except django_core_validation_error as error:
+            _erro_de_dominio(error)
+        return self._resposta(proposta)
+
+    @action(detail=True, methods=['post'], url_path='preencher-posicao')
+    def preencher_posicao(self, request, pk=None):
+        proposta = self.get_object()
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            with transaction.atomic():
+                item = (
+                    proposta_violeiros_services.preencher_posicao_proposta(
+                        proposta,
+                        **serializer.validated_data,
+                    )
+                )
+                self._auditar(
+                    request,
+                    proposta,
+                    f'posição preenchida pelo item {item.pk}',
+                )
+        except django_core_validation_error as error:
+            _erro_de_dominio(error)
+        return self._resposta(proposta, status_code=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=['post'], url_path='substituir-posicao')
+    def substituir_posicao(self, request, pk=None):
+        proposta = self.get_object()
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        item = get_object_or_404(
+            ItemPropostaVioleiros,
+            pk=serializer.validated_data['item'].pk,
+            proposta=proposta,
+        )
+        try:
+            with transaction.atomic():
+                anterior, novo = (
+                    proposta_violeiros_services.substituir_ocupacao_proposta(
+                        item,
+                        perfil_alpinista=(
+                            serializer.validated_data['perfil_alpinista']
+                        ),
+                    )
+                )
+                self._auditar(
+                    request,
+                    proposta,
+                    f'item {anterior.pk} substituído pelo item {novo.pk}',
+                )
+        except django_core_validation_error as error:
+            _erro_de_dominio(error)
+        return self._resposta(proposta)
+
+    @action(detail=True, methods=['post'], url_path='retirar-item')
+    def retirar_item(self, request, pk=None):
+        proposta = self.get_object()
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        item = get_object_or_404(
+            ItemPropostaVioleiros,
+            pk=serializer.validated_data['item'].pk,
+            proposta=proposta,
+        )
+        try:
+            with transaction.atomic():
+                item = proposta_violeiros_services.retirar_item_proposta(item)
+                self._auditar(
+                    request,
+                    proposta,
+                    f'item {item.pk} retirado',
+                )
+        except django_core_validation_error as error:
+            _erro_de_dominio(error)
+        return self._resposta(proposta)
+
+    @action(detail=True, methods=['post'])
+    def encerrar(self, request, pk=None):
+        proposta = self.get_object()
+        try:
+            with transaction.atomic():
+                proposta = (
+                    proposta_violeiros_services.encerrar_proposta_violeiros(
+                        proposta
+                    )
+                )
+                self._auditar(request, proposta, 'encerrada')
+        except django_core_validation_error as error:
+            _erro_de_dominio(error)
+        return self._resposta(proposta)
+
+    @action(detail=True, methods=['get'])
+    def resumo(self, request, pk=None):
+        return self._resposta(self.get_object())
+
+    @action(detail=True, methods=['post'], url_path='aproveitar-candidato')
+    def aproveitar_candidato(self, request, pk=None):
+        proposta = self.get_object()
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        item = get_object_or_404(
+            ItemPropostaVioleiros,
+            pk=serializer.validated_data['item'].pk,
+            proposta=proposta,
+        )
+        try:
+            with transaction.atomic():
+                pessoa = (
+                    proposta_violeiros_services
+                    .obter_candidato_para_aproveitamento(item)
+                )
+                convite = trabalho_services.criar_convite_trabalho(
+                    pessoa=pessoa,
+                    encontro=proposta.encontro,
+                    role_proposta=serializer.validated_data.get('role_equipe'),
+                    confirmar_avisos=serializer.validated_data.get(
+                        'confirmar_avisos',
+                        False,
+                    ),
+                )
+                LogSistema.objects.create(
+                    usuario=request.user,
+                    acao='CREATE',
+                    modulo='ConviteEncontro',
+                    descricao=(
+                        f'ConviteEncontro ID {convite.pk}: aproveitamento do '
+                        f'ItemPropostaVioleiros ID {item.pk} solicitado.'
+                    ),
+                )
+        except django_core_validation_error as error:
+            _erro_de_trabalho(error)
+        return Response(
+            ConviteEncontroCommandSerializer(
+                convite,
+                context=self.get_serializer_context(),
+            ).data,
+            status=status.HTTP_200_OK,
+        )
 
 
 class SessaoFormativaCommandViewSet(

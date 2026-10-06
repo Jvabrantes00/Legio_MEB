@@ -17,20 +17,20 @@ ainda não implementada, sem alterar as permissões da matriz corrente.
 
 ## Matriz
 
-| Papel | API root | Admin | Alpinista | Escrita Alpinista | Foto perfil | Música | Formação em Encontros | Encontros | Galeria | Funções / participações | Eventos / participações | Materiais / entregas | Dashboard | Logs |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| Superuser técnico | R | RW | Full | RW | RW | RW | RW | Full/RW | RW | RW | RW | RW | R | R |
-| Suporte | — | — | Full | RW | RW | RW | RW | Full/RW | RW | RW | RW | RW | R | R |
-| Diretoria | — | — | Full | RW | RW | RW | RW | Full/RW | RW | RW | RW | RW | R | R |
-| Fichas | — | — | Full | RW | RW | RW | R | Full/RW | — | RW | — | — | R | — |
-| MME | — | — | Summary | — | R | RW | — | — | — | — | — | — | — | — |
-| Formação | — | — | Summary | — | R | — | RW | — | — | — | — | — | — | — |
-| Secretaria | — | — | Summary | — | R | — | — | — | — | — | — | RW | — | — |
-| Ação Social | — | — | Summary | — | R | — | — | — | — | — | — | — | — | — |
-| Liturgia | — | — | Summary | — | R | — | — | — | — | — | — | — | — | — |
-| Eventos | — | — | Summary | — | R | — | — | — | — | — | RW | — | — | — |
-| Comunicação | — | — | Summary | — | RW | — | — | Summary/R | RW | — | — | — | — | — |
-| Usuário sem role | — | — | — | — | — | — | — | — | — | — | — | — | — | — |
+| Papel | API root | Admin | Alpinista | Escrita Alpinista | Foto perfil | Música | Propostas MME | Formação em Encontros | Encontros | Galeria | Funções / participações | Eventos / participações | Materiais / entregas | Dashboard | Logs |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| Superuser técnico | R | RW | Full | RW | RW | RW | RW | RW | Full/RW | RW | RW | RW | RW | R | R |
+| Suporte | — | — | Full | RW | RW | RW | RW | RW | Full/RW | RW | RW | RW | RW | R | R |
+| Diretoria | — | — | Full | RW | RW | RW | RW | RW | Full/RW | RW | RW | RW | RW | R | R |
+| Fichas | — | — | Full | RW | RW | RW | R | R | Full/RW | — | RW | — | — | R | — |
+| MME | — | — | Summary | — | R | RW | RW | — | — | — | — | — | — | — | — |
+| Formação | — | — | Summary | — | R | — | — | RW | — | — | — | — | — | — | — |
+| Secretaria | — | — | Summary | — | R | — | — | — | — | — | — | — | RW | — | — |
+| Ação Social | — | — | Summary | — | R | — | — | — | — | — | — | — | — | — | — |
+| Liturgia | — | — | Summary | — | R | — | — | — | — | — | — | — | — | — | — |
+| Eventos | — | — | Summary | — | R | — | — | — | — | — | — | RW | — | — | — |
+| Comunicação | — | — | Summary | — | RW | — | — | — | Summary/R | RW | — | — | — | — | — |
+| Usuário sem role | — | — | — | — | — | — | — | — | — | — | — | — | — | — | — |
 
 ## Detalhes importantes
 
@@ -104,6 +104,21 @@ ainda não implementada, sem alterar as permissões da matriz corrente.
 - O histórico formativo canônico é separado do histórico de equipes. A leitura
   do endpoint legado de palestras permanece disponível durante a
   compatibilidade, sem dual-write ou backfill automático.
+
+### MME e Propostas de Violeiros
+
+- Suporte, Diretoria e MME podem criar, editar, preencher, substituir, retirar
+  e encerrar propostas. O superuser permanece bypass técnico separado.
+- Fichas pode listar, consultar resumo e disponibilidade e aproveitar um
+  candidato pelo fluxo oficial de convite de trabalho, mas não altera a
+  proposta diretamente.
+- A seleção pela proposta cria somente `ConviteEncontro(TRABALHAR)` e pode
+  indicar uma role oficial diferente da sugestão. Confirmação, trabalho e
+  alocação continuam nos comandos canônicos da D.3.
+- MME não recebe CRUD geral de Encontro, equipe ou trabalho. A sugestão de
+  coordenação não concede autorização contextual.
+- Os demais papéis permanecem negados por default. Situação e completude são
+  derivadas, sem dual-write na proposta.
 
 ### Domínios especializados
 

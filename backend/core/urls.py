@@ -13,6 +13,7 @@ from .views import (
     ResultadoParticipacaoCommandViewSet,
     EquipeEncontroViewSet, TrabalhoEncontroCommandViewSet,
     PresencaPreparatoriaCommandViewSet,
+    PropostaVioleirosViewSet,
     SessaoFormativaCommandViewSet,
 )
 from .views import dashboard_stats
@@ -77,6 +78,11 @@ router.register(
     r'sessoes-formativas',
     SessaoFormativaCommandViewSet,
     basename='sessao-formativa',
+)
+router.register(
+    r'propostas-violeiros',
+    PropostaVioleirosViewSet,
+    basename='proposta-violeiros',
 )
 router.register(r'participacoes-eventos', ParticipacaoEventoViewSet)
 router.register(r'logs', LogSistemaViewSet)
