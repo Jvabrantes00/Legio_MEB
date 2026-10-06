@@ -20,8 +20,9 @@ substitui os documentos de referência nem os `AGENTS.md` aplicáveis.
 - 1B.3D.3 concluiu Equipes e Trabalho em Encontro, incluindo cutover lógico e
   validação de concorrência em PostgreSQL.
 - 1B.3D.4 — Formação em Encontros concluída, com catálogo real, services, API,
-  autorização e validação PostgreSQL. A próxima frente global ainda não está
-  definida na documentação.
+  autorização e validação PostgreSQL.
+- 1B.3D.5 — MME e Propostas de Violeiros preparada documentalmente; próximo
+  bloco: D.5A, análise do legado e desenho técnico.
 
 O estado vivo e o roadmap estão em [[PROJECT_STATE]].
 
@@ -87,6 +88,21 @@ Consulte `docs/domain/ENCOUNTER_WORK.md` somente quando houver dependência
 direta de `TrabalhoEncontro`, especialmente para a regra de palestrante no
 AVC. Consulte `docs/AUTHORIZATION_MATRIX.md` somente quando a tarefa envolver
 permissões. Não carregue outros domínios indiscriminadamente.
+
+### MME e Propostas de Violeiros
+
+Se a tarefa envolver MME, propostas ou pré-equipes de Violeiros, candidatos,
+cinco posições ativas, disponibilidade nas propostas, aproveitamento pela
+escala oficial ou composição sugerida de um coordenador e quatro integrantes,
+leia nesta ordem:
+
+1. `docs/domain/ENCOUNTER_MME.md`;
+2. `docs/workplans/PHASE_1B_D5.md`.
+
+Consulte `docs/domain/ENCOUNTER_WORK.md` somente quando houver dependência
+direta de `TrabalhoEncontro`, equipe oficial, alocação, elegibilidade ou
+histórico de trabalho. Consulte `docs/AUTHORIZATION_MATRIX.md` somente quando a
+tarefa envolver permissões. Não carregue outros domínios indiscriminadamente.
 
 ### Arquitetura
 
