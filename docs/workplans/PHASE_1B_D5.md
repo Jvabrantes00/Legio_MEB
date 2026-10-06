@@ -2,9 +2,9 @@
 
 ## Status geral
 
-D.5A e D.5B concluídas em 2026-10-06. A fundação estrutural de propostas e
-itens foi implementada em migration expansiva e validada pela suíte backend.
-D.5C — services, disponibilidade e encerramento — é o próximo bloco.
+D.5A, D.5B e D.5C concluídas em 2026-10-06. A fundação e os services
+transacionais de propostas foram implementados e validados pela suíte backend.
+D.5D — API, autorização e compatibilidade — é o próximo bloco.
 
 ## Objetivo
 
@@ -49,10 +49,11 @@ expansiva e testes estruturais, sem services, API ou backfill.
 
 ### D.5C — Services, disponibilidade e encerramento operacional
 
-Status: pendente.
+Status: concluída em 2026-10-06.
 
-Implementará comandos transacionais, projeção de disponibilidade, composição
-`n/5`, preenchimento de slots e encerramento, sem escrever na escala oficial.
+Implementou comandos transacionais, projeção de disponibilidade, composição
+`n/5`, preenchimento/substituição de slots e encerramento, sem escrever na
+escala oficial.
 
 ### D.5D — API, autorização e compatibilidade
 
@@ -226,10 +227,11 @@ O comando recebe proposta, perfil, papel e posição. Ele:
 3. rejeita perfil não violeiro, não disponível para MME, bloqueado ou já
    vigente na mesma proposta;
 4. consulta a escala oficial sob lock;
-5. se o slot estiver ocupado por candidato ainda disponível, rejeita;
-6. se o ocupante estiver indisponível, torna a linha anterior histórica e cria
-   a nova linha no mesmo comando atômico;
-7. traduz corrida de constraint para erro de domínio previsível.
+5. exige slot vazio no comando de preenchimento;
+6. usa comando explícito de substituição, referenciando a ocupação esperada,
+   para tornar a linha anterior histórica e preencher o mesmo slot;
+7. traduz corrida de constraint ou ocupação obsoleta para erro de domínio
+   previsível.
 
 Também haverá comando explícito para retirar um item vigente sem preencher o
 slot. Não haverá remoção física em fluxo normal. Uma Pessoa histórica poderá
@@ -314,6 +316,7 @@ Os services previstos são:
 - `criar_proposta_violeiros(...)`;
 - `editar_proposta_violeiros(...)`;
 - `preencher_posicao_proposta(...)`;
+- `substituir_ocupacao_proposta(...)`;
 - `retirar_item_proposta(...)`;
 - `encerrar_proposta_violeiros(...)`;
 - `obter_situacao_item_proposta(...)` e
@@ -390,6 +393,74 @@ schema. **nenhum backfill automático nesta etapa**.
 - `backend/core/models.py`
 - `backend/core/migrations/0034_expand_propostas_violeiros.py`
 - `backend/core/tests/test_encontro_mme_models.py`
+- `docs/workplans/PHASE_1B_D5.md`
+
+## Resultado da D.5C
+
+### Services implementados
+
+- `criar_proposta_violeiros` e `editar_proposta_violeiros` criam e alteram
+  somente proposta aberta.
+- `preencher_posicao_proposta` inclui candidato disponível em slot vazio e
+  rejeita perfil ou slot já vigente.
+- `substituir_ocupacao_proposta` recebe a ocupação esperada, arquiva a linha e
+  cria a nova no mesmo slot atomicamente. Uma segunda substituição concorrente
+  da linha obsoleta é rejeitada, evitando lost update.
+- `retirar_item_proposta` preserva a linha e é idempotente enquanto a proposta
+  permanece aberta.
+- `encerrar_proposta_violeiros` executa `ABERTA → ENCERRADA`, inclusive em
+  proposta incompleta, sem implementar reabertura.
+- `obter_situacao_item_proposta` e `resumir_proposta_violeiros` são consultas
+  sem efeitos colaterais e retornam estruturas próprias para a futura API.
+
+### Disponibilidade e composição
+
+- A situação é derivada de `PerfilAlpinista`, do evaluator da D.3 e de
+  `TrabalhoEncontro`; nenhum estado da escala foi copiado para a proposta.
+- Trabalho `ALOCADO`, `TRABALHOU` ou `FALTOU` em equipe de código `violeiros`
+  produz `APROVEITADO_VIOLEIROS`; em outra equipe produz
+  `INDISPONIVEL_OUTRA_EQUIPE`.
+- Trabalho aguardando alocação ou retirado não bloqueia a proposta.
+- Perfil sem `violeiro` ou `disponivel_mme`, ou com bloqueio estrutural da D.3,
+  produz `INDISPONIVEL_MME`; `canta` permanece apenas consultivo e avisos de
+  elegibilidade não são convertidos em bloqueio.
+- Item não vigente produz `HISTORICO`. Apenas itens vigentes em situação
+  `DISPONIVEL` contam no resumo.
+- O resumo expõe `total_posicoes=5`, `total_disponivel`, `vagas_disponiveis`,
+  `completa` e `precisa_completar`. Uma alocação oficial altera esse resultado
+  em todas as propostas relacionadas sem dual-write.
+
+### Transações e concorrência
+
+- Todas as mutações compostas usam `transaction.atomic`.
+- Locks seguem Pessoas, Encontro, proposta, itens/slots e trabalhos relevantes,
+  em ordem compatível com o domínio de Trabalho.
+- `select_for_update` serializa preenchimentos, substituições, retirada e
+  encerramento; constraints da D.5B permanecem a defesa final.
+- Foram preparados cinco testes condicionados a PostgreSQL para mesmo slot,
+  mesmo candidato, substituições da mesma ocupação, encerramento concorrente
+  com edição e alocação oficial concorrente. A execução real permanece
+  reservada à D.5E.
+
+### Testes e validações
+
+- Adicionados 24 testes de services: 19 executados e aprovados no SQLite e 5
+  concorrentes ignorados por exigirem PostgreSQL real.
+- Cobertura inclui criação, edição, cinco posições, `5/5`, `4/5`, duplicidade,
+  múltiplas propostas, substituição, retirada, todas as situações derivadas,
+  encerramento, bloqueio pós-encerramento, ausência de reabertura, ausência de
+  efeitos em outros domínios e rollback integral.
+- Suíte backend: 469/469 aprovada, com 14 skips condicionais no total.
+- `python manage.py check --settings=setup.test_settings`: aprovado.
+- `python manage.py makemigrations --check --dry-run
+  --settings=setup.test_settings`: nenhuma mudança detectada.
+- Nenhuma migration foi criada ou alterada na D.5C e não houve acesso ao
+  PostgreSQL.
+
+### Arquivos alterados na D.5C
+
+- `backend/core/services/propostas_violeiros.py`
+- `backend/core/tests/test_encontro_mme_services.py`
 - `docs/workplans/PHASE_1B_D5.md`
 
 ## Estratégia incremental e compatibilidade
@@ -483,7 +554,7 @@ legada equivalente. Essa reconciliação permanece débito humano separado.
 - Implementação frontend das propostas fica fora dos blocos backend definidos
   neste workplan, salvo decisão posterior explícita.
 
-Nenhuma dessas pendências exige nova decisão de produto para iniciar a D.5B.
+Nenhuma dessas pendências exige nova decisão de produto para iniciar a D.5D.
 
 ## Arquivos relevantes
 
@@ -500,8 +571,7 @@ Nenhuma dessas pendências exige nova decisão de produto para iniciar a D.5B.
 
 ## Próximo passo
 
-D.5C — implementar services transacionais, disponibilidade derivada, resumo
-`n/5`, preenchimento de posições e encerramento operacional.
+D.5D — implementar API, autorização e compatibilidade sem cutover destrutivo.
 
 ## Histórico de execução
 
@@ -514,3 +584,7 @@ D.5C — implementar services transacionais, disponibilidade derivada, resumo
 - 2026-10-06 — D.5B concluída. Models, migration expansiva e 16 testes
   estruturais implementados; suíte backend com 445 testes aprovada. Nenhum
   backfill, service, API ou acesso ao PostgreSQL foi realizado.
+- 2026-10-06 — D.5C concluída. Services transacionais, situações derivadas,
+  resumo `n/5`, substituição segura e encerramento implementados; suíte backend
+  com 469 testes aprovada. Cinco corridas aguardam validação PostgreSQL na
+  D.5E.
