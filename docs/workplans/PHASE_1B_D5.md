@@ -2,9 +2,9 @@
 
 ## Status geral
 
-D.5A a D.5D concluídas em 2026-10-06. Fundação, services, API, autorização e
-compatibilidade de propostas foram implementados e validados pela suíte
-backend. D.5E — PostgreSQL, regressão e fechamento — é o próximo bloco.
+D.5A a D.5E concluídas em 2026-10-06. A Fase 1B.3D.5 — MME e Propostas de
+Violeiros está **CONCLUÍDA**, com concorrência, regressão e migrations validadas
+em PostgreSQL 16 descartável.
 
 ## Objetivo
 
@@ -64,9 +64,9 @@ auditoria e convivência com os endpoints legados, sem cutover destrutivo.
 
 ### D.5E — PostgreSQL, regressão e fechamento
 
-Status: pendente.
+Status: concluída em 2026-10-06.
 
-Executará os testes concorrentes em PostgreSQL, regressão backend, conferência
+Executou os testes concorrentes em PostgreSQL, regressão backend, conferência
 de migrations, fechamento documental e atualização do estado global.
 
 ## D.5A — relatório de análise e desenho técnico
@@ -552,6 +552,67 @@ schema. **nenhum backfill automático nesta etapa**.
 - `docs/AUTHORIZATION_MATRIX.md`
 - `docs/workplans/PHASE_1B_D5.md`
 
+## Resultado da D.5E
+
+### PostgreSQL e concorrência
+
+- A validação usou PostgreSQL **16.15** em cluster descartável criado por
+  `pg_virtualenv`, com bancos e porta exclusivos do processo.
+- Os cinco testes reais de concorrência passaram: disputa pelo mesmo slot,
+  mesmo candidato em slots distintos, substituições da mesma ocupação,
+  encerramento concorrente com edição e alocação oficial concorrente.
+- Locks, transações e constraints mantiveram uma única ocupação vigente por
+  slot e candidato, preservaram o encerramento e refletiram a escala oficial
+  sem dual-write.
+- A primeira tentativa, por TCP e senha fictícia, foi rejeitada antes de
+  qualquer migration. O cluster foi removido, e a repetição pelo socket Unix
+  isolado concluiu todas as validações.
+- O cluster efêmero foi removido automaticamente. `sia_dev`, `CREATEDB`, a
+  configuração global e os dados persistentes não foram alterados.
+
+### Regressão final
+
+- A suíte backend completa aprovou **490/490 testes** no PostgreSQL, sem
+  skips. A baseline SQLite descobriu os mesmos 490 testes, aprovou os 476
+  aplicáveis e registrou 14 skips condicionais esperados.
+- Permanecem cobertos os cinco slots, múltiplas propostas, nome opcional,
+  estados, constraints, histórico acima de cinco linhas, substituição,
+  encerramento idempotente e bloqueio de mutações posteriores.
+- As situações `DISPONIVEL`, `APROVEITADO_VIOLEIROS`,
+  `INDISPONIVEL_OUTRA_EQUIPE`, `INDISPONIVEL_MME` e `HISTORICO` continuam
+  derivadas das fontes canônicas. Resumo `n/5`, completude, necessidade de
+  reposição e reflexo multi-proposta não persistem estado redundante.
+- A API preservou contratos allowlist, semântica HTTP, histórico de itens,
+  filtro de incompletas, default deny e as fronteiras de MME, Diretoria,
+  Suporte, Fichas e superuser técnico.
+- `python manage.py check` foi aprovado e `makemigrations --check --dry-run`
+  não detectou mudanças.
+
+### Aproveitamento oficial e separação de domínios
+
+- O aproveitamento continua criando somente
+  `ConviteEncontro(TRABALHAR)` no fluxo canônico da D.3, sem confirmação,
+  alocação, `TrabalhoEncontro` ou resultado automático.
+- Fichas e Diretoria podem combinar candidatos de propostas diferentes, usar
+  role oficial distinta da sugestão e escalar Pessoas externas às propostas.
+  Não existe proposta vencedora.
+- `TrabalhoEncontro` permanece a fonte operacional da verdade. Propostas não
+  reservam Pessoa, concedem coordenação ou criam histórico de trabalho,
+  `Frequencia`, `PerfilAlpinista`, saúde ou Formação.
+- O perfil MME continua usando somente `violeiro`, `canta` e
+  `disponivel_mme`; a reconciliação com a API musical legada não foi
+  antecipada.
+
+### Migrations e compatibilidade
+
+- Todas as migrations aplicaram em PostgreSQL limpo. `showmigrations`
+  confirmou `core.0001` a `core.0034_expand_propostas_violeiros` aplicadas.
+- Nenhuma migration foi criada no fechamento. Estruturas e APIs legadas foram
+  preservadas sem dual-write, backfill heurístico, reconstrução de propostas
+  ou remoção destrutiva.
+- Os critérios essenciais de D.5A–D.5E foram satisfeitos. A Fase 1B.3D.5 está
+  tecnicamente concluída.
+
 ## Estratégia incremental e compatibilidade
 
 ### EXPAND — D.5B e D.5C
@@ -635,15 +696,20 @@ legada equivalente. Essa reconciliação permanece débito humano separado.
 ## Débitos e pendências
 
 - Reconciliar a existência e os valores de `PerfilAlpinista`, inclusive
-  `violeiro`, `canta` e `disponivel_mme`, com fonte humana confiável.
+  `violeiro`, `canta` e `disponivel_mme`, com fonte humana confiável e com os
+  consumidores da API musical legada.
 - Definir e provisionar operacionalmente o catálogo/snapshot de equipes com o
   código estável `violeiros`; a D.5 não cria catálogo paralelo.
 - Migrar consumidores do histórico legado de violeiro para a fonte canônica
   sem quebra de contrato.
-- Implementação frontend das propostas fica fora dos blocos backend definidos
-  neste workplan, salvo decisão posterior explícita.
+- Implementar o frontend canônico de propostas em bloco futuro explicitamente
+  planejado.
+- Depreciar e remover fisicamente as estruturas legadas somente após
+  reconciliação e cutover seguros.
+- Notificações push/e-mail, catálogo de instrumentos e histórico de sugestões
+  no perfil do Alpinista permanecem fora deste domínio concluído.
 
-Nenhuma dessas pendências impede a validação e o fechamento da D.5E.
+Esses itens são débitos futuros e não impediram o fechamento da D.5E.
 
 ## Arquivos relevantes
 
@@ -656,12 +722,12 @@ Nenhuma dessas pendências impede a validação e o fechamento da D.5E.
 - `backend/core/services/elegibilidade_trabalho.py`
 - `backend/core/roles.py`, `permissions.py`, `serializers.py`, `views.py` e
   `urls.py`
-- migrations `0025`, `0026`, `0030` e `0033`.
+- migrations `0025`, `0026`, `0030`, `0033` e `0034`.
 
 ## Próximo passo
 
-D.5E — executar as cinco corridas em PostgreSQL real, regressão final e
-fechamento documental da Fase 1B.3D.5.
+A próxima frente global da Fase 1 ainda não possui numeração ou escopo
+definidos na documentação atual. Ela deve ser formalizada antes da execução.
 
 ## Histórico de execução
 
@@ -682,3 +748,7 @@ fechamento documental da Fase 1B.3D.5.
   convite oficial, filtro de propostas incompletas, auditoria e compatibilidade
   implementados; suíte backend com 490 testes aprovada. Nenhuma migration ou
   alteração de legado foi necessária.
+- 2026-10-06 — D.5E concluída. Cinco corridas e 490/490 testes passaram no
+  PostgreSQL 16.15 descartável; a baseline SQLite passou com 14 skips
+  esperados, e a cadeia limpa foi validada até `core.0034`. A Fase 1B.3D.5
+  foi encerrada sem dual-write, backfill ou mudança destrutiva.

@@ -21,8 +21,9 @@ substitui os documentos de referência nem os `AGENTS.md` aplicáveis.
   validação de concorrência em PostgreSQL.
 - 1B.3D.4 — Formação em Encontros concluída, com catálogo real, services, API,
   autorização e validação PostgreSQL.
-- 1B.3D.5 — MME e Propostas de Violeiros preparada documentalmente; próximo
-  bloco: D.5A, análise do legado e desenho técnico.
+- 1B.3D.5 — MME e Propostas de Violeiros concluída, com services, API,
+  autorização, compatibilidade e validação de concorrência em PostgreSQL.
+- A próxima frente global da Fase 1 ainda precisa ser formalizada.
 
 O estado vivo e o roadmap estão em [[PROJECT_STATE]].
 

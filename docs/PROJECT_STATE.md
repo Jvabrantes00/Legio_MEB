@@ -2,7 +2,7 @@
 
 ## Estado atual
 
-- Data: 5 de outubro de 2026.
+- Data: 6 de outubro de 2026.
 - Branch: `sia/fase-1-modelagem-dominio`.
 - **FASE 0 — ESTABILIZAÇÃO: CONCLUÍDA**
 - **FASE 1 — REMODELAGEM DE DOMÍNIO: EM ANDAMENTO**
@@ -21,7 +21,7 @@
 | 0H PostgreSQL e legado | ✅ Concluída |
 | 0I Débitos técnicos restantes | ✅ Concluída |
 | 0J Gate e auditoria final | ✅ Concluída |
-| Fase 1 Remodelagem de domínio | Em andamento; 1B.3D.4 Formação em Encontros concluída; próxima frente global ainda não definida |
+| Fase 1 Remodelagem de domínio | Em andamento; 1B.3D.5 MME e Propostas de Violeiros concluída; próxima frente global ainda não definida |
 
 ## Estado da Fase 1
 
@@ -102,6 +102,21 @@
   incluindo os dois cenários concorrentes, e validou migrations até
   `core.0033_expand_sessoes_formativas`. A baseline SQLite permaneceu OK com
   9 skips PostgreSQL esperados; o cluster temporário foi removido.
+- 1B.3D.5 concluiu MME e Propostas de Violeiros. Múltiplas propostas por
+  Encontro preservam cinco posições vigentes, histórico de substituições e
+  disponibilidade derivada da escala oficial, sem reservar Pessoas ou copiar
+  o estado de `TrabalhoEncontro`.
+- A API canônica permite gestão a MME, Diretoria e Suporte. Fichas possui
+  leitura e aproveitamento oficial, que cria somente
+  `ConviteEncontro(TRABALHAR)`; confirmação, alocação e trabalho realizado
+  continuam exclusivamente no fluxo da D.3.
+- Propostas não criam histórico de trabalho, `Frequencia`,
+  `PerfilAlpinista`, saúde ou Formação. O legado musical e de Violeiros foi
+  preservado sem dual-write, backfill heurístico ou remoção física.
+- A regressão final aprovou 490/490 testes no PostgreSQL 16.15 descartável,
+  incluindo os cinco cenários concorrentes, e validou migrations até
+  `core.0034_expand_propostas_violeiros`. A baseline SQLite permaneceu OK com
+  14 skips PostgreSQL esperados; o cluster temporário foi removido.
 - A próxima frente global da Fase 1 ainda não possui numeração ou escopo
   definidos na documentação atual e deve ser formalizada antes da execução.
 
