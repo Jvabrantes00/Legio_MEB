@@ -165,6 +165,41 @@ def _detectar_conflitos(itens):
     )
 
 
+def detectar_conflitos_para_encontro(encontro_id, datas):
+    """Return advisory overlaps for proposed/current dates of one Encounter."""
+    datas = tuple(sorted(set(datas)))
+    if not datas:
+        return ()
+
+    encontros_por_data = defaultdict(set)
+    dias = DiaEncontro.objects.filter(
+        data__in=datas,
+        calendario__vigente=True,
+    ).exclude(calendario__encontro_id=encontro_id)
+    for data_dia, outro_id in dias.values_list(
+        'data',
+        'calendario__encontro_id',
+    ):
+        encontros_por_data[data_dia].add(outro_id)
+
+    legados = Encontro.objects.filter(
+        calendarios__isnull=True,
+        data_referencia__in=datas,
+    ).exclude(pk=encontro_id)
+    for data_dia, outro_id in legados.values_list('data_referencia', 'pk'):
+        encontros_por_data[data_dia].add(outro_id)
+
+    return tuple(
+        ConflitoCalendarioDTO(
+            data=data_dia,
+            encontro_ids=tuple(sorted({encontro_id, *outros_ids})),
+            quantidade=len(outros_ids) + 1,
+        )
+        for data_dia, outros_ids in sorted(encontros_por_data.items())
+        if outros_ids
+    )
+
+
 def _anotar_conflitos(itens, conflitos):
     conflitos_por_data = {conflito.data: conflito for conflito in conflitos}
     return tuple(

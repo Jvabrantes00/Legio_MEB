@@ -135,6 +135,22 @@ def _exigir_agenda_oficial_vigente(encontro):
 
 
 @transaction.atomic
+def editar_dados_basicos(encontro, *, titulo=None, local=None):
+    encontro_bloqueado = _bloquear_encontro(encontro)
+    campos_alterados = []
+    if titulo is not None:
+        encontro_bloqueado.encontro = titulo
+        campos_alterados.append('encontro')
+    if local is not None:
+        encontro_bloqueado.local = local
+        campos_alterados.append('local')
+    if not campos_alterados:
+        raise ValidationError('Informe ao menos um dado básico para alterar.')
+    encontro_bloqueado.save(update_fields=campos_alterados)
+    return encontro_bloqueado
+
+
+@transaction.atomic
 def criar_encontro_com_agenda(
     *,
     encontro,

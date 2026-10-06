@@ -5,15 +5,15 @@ from django.core.exceptions import ValidationError as django_core_validation_err
 from django.http import FileResponse, Http404
 from rest_framework import filters, mixins, status, viewsets
 from rest_framework.decorators import api_view, permission_classes, action
-from rest_framework.exceptions import ValidationError
+from rest_framework.exceptions import MethodNotAllowed, ValidationError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from django.shortcuts import get_object_or_404
 
 from .models import (
-    Alpinista, ConviteEncontro, Encontro, EntregaMaterial, Evento,
-    EquipeEncontro,
+    Alpinista, CalendarioEncontro, ConviteEncontro, Encontro, EntregaMaterial,
+    EquipeEncontro, Evento,
     FotoEncontro, FuncaoEncontro, Inscricao, Palestra,
     ParticipacaoEncontro as ResultadoParticipacaoEncontro,
     ParticipacaoEvento, LogSistema, Material, PalestranteSessao,
@@ -46,6 +46,11 @@ from .serializers import (
     PalestranteSessaoSerializer,
     PeriodoCalendarioQuerySerializer,
     ConsultaCalendarioInstitucionalSerializer,
+    CalendarioSemDadosCommandSerializer,
+    CriacaoEncontroCalendarioCommandSerializer,
+    DadosBasicosCalendarioCommandSerializer,
+    PlanejamentoCalendarioCommandSerializer,
+    ResultadoComandoCalendarioSerializer,
     RealizacaoSessaoCommandSerializer,
     RemocaoPalestranteCommandSerializer,
     SessaoFormativaSerializer,
@@ -69,6 +74,7 @@ from .services import trabalhos as trabalho_services
 from .services import formacoes as formacao_services
 from .services import propostas_violeiros as proposta_violeiros_services
 from .services import calendario_institucional as calendario_services
+from .services import comandos_calendario as calendario_command_services
 from .serializers import _erro_de_dominio, _erro_de_trabalho
 from .formacao_catalogo import TEMAS_FORMATIVOS
 from .roles import (
@@ -159,6 +165,207 @@ def calendario_institucional(request):
         context={'pode_gerir_calendario': pode_gerir},
     )
     return Response(serializer.data)
+
+
+class CalendarioEncontroCommandViewSet(viewsets.GenericViewSet):
+    queryset = Encontro.objects.all()
+    serializer_class = CriacaoEncontroCalendarioCommandSerializer
+    permission_classes = [
+        require_sia_roles(*INSTITUTIONAL_CALENDAR_MANAGEMENT_ROLES),
+    ]
+
+    serializer_classes = {
+        'create': CriacaoEncontroCalendarioCommandSerializer,
+        'dados_basicos': DadosBasicosCalendarioCommandSerializer,
+        'planejamento': PlanejamentoCalendarioCommandSerializer,
+        'oficializar': CalendarioSemDadosCommandSerializer,
+        'reprogramar': PlanejamentoCalendarioCommandSerializer,
+        'adiar': CalendarioSemDadosCommandSerializer,
+        'iniciar_planejamento': PlanejamentoCalendarioCommandSerializer,
+        'cancelar': CalendarioSemDadosCommandSerializer,
+    }
+
+    def get_serializer_class(self):
+        return self.serializer_classes.get(
+            self.action,
+            self.serializer_class,
+        )
+
+    def retrieve(self, request, *args, **kwargs):
+        raise MethodNotAllowed(request.method)
+
+    def _auditar(self, request, encontro, operacao, *, acao='UPDATE'):
+        LogSistema.objects.create(
+            usuario=request.user,
+            acao=acao,
+            modulo='CalendarioInstitucional',
+            descricao=f'Encontro ID {encontro.pk}: {operacao}.',
+        )
+
+    def _resposta(self, encontro, *, http_status=status.HTTP_200_OK):
+        encontro.refresh_from_db(fields=['status'])
+        calendario = (
+            CalendarioEncontro.objects
+            .filter(encontro=encontro, vigente=True)
+            .prefetch_related('dias')
+            .first()
+        )
+        dias = []
+        if calendario is not None:
+            dias = list(calendario.dias.order_by('ordem', 'id'))
+        avisos = calendario_services.detectar_conflitos_para_encontro(
+            encontro.pk,
+            [dia.data for dia in dias],
+        )
+        dados = {
+            'encontro_id': encontro.pk,
+            'status': encontro.status,
+            'calendario_id': calendario.pk if calendario else None,
+            'calendario_versao': calendario.versao if calendario else None,
+            'confirmacao': (
+                None
+                if calendario is None
+                else (
+                    calendario_services.CONFIRMACAO_OFICIAL
+                    if calendario.oficializado_em is not None
+                    else calendario_services.CONFIRMACAO_PROVISORIA
+                )
+            ),
+            'dias': dias,
+            'avisos_conflito': avisos,
+        }
+        return Response(
+            ResultadoComandoCalendarioSerializer(dados).data,
+            status=http_status,
+        )
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            with transaction.atomic():
+                encontro = calendario_command_services.criar_encontro(
+                    titulo=serializer.validated_data['encontro'],
+                    tipo=serializer.validated_data['tipo'],
+                    local=serializer.validated_data['local'],
+                    dias=serializer.validated_data['dias'],
+                )
+                self._auditar(
+                    request,
+                    encontro,
+                    'criado pelo calendário',
+                    acao='CREATE',
+                )
+        except django_core_validation_error as error:
+            _erro_de_dominio(error)
+        return self._resposta(encontro, http_status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=['patch'], url_path='dados-basicos')
+    def dados_basicos(self, request, pk=None):
+        encontro = self.get_object()
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            with transaction.atomic():
+                encontro = calendario_command_services.editar_dados_basicos(
+                    encontro,
+                    titulo=serializer.validated_data.get('encontro'),
+                    local=serializer.validated_data.get('local'),
+                )
+                self._auditar(request, encontro, 'dados básicos alterados')
+        except django_core_validation_error as error:
+            _erro_de_dominio(error)
+        return self._resposta(encontro)
+
+    @action(detail=True, methods=['patch'], url_path='planejamento')
+    def planejamento(self, request, pk=None):
+        encontro = self.get_object()
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            with transaction.atomic():
+                calendario_command_services.editar_planejamento(
+                    encontro,
+                    dias=serializer.validated_data['dias'],
+                )
+                self._auditar(request, encontro, 'planejamento alterado')
+        except django_core_validation_error as error:
+            _erro_de_dominio(error)
+        return self._resposta(encontro)
+
+    @action(detail=True, methods=['post'], url_path='oficializar')
+    def oficializar(self, request, pk=None):
+        return self._executar_sem_dados(
+            request,
+            self.get_object(),
+            calendario_command_services.oficializar_agenda,
+            'agenda oficializada',
+        )
+
+    @action(detail=True, methods=['post'], url_path='reprogramar')
+    def reprogramar(self, request, pk=None):
+        encontro = self.get_object()
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            with transaction.atomic():
+                calendario_command_services.reprogramar_agenda(
+                    encontro,
+                    dias=serializer.validated_data['dias'],
+                )
+                self._auditar(request, encontro, 'agenda reprogramada')
+        except django_core_validation_error as error:
+            _erro_de_dominio(error)
+        return self._resposta(encontro)
+
+    @action(detail=True, methods=['post'], url_path='adiar')
+    def adiar(self, request, pk=None):
+        return self._executar_sem_dados(
+            request,
+            self.get_object(),
+            calendario_command_services.adiar_encontro,
+            'Encontro adiado',
+        )
+
+    @action(
+        detail=True,
+        methods=['post'],
+        url_path='iniciar-planejamento',
+    )
+    def iniciar_planejamento(self, request, pk=None):
+        encontro = self.get_object()
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            with transaction.atomic():
+                calendario_command_services.iniciar_novo_planejamento(
+                    encontro,
+                    dias=serializer.validated_data['dias'],
+                )
+                self._auditar(request, encontro, 'novo planejamento iniciado')
+        except django_core_validation_error as error:
+            _erro_de_dominio(error)
+        return self._resposta(encontro)
+
+    @action(detail=True, methods=['post'], url_path='cancelar')
+    def cancelar(self, request, pk=None):
+        return self._executar_sem_dados(
+            request,
+            self.get_object(),
+            calendario_command_services.cancelar_encontro,
+            'Encontro cancelado',
+        )
+
+    def _executar_sem_dados(self, request, encontro, comando, operacao):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            with transaction.atomic():
+                comando(encontro)
+                self._auditar(request, encontro, operacao)
+        except django_core_validation_error as error:
+            _erro_de_dominio(error)
+        return self._resposta(encontro)
 
 
 @api_view(['GET'])

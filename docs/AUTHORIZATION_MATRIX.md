@@ -12,16 +12,16 @@
 Esta matriz descreve somente o que está implementado. Capabilities do
 frontend orientam a interface, mas o backend é a autoridade final.
 
-A leitura do Calendário Institucional já está implementada como projeção
-allowlist. Os comandos de gestão continuam reservados à fase seguinte.
+O Calendário Institucional está implementado como projeção allowlist e
+comandos explícitos sobre o domínio canônico de Encontros.
 
 ## Matriz
 
 | Papel | API root | Admin | Alpinista | Escrita Alpinista | Foto perfil | Música | Propostas MME | Formação em Encontros | Encontros | Calendário | Galeria | Funções / participações | Eventos / participações | Materiais / entregas | Dashboard | Logs |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| Superuser técnico | R | RW | Full | RW | RW | RW | RW | RW | Full/RW | R | RW | RW | RW | RW | R | R |
-| Suporte | — | — | Full | RW | RW | RW | RW | RW | Full/RW | R | RW | RW | RW | RW | R | R |
-| Diretoria | — | — | Full | RW | RW | RW | RW | RW | Full/RW | R | RW | RW | RW | RW | R | R |
+| Superuser técnico | R | RW | Full | RW | RW | RW | RW | RW | Full/RW | RW | RW | RW | RW | RW | R | R |
+| Suporte | — | — | Full | RW | RW | RW | RW | RW | Full/RW | RW | RW | RW | RW | RW | R | R |
+| Diretoria | — | — | Full | RW | RW | RW | RW | RW | Full/RW | RW | RW | RW | RW | RW | R | R |
 | Fichas | — | — | Full | RW | RW | RW | R | R | Full/RW | R | — | RW | — | — | R | — |
 | MME | — | — | Summary | — | R | RW | RW | — | — | R | — | — | — | — | — | — |
 | Formação | — | — | Summary | — | R | — | — | RW | — | R | — | — | — | — | — | — |
@@ -133,9 +133,11 @@ allowlist. Os comandos de gestão continuam reservados à fase seguinte.
 - Todas as roles funcionais reconhecidas visualizam a projeção allowlist do
   Calendário Institucional. Ela não contém participantes, equipes, saúde,
   inscrições, convites, formação ou observações internas.
-- O endpoint implementado nesta etapa é somente leitura. A capability de
-  gestão reflete a política já aprovada para Suporte e Diretoria, mas não
-  expõe comandos antes da fase correspondente.
+- Suporte e Diretoria podem criar Encontro, alterar dados básicos e
+  planejamento, oficializar, reprogramar, adiar, iniciar novo planejamento e
+  cancelar por comandos explícitos. Não existe CRUD direto de agenda ou dia.
+- As demais roles funcionais permanecem somente leitura. A capability de
+  gestão deriva da mesma política aplicada aos comandos.
 - O superuser permanece como bypass técnico separado.
 - Visualizar um item no calendário não concede permissão de gestão sobre o
   objeto de origem.

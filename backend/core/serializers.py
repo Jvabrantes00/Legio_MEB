@@ -29,15 +29,19 @@ from .roles import recognized_user_roles
 
 
 class StrictCommandSerializer(serializers.Serializer):
-    def validate(self, attrs):
-        extra_fields = set(self.initial_data) - set(self.fields)
+    def to_internal_value(self, data):
+        extra_fields = (
+            set(data) - set(self.fields)
+            if hasattr(data, 'keys')
+            else set()
+        )
         if extra_fields:
             raise serializers.ValidationError({
                 'campos_extras': [
                     f"Campos não permitidos: {', '.join(sorted(extra_fields))}."
                 ]
             })
-        return attrs
+        return super().to_internal_value(data)
 
 
 def calculate_age(birth_date):
@@ -635,9 +639,78 @@ class ConsultaCalendarioInstitucionalSerializer(serializers.Serializer):
         pode_gerir = self.context.get('pode_gerir_calendario', False)
         return {
             'pode_visualizar': True,
+            'pode_gerir_calendario': pode_gerir,
             'pode_criar_encontro': pode_gerir,
             'pode_publicar': pode_gerir,
         }
+
+
+class DiaCalendarioCommandSerializer(StrictCommandSerializer):
+    ordem = serializers.IntegerField(min_value=1)
+    data = serializers.DateField()
+    descricao = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        max_length=255,
+        default='',
+    )
+
+
+class CriacaoEncontroCalendarioCommandSerializer(StrictCommandSerializer):
+    encontro = serializers.CharField(max_length=255, allow_blank=False)
+    tipo = serializers.ChoiceField(choices=Encontro.Tipo.choices)
+    local = serializers.CharField(max_length=255, allow_blank=False)
+    dias = DiaCalendarioCommandSerializer(many=True, allow_empty=False)
+
+
+class DadosBasicosCalendarioCommandSerializer(StrictCommandSerializer):
+    encontro = serializers.CharField(
+        required=False,
+        max_length=255,
+        allow_blank=False,
+    )
+    local = serializers.CharField(
+        required=False,
+        max_length=255,
+        allow_blank=False,
+    )
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        if not attrs:
+            raise serializers.ValidationError({
+                'non_field_errors': [
+                    'Informe encontro ou local para alterar.'
+                ]
+            })
+        return attrs
+
+
+class PlanejamentoCalendarioCommandSerializer(StrictCommandSerializer):
+    dias = DiaCalendarioCommandSerializer(many=True, allow_empty=False)
+
+
+class CalendarioSemDadosCommandSerializer(StrictCommandSerializer):
+    pass
+
+
+class DiaResultadoComandoCalendarioSerializer(serializers.Serializer):
+    id = serializers.IntegerField(read_only=True)
+    data = serializers.DateField(read_only=True)
+    ordem = serializers.IntegerField(read_only=True)
+
+
+class ResultadoComandoCalendarioSerializer(serializers.Serializer):
+    encontro_id = serializers.IntegerField(read_only=True)
+    status = serializers.CharField(read_only=True)
+    calendario_id = serializers.IntegerField(read_only=True, allow_null=True)
+    calendario_versao = serializers.IntegerField(
+        read_only=True,
+        allow_null=True,
+    )
+    confirmacao = serializers.CharField(read_only=True, allow_null=True)
+    dias = DiaResultadoComandoCalendarioSerializer(many=True, read_only=True)
+    avisos_conflito = ConflitoCalendarioSerializer(many=True, read_only=True)
 
 
 class FotoEncontroSerializer(serializers.ModelSerializer):

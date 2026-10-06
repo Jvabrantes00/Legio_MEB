@@ -2,10 +2,10 @@
 
 ## Status geral
 
-D.6A e D.6B concluídas. A projeção canônica de Encontros, consulta por período,
-fallback legado controlado, conflitos consultivos, API allowlist, autorização
-de leitura e índice de data estão implementados e validados. D.6C — comandos,
-criação/edição e autorização — é o próximo bloco.
+D.6A, D.6B e D.6C concluídas. Projeção, leitura e comandos temporais canônicos
+estão implementados e validados, com autorização, auditoria e compatibilidade
+legada preservadas. Aguardando checkpoint humano de UX/UI na D.6D; nenhum
+frontend ou PDF pode começar antes dele.
 
 ## Objetivo
 
@@ -57,15 +57,15 @@ sem comandos de escrita nem tabela duplicada de calendário.
 
 ### D.6C — Comandos, criação/edição e autorização
 
-Status: pendente.
+Status: concluída em 2026-10-06.
 
-Exporá comandos explícitos de criação, dados básicos, planejamento,
-oficialização, reprogramação, adiamento e cancelamento, delegando aos services
-canônicos e atualizando auditoria e matriz implementada.
+Expôs comandos explícitos de criação, dados básicos, planejamento,
+oficialização, reprogramação, adiamento, novo planejamento e cancelamento,
+delegando aos services canônicos com auditoria transacional.
 
 ### D.6D — Definição de UX/UI
 
-Status: pendente.
+Status: aguardando checkpoint humano.
 
 Checkpoint humano obrigatório. O trabalho deve parar para apresentar o estado
 técnico e obter decisões do usuário. Nenhum frontend, design final de PDF ou
@@ -164,6 +164,96 @@ temporário e remoção de recursos efêmeros.
 - `docs/AUTHORIZATION_MATRIX.md`;
 - `docs/workplans/PHASE_1B_D6.md`.
 
+## Resultado da D.6C
+
+### Comandos e endpoints
+
+O command viewset em `/api/calendario-institucional/encontros/` expõe apenas:
+
+- `POST /` — criar Encontro com agenda inicial provisória;
+- `PATCH /{id}/dados-basicos/` — alterar nome e/ou local;
+- `PATCH /{id}/planejamento/` — substituir dias provisórios in-place;
+- `POST /{id}/oficializar/` — oficializar a agenda vigente;
+- `POST /{id}/reprogramar/` — preservar a versão anterior e criar oficial;
+- `POST /{id}/adiar/` — retirar vigência sem inventar novas datas;
+- `POST /{id}/iniciar-planejamento/` — criar nova versão provisória;
+- `POST /{id}/cancelar/` — cancelar sem remover Encontro ou agenda.
+
+Não há listagem/detalhe duplicado, CRUD de calendário/dia, delete, transições
+operacionais de preparação/início/finalização nem comandos de participantes,
+equipes, formação ou MME.
+
+### Reutilização, transações e auditoria
+
+- `core.services.comandos_calendario` é uma camada fina de orquestração sobre
+  os services temporais de Encontro. Lifecycle, vigência, oficialização,
+  versionamento e locks não foram copiados para serializers/views.
+- `editar_dados_basicos` foi acrescentado ao service canônico de Encontro e
+  aceita somente nome/local sob `select_for_update`.
+- Cada endpoint envolve comando e `LogSistema` no mesmo `transaction.atomic`.
+  Os logs usam somente o ID do Encontro e a operação; falha de auditoria
+  reverte criação e objetos temporais.
+- Escritas com dias sincronizam `data_referencia` e uma representação
+  determinística em `data_exato` apenas para consumidores legados. A fonte de
+  verdade permanece `CalendarioEncontro`/`DiaEncontro`.
+- Respostas trazem status, agenda/versão vigente, confirmação, dias e
+  `avisos_conflito`; conflitos reutilizam o detector central, incluem legado
+  sem calendário, não persistem e nunca bloqueiam o comando.
+
+### Autorização e capabilities
+
+- Suporte, Diretoria e superuser executam todos os comandos. Fichas, MME,
+  Formação, Secretaria, Ação Social, Liturgia, Eventos e Comunicação continuam
+  somente leitura; usuário sem role e anônimo permanecem negados.
+- A projeção agora inclui `pode_gerir_calendario`, derivada da mesma constante
+  de roles usada pelo command viewset. As capabilities existentes permanecem
+  alinhadas à política aprovada.
+- Métodos e campos não expostos retornam `405`/`400`; recurso ausente retorna
+  `404`; transições inválidas dos services retornam `400`.
+
+### Compatibilidade e cutover
+
+- Os novos writes usam exclusivamente services e estrutura canônicos; não há
+  fallback de escrita, dual-write temporal, backfill ou registro visual.
+- O CRUD legado de Encontro foi preservado. Seu payload informa apenas
+  `data_referencia` e `data_exato` textual, logo converter múltiplos dias seria
+  heurístico e inseguro. Esses registros podem continuar sem agenda e entram
+  somente no fallback de leitura D.6B.
+- Exclusão e edição direta do endpoint legado permanecem como débito de
+  compatibilidade até existir contrato estruturado e plano de cutover. Não
+  houve quebra dos consumidores atuais.
+
+### Concorrência, testes e validação
+
+- Os services existentes bloqueiam Encontro e agenda vigente. Edições são
+  serializadas; oficialização concorrente rejeita a segunda transição;
+  reprogramações preservam versões; edição concorrente com oficialização ou
+  cancelamento não produz agenda parcial.
+- Cinco testes reais de concorrência foram preparados e condicionados a
+  PostgreSQL: edição simultânea, oficialização simultânea, reprogramação
+  simultânea, edição versus oficialização e edição versus cancelamento. Sua
+  execução fica reservada à D.6G.
+- A D.6C adicionou 19 testes, dos quais 14 passaram em SQLite e cinco foram
+  corretamente ignorados. A suíte backend total passou com 525 testes e 19
+  skips. `manage.py check` passou e `makemigrations --check --dry-run` retornou
+  `No changes detected`, com o aviso esperado de PostgreSQL inacessível na
+  sandbox.
+- Nenhuma migration nova foi necessária. Frontend, PDF, publicação e
+  PostgreSQL não foram executados.
+
+### Arquivos alterados na D.6C
+
+- `backend/core/services/encontros.py`;
+- `backend/core/services/comandos_calendario.py`;
+- `backend/core/services/calendario_institucional.py`;
+- `backend/core/serializers.py`;
+- `backend/core/views.py`;
+- `backend/core/urls.py`;
+- `backend/core/tests/test_calendario_institucional_commands.py`;
+- `docs/00_HOME.md`;
+- `docs/AUTHORIZATION_MATRIX.md`;
+- `docs/workplans/PHASE_1B_D6.md`.
+
 ## Decisões da fase
 
 - O ADR-001 permanece a decisão arquitetural principal e não será duplicado.
@@ -200,9 +290,8 @@ temporário e remoção de recursos efêmeros.
 - As FKs de agenda e dias usam `CASCADE`, coerente com a dependência do
   Encontro, mas a API nova não deverá oferecer exclusão do calendário como
   operação normal.
-- Não existe índice iniciado por `DiaEncontro.data`; o índice único atual
-  começa por `calendario_id` e não atende idealmente buscas globais por
-  intervalo.
+- Na auditoria D.6A não existia índice iniciado por `DiaEncontro.data`; a
+  migration `0035` o adicionou na D.6B para as buscas globais por intervalo.
 - Não existem constraints SQL cruzando status do Encontro, vigência e
   oficialização. Essas invariantes são corretamente mantidas pelos services,
   pois dependem de objetos relacionados e transições.
@@ -605,9 +694,9 @@ ambientes isolados normais.
 ## Pendências humanas
 
 As perguntas visuais e a política de download histórico estão reservadas à
-D.6D. Elas não bloqueiam a D.6C; a projeção já usa contrato neutro e a política
-conservadora documentada. Não há decisão humana ou bloqueio técnico pendente
-antes dos comandos.
+D.6D. Projeção e comandos usam contratos neutros, mas esse checkpoint humano é
+agora bloqueante para a D.6E e para o design final dos PDFs. Aguardando
+checkpoint humano de UX/UI.
 
 ## Débitos
 
@@ -660,9 +749,11 @@ antes dos comandos.
 
 ## Próximo passo
 
-D.6C — implementar comandos explícitos de criação e edição pelo Calendário,
-delegação aos services temporais, auditoria e autorização de gestão, sem
-frontend, PDF ou publicação.
+**Aguardando checkpoint humano de UX/UI.**
+
+D.6D deve coletar e registrar as decisões visuais e de produto já reservadas
+no workplan. Não iniciar frontend, design final de PDF ou aplicação de paleta
+antes dessa conversa.
 
 ## Histórico de execução
 
@@ -675,3 +766,7 @@ frontend, PDF ou publicação.
 - 2026-10-06 — D.6B concluída. Projeção, API de leitura, conflitos,
   autorização e índice implementados; 16 testes novos e suíte backend com 506
   testes aprovados, sem PostgreSQL, frontend ou comandos de escrita.
+- 2026-10-06 — D.6C concluída. Comandos temporais, autorização de gestão,
+  auditoria, avisos de conflito e sincronização compatível implementados; suíte
+  backend com 525 testes aprovados e cinco cenários novos de concorrência
+  reservados ao PostgreSQL na D.6G. Aguardando checkpoint humano de UX/UI.
