@@ -21,7 +21,7 @@
 | 0H PostgreSQL e legado | ✅ Concluída |
 | 0I Débitos técnicos restantes | ✅ Concluída |
 | 0J Gate e auditoria final | ✅ Concluída |
-| Fase 1 Remodelagem de domínio | Em andamento; 1B.3D.3 concluída; próxima frente: Palestras e seus históricos (numeração ainda não definida) |
+| Fase 1 Remodelagem de domínio | Em andamento; 1B.3D.4 Formação em Encontros concluída; próxima frente global ainda não definida |
 
 ## Estado da Fase 1
 
@@ -86,8 +86,24 @@
 - Permanecem futuros o frontend canônico de equipes, a reconciliação e remoção
   física do legado, a fonte definitiva de atividade, saúde contextual e regras
   adicionais de AVC/Acampamento.
-- Próxima frente já registrada na direção da Fase 1: Palestras e seus
-  históricos. A numeração do bloco ainda não está definida na documentação.
+- 1B.3D.4 concluiu Formação em Encontros. O catálogo fixo em código contém
+  nove palestras compartilhadas por Escalada/ESPPA e onze bate-papos de AVC;
+  Acampamento permanece sem conteúdo deste domínio.
+- `SessaoFormativa` e `PalestranteSessao` preservam snapshots, múltiplos
+  palestrantes internos/externos e realização efetiva. O histórico canônico
+  deriva somente de sessão `REALIZADA` e Alpinista que `MINISTROU`.
+- A API canônica restringe gestão a Formação, Diretoria e Suporte, com Fichas
+  somente leitura e default deny para os demais papéis. A regra do AVC exige
+  palestrante Alpinista trabalhando no mesmo Encontro.
+- `Palestra`, `historico-palestras` e o filtro legado permanecem disponíveis
+  para compatibilidade de leitura, sem dual-write, conversão ou backfill
+  automático. Consumidores frontend e remoção física permanecem débitos.
+- A regressão final aprovou 429/429 testes no PostgreSQL 16.15 descartável,
+  incluindo os dois cenários concorrentes, e validou migrations até
+  `core.0033_expand_sessoes_formativas`. A baseline SQLite permaneceu OK com
+  9 skips PostgreSQL esperados; o cluster temporário foi removido.
+- A próxima frente global da Fase 1 ainda não possui numeração ou escopo
+  definidos na documentação atual e deve ser formalizada antes da execução.
 
 ## Histórico — Fase 0
 

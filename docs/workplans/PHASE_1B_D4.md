@@ -2,9 +2,9 @@
 
 ## Status geral
 
-Fase em andamento. D.4A, D.4B, D.4C, D.4C.1 e D.4D estão concluídos. O
-domínio possui fundação, catálogo real, services, API canônica, autorização e
-compatibilidade de leitura sem backfill. D.4E é o próximo bloco.
+**CONCLUÍDA.** D.4A, D.4B, D.4C, D.4C.1, D.4D e D.4E foram aprovadas. O
+domínio possui fundação, catálogo real, services, API canônica, autorização,
+compatibilidade de leitura e validação real em PostgreSQL, sem backfill.
 
 ## Objetivo
 
@@ -62,7 +62,7 @@ Status: concluída em 2026-10-05.
 
 ### D.4E — PostgreSQL, regressão e fechamento
 
-Status: pendente.
+Status: concluída em 2026-10-05.
 
 ## D.4A — relatório de análise e desenho técnico
 
@@ -538,6 +538,55 @@ de realização. Registros não reconciliados permanecem apenas no legado.
 - `docs/AUTHORIZATION_MATRIX.md`
 - `docs/workplans/PHASE_1B_D4.md`
 
+## D.4E — resultado final
+
+### PostgreSQL e concorrência
+
+- A validação usou PostgreSQL **16.15** em cluster descartável criado por
+  `pg_virtualenv`, com banco, usuário e porta exclusivos do processo.
+- Os dois testes reais de concorrência passaram: inclusão simultânea do mesmo
+  Alpinista produziu uma única atuação, e realizações simultâneas divergentes
+  preservaram um único resultado válido sem sobrescrita.
+- `transaction.atomic`, `select_for_update`, a unicidade condicional e a
+  idempotência funcionaram no backend alvo.
+- A primeira tentativa conectou por TCP com senha fictícia e foi rejeitada
+  antes de qualquer migration. O cluster foi descartado; a repetição pelo
+  socket Unix isolado concluiu todas as validações.
+- A suíte completa aprovou **429/429 testes** no PostgreSQL, sem skips.
+- O cluster efêmero foi removido automaticamente. `sia_dev`, `CREATEDB`, a
+  configuração global do PostgreSQL e dados persistentes não foram alterados.
+
+### Regressão final
+
+- A baseline SQLite executou 429 testes com resultado OK e 9 skips
+  condicionais a PostgreSQL.
+- Permaneceram cobertos registry, snapshots, XOR, states, services,
+  realização, histórico derivado, regras por tipo, guarda do trabalho no AVC,
+  catálogo real, API, autorização e leitura compatível do legado.
+- A regressão confirmou que externo não cria Pessoa, Perfil ou User; Formação
+  não cria Trabalho ou Frequência; somente `REALIZADA` + `MINISTROU` compõe o
+  histórico canônico; e `Palestra` não é convertida automaticamente.
+- Formação, Diretoria e Suporte mantêm gestão; Fichas mantém somente leitura;
+  superuser continua bypass técnico; demais papéis permanecem default deny.
+
+### Catálogo e migrations
+
+- O catálogo final permanece em código com nove palestras compartilhadas por
+  Escalada/ESPPA, onze bate-papos de AVC e nenhum tema de Acampamento.
+- Códigos permanecem estáveis, `title_snapshot` preserva história e não existe
+  CRUD ou persistência do catálogo.
+- Todas as migrations aplicaram em PostgreSQL limpo. `showmigrations`
+  confirmou `core.0001` a `core.0033_expand_sessoes_formativas` aplicadas.
+- `makemigrations --check --dry-run` não detectou mudanças. Nenhuma migration
+  foi criada no fechamento.
+
+### Critérios de fechamento
+
+- D.4A–D.4E estão concluídas e todos os critérios essenciais foram
+  satisfeitos. A Fase 1B.3D.4 — Formação em Encontros está **CONCLUÍDA**.
+- Não há próxima numeração global definida na documentação atual; o próximo
+  bloco deve ser formalizado antes da execução, sem inferência neste workplan.
+
 ## Decisões da fase
 
 - As regras de produto fechadas permanecem no documento de domínio; o desenho
@@ -583,14 +632,17 @@ write API, service, admin, transformador legado ou consumidor frontend fonte.
 - Na D.4D, 12 testes de API foram adicionados e a suíte backend passou com 429
   testes e 9 skips. A regressão focada de API/contratos/autorização passou com
   105 testes.
+- Na D.4E, a suíte aprovou 429/429 testes no PostgreSQL 16.15; a baseline
+  SQLite executou os mesmos 429 testes com resultado OK e 9 skips esperados.
+  Os dois testes concorrentes de Formação passaram no PostgreSQL real.
 
 ## Débitos
 
-- Execução PostgreSQL dos testes de inclusão e realização concorrentes,
-  regressão final e fechamento da D.4E.
 - Reconciliação humana do legado e futura depreciação do model `Palestra`.
 - Inventário de consumidores externos ao repositório antes da remoção física.
 - Migração de qualquer consumidor frontend legado para a API canônica.
+- Melhorias futuras de quadrante/frontend e mudanças posteriores no catálogo
+  exigem etapas próprias; não pertencem ao fechamento da D.4.
 
 ## Arquivos relevantes
 
@@ -623,8 +675,9 @@ write API, service, admin, transformador legado ou consumidor frontend fonte.
 
 ## Próximo passo
 
-D.4E — executar os testes de concorrência em PostgreSQL real, regressão final,
-conferência das migrations e fechamento da Fase 1B.3D.4.
+A próxima fase global ainda não possui numeração ou escopo definidos na
+documentação atual. Formalizar o próximo bloco antes de iniciar nova
+implementação.
 
 ## Histórico de execução
 
@@ -652,3 +705,7 @@ conferência das migrations e fechamento da Fase 1B.3D.4.
   derivado e compatibilidade de leitura do legado. A suíte backend executou
   429 testes com resultado OK e 9 skips, nenhuma migration foi gerada e D.4E
   foi definido como próximo bloco.
+- 2026-10-05 — D.4E e a Fase 1B.3D.4 concluídas. Os 429 testes passaram no
+  PostgreSQL 16.15 descartável, inclusive os dois cenários concorrentes; a
+  baseline SQLite permaneceu OK com 9 skips condicionais, migrations foram
+  validadas até `core.0033` e o cluster temporário foi removido.

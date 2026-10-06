@@ -19,8 +19,9 @@ substitui os documentos de referência nem os `AGENTS.md` aplicáveis.
   transacionais, cutover lógico e validação real em PostgreSQL.
 - 1B.3D.3 concluiu Equipes e Trabalho em Encontro, incluindo cutover lógico e
   validação de concorrência em PostgreSQL.
-- 1B.3D.4 — Formação em Encontros preparada documentalmente; próximo bloco:
-  D.4A, análise do legado e desenho técnico.
+- 1B.3D.4 — Formação em Encontros concluída, com catálogo real, services, API,
+  autorização e validação PostgreSQL. A próxima frente global ainda não está
+  definida na documentação.
 
 O estado vivo e o roadmap estão em [[PROJECT_STATE]].
 
