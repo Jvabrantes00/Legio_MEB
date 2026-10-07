@@ -200,4 +200,6 @@ AGENTS aplicáveis.
 - [[decisions/ADR-001-calendario-institucional]] — decisão do Calendário
   Institucional.
 - [[PHASE_0_CLOSURE]] — fechamento histórico da Fase 0.
+- [[workplans/DEV_SEED]] — dataset controlado para testes manuais em
+  desenvolvimento.
 - [[AGENTS_INDEX]] — localização e alcance dos guias de agentes.
