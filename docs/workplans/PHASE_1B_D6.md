@@ -2,10 +2,11 @@
 
 ## Status geral
 
-D.6A–D.6F e D.6G.1–D.6G.3 concluídas. O checkpoint D.6H.1/H.2 aprovou os seis
-cenários concorrentes em PostgreSQL 16 real. A D.6H.3 preparou a regressão
-final e aguarda execução manual pelo usuário. A D.6 permanece aberta até a
-revisão e o fechamento documental H.4.
+**D.6 — CONCLUÍDA em 2026-10-07.**
+
+D.6A–D.6G.3 e D.6H.1–D.6H.4 concluídas. O checkpoint concorrente foi
+aprovado em PostgreSQL 16 real, a regressão final manual foi aprovada e o
+estado global foi consolidado na documentação.
 
 ## Objetivo
 
@@ -81,11 +82,11 @@ canônica, visibilidade e contrato heterogêneo, antes do frontend.
 
 ### D.6F — Frontend personalizado
 
-Status: tecnicamente concluída em 2026-10-06.
+Status: concluída em 2026-10-06.
 
 Implementou a especificação visual aprovada na D.6D sobre os contratos
-entregues em D.6B–D.6E. A implementação está pronta para revisão visual
-humana; eventuais ajustes visuais devem preceder D.6G.
+entregues em D.6B–D.6E. A revisão humana e os refinamentos posteriores foram
+incorporados antes do fechamento.
 
 ### D.6G.1 — Fundação técnica e spike visual
 
@@ -114,10 +115,9 @@ histórico, download privado, UI final e compensação de storage.
 
 ### D.6H — Integração, PostgreSQL, regressão e fechamento
 
-Status: em andamento; checkpoint PostgreSQL D.6H.1/H.2 concluído em
-2026-10-07.
+Status: concluída em 2026-10-07.
 
-Validará integração, migrations, os seis cenários concorrentes acumulados na
+Validou integração, migrations, os seis cenários concorrentes acumulados na
 D.6C/D.6E, publicação/storage e regressão backend/frontend.
 
 Subdivisão operacional:
@@ -125,8 +125,8 @@ Subdivisão operacional:
 - **D.6H.1:** auditoria dos testes, ambiente efêmero e comandos manuais,
   concluída;
 - **D.6H.2:** checkpoint humano aprovado com 6/6 cenários em PostgreSQL 16;
-- **D.6H.3:** regressão final preparada; execução manual pendente;
-- **D.6H.4:** revisão final, documentação, `PROJECT_STATE` e fechamento da D.6.
+- **D.6H.3:** regressão final manual aprovada;
+- **D.6H.4:** revisão final, documentação e fechamento concluídos.
 
 ## Resultado da D.6B
 
@@ -652,9 +652,9 @@ D.6G.2 concluída por decisão humana. Próximo bloco: D.6G.3.
   API, UI ou código de produção.
 - Os seis artefatos controlados Público/Interno foram gerados com as contagens
   de 1, 12 e 1 páginas esperadas e inspecionados visualmente.
-- O SVG oficial `core/static/core/branding/logo-escalada.svg`, contendo apenas
-  o símbolo do pé, é incorporado como data URI controlada no canto superior
-  direito. O fetcher do WeasyPrint bloqueia recursos externos.
+- O SVG oficial `backend/core/static/core/branding/logo-escalada.svg`,
+  contendo apenas o símbolo do pé, é incorporado como data URI controlada no
+  canto superior direito. O fetcher do WeasyPrint bloqueia recursos externos.
 
 ### Publicação, histórico e segurança
 
@@ -682,9 +682,10 @@ D.6G.2 concluída por decisão humana. Próximo bloco: D.6G.3.
 - O diálogo de exportação oferece escopo e as três modalidades finais,
   desabilita o mês selecionado na visão anual com explicação, gera preview e
   exige confirmação contextual antes de publicar.
-- O histórico apresenta formato, data, autoria e hash abreviado, com download
-  autenticado. Estados de carregamento, erro, sucesso e vazio, foco preso no
-  modal, Escape, restauração de foco e adaptação mobile foram preservados.
+- O histórico apresenta escopo, período, layout, ano/mês, data, autoria e hash
+  abreviado, do mais recente para o mais antigo, com download autenticado.
+  Estados de carregamento, erro, sucesso e vazio, foco preso no modal, Escape,
+  restauração de foco e adaptação mobile foram preservados.
 - A UI usa o BFF existente e nunca lê JWT. A ação permanece disponível apenas
   a gestores do Calendário.
 
@@ -693,15 +694,15 @@ D.6G.2 concluída por decisão humana. Próximo bloco: D.6G.3.
 - Testes cobrem modalidades, 12 páginas, Modelo B, logo local, snapshot sem
   PII, publicabilidade, imutabilidade, SHA-256, republicação, falhas de
   renderer/storage/banco, autorização, IDOR, UI e separação preview/publicar.
-- Os 22 testes backend focados e a suíte backend completa de 561 testes
-  passaram, com 20 skips PostgreSQL previstos. `check` e
-  `makemigrations --check --dry-run` passaram sem mudanças pendentes.
+- Os 22 testes backend focados passaram na validação final. A regressão
+  integrada e seus 20 skips PostgreSQL esperados estão consolidados no
+  resultado da D.6H.3/H.4.
 - No frontend, 131 testes, TypeScript, ESLint e build de produção Webpack
   passaram. O lint manteve somente dois warnings preexistentes de `<img>` em
   Alpinistas. O Turbopack não pôde abrir sua porta interna na sandbox; o build
   Webpack foi validado sem deixar alteração de configuração.
-- D.6H permanece responsável pela validação PostgreSQL dos cenários
-  concorrentes acumulados, regressão integrada final e fechamento da D.6.
+- A validação PostgreSQL dos cenários concorrentes, a regressão integrada e o
+  fechamento foram concluídos na D.6H.
 - A imutabilidade física depende das permissões operacionais do banco/storage;
   não foi introduzido trigger ou política de retenção fora do escopo aprovado.
 
@@ -819,7 +820,7 @@ A D.6H.1 não executou testes automatizados nem iniciou correções preventivas.
 O usuário deve enviar para a D.6H.2 a saída completa do comando conjunto,
 incluindo criação/remoção do cluster, os seis resultados, traceback integral e
 as últimas linhas do log PostgreSQL que `pg_virtualenv` imprime em caso de
-falha. A D.6 permanece aberta.
+falha. Naquele checkpoint, a D.6 ainda aguardava os blocos H.2–H.4.
 
 ## Resultado da D.6H.2
 
@@ -844,7 +845,8 @@ falha. A D.6 permanece aberta.
    Encontro.
 
 Nenhuma correção de código, teste ou harness foi necessária. O checkpoint
-PostgreSQL D.6H.1/H.2 está concluído, mas a D.6 permanece aberta.
+PostgreSQL D.6H.1/H.2 foi concluído; naquele momento, H.3/H.4 ainda estavam
+pendentes.
 
 ### Próximos blocos
 
@@ -927,11 +929,39 @@ corrigir somente o problema observado. Executar primeiro o menor comando
 relevante, repetir a etapa afetada e só reiniciar regressão mais ampla quando o
 alcance da correção justificar.
 
-Para o fechamento H.4, o usuário deve enviar: comando e linha final de cada
-etapa; quantidade e resultado das suítes; relação de skips; warnings do lint;
-resumo do build; `git diff --check`; e `git status --short`. Em falha, enviar
-também traceback/erro integral. A D.6H.3 está preparada, mas ainda não
-aprovada; a D.6 permanece aberta.
+Os resultados enviados pelo usuário foram consolidados na D.6H.4; o bloco
+D.6H.3 está aprovado.
+
+## Resultado da D.6H.3 e D.6H.4
+
+### Regressão backend e checks
+
+- A suíte backend completa executou 561 testes, com 20 skips e um único erro:
+  uma referência antiga a `Logo Escalada.svg`, enquanto o asset oficial já se
+  chamava `logo-escalada.svg`.
+- A correção ficou restrita ao caminho do asset. O teste isolado passou
+  (1/1) e o módulo `core.tests.test_calendario_institucional_export` passou
+  integralmente (22/22). Os demais testes da suíte completa já haviam passado
+  antes da correção, portanto não houve repetição desnecessária dos 561.
+- `manage.py check` e `makemigrations --check --dry-run` foram aprovados, sem
+  mudança de model pendente.
+
+### Regressão frontend
+
+- Vitest: 131/131 testes e 10/10 arquivos aprovados.
+- TypeScript aprovado; ESLint sem erros e com os dois warnings preexistentes
+  de `<img>` na área de Alpinistas, alheios à D.6.
+- Build do Next.js 16.3.3 com Webpack aprovado, incluindo a rota
+  `/calendario`.
+
+### Migrations e encerramento
+
+- O grafo confirmou, nesta ordem,
+  `0035_diaencontro_data_index`, `0036_expand_agenda_encontro`,
+  `0037_publicacao_calendario_institucional` e
+  `0038_calendario_publicacao_layout`.
+- A D.6H.3 foi aprovada e a D.6H.4 concluiu a revisão documental. A Fase
+  1B.3D.6 está concluída.
 
 ## Decisões da fase
 
@@ -1261,17 +1291,17 @@ A Agenda exibida cronologicamente reúne sem duplicação:
 
 - **Dias do Encontro:** `DiaEncontro` com rótulo público curto/editável, como
   `Pré-Escalada`, `Sexta-feira`, `Sábado` ou `Domingo`;
-- **Preparação:** `ReuniaoPreparatoriaEncontro` real, preservando presença e
+- **Preparatória:** `ReuniaoPreparatoriaEncontro` real, preservando presença e
   regras da D.3;
 - **Pós-Encontro:** item simples `Avaliação`, vinculado ao Encontro.
 
 Sugestões de rótulo por tipo são editáveis, não obrigatórias e nunca inferidas
-automaticamente pelo índice da data. Reuniões podem receber complemento de
-agenda, como `Missa de Entrega`, sem criar novo tipo de compromisso. A criação
-inicial pode incluir reuniões preparatórias junto com os dias.
+automaticamente pelo índice da data. Preparatórias podem receber complemento
+de agenda, como `Missa de Entrega`, sem criar novo tipo de compromisso. A
+criação inicial pode incluir Preparatórias junto com os dias.
 
-A futura página canônica do Encontro terá uma seção `Agenda` com as mesmas
-fontes. `Editar calendário` modifica os objetos reais, de modo que página e
+A página canônica do Encontro possui uma seção `Agenda` com as mesmas fontes.
+`Editar calendário` modifica os objetos reais, de modo que página e
 Calendário refletem automaticamente a mesma informação.
 
 ## Deltas técnicos entregues na D.6E
@@ -1298,10 +1328,10 @@ tipos genéricos de compromisso nesta fase.
 
 - Público e Interno oferecem: mensal de um mês, mensal do ano completo em um
   PDF de 12 páginas e anual resumido Modelo B em uma página.
-- **Público:** somente itens publicáveis externamente, inicialmente dias dos
-  Encontros. Exclui preparatórias, avaliação interna, pessoas, equipes,
+- **Público:** somente itens publicáveis externamente, inicialmente Dias dos
+  Encontros. Exclui Preparatórias, Avaliação, pessoas, equipes,
   presença e operação.
-- **Interno:** pode incluir dias, preparatórias e avaliação. Recebe `USO
+- **Interno:** pode incluir Dias, Preparatórias e Avaliação. Recebe `USO
   INTERNO`, mas continua sem dados pessoais ou sensíveis por padrão.
 - Não existe Excel. PDF é saída de divulgação e nunca fonte de edição.
 - A decisão publicável/interno pertence ao item/domínio apropriado; o renderer
@@ -1311,7 +1341,7 @@ tipos genéricos de compromisso nesta fase.
 
 - A4 paisagem, digital-first, grade de segunda a domingo e itens
   centralizados.
-- Cabeçalho jovem/institucional e logo real do movimento/paróquia no canto
+- Cabeçalho jovem/institucional e somente o símbolo oficial do pé no canto
   superior direito.
 - Provisório usa `*` e legenda. O interno também identifica `USO INTERNO`.
 
@@ -1528,11 +1558,9 @@ ambientes isolados normais.
 
 ## Pendências humanas
 
-- Nenhuma decisão humana permanece aberta na D.6G.3. O asset oficial foi
-  incorporado, a UI foi fechada e a política de histórico foi implementada:
-  público para roles funcionais autenticadas e interno apenas para gestores.
-
-Não há decisão de produto bloqueante para iniciar a D.6H.
+Nenhuma decisão humana permanece aberta na D.6. Antes de iniciar uma nova
+etapa com decisão relevante de arquitetura, o próximo checkpoint deve levantar
+com o usuário as necessidades de produto e uso.
 
 ## Débitos
 
@@ -1545,9 +1573,16 @@ Não há decisão de produto bloqueante para iniciar a D.6H.
   de backup não pertence à D.6.
 - A instalação de WeasyPrint precisa permanecer reproduzível no deploy e
   conservar as bibliotecas de sistema validadas pelo spike.
+- Uma interrupção abrupta entre a escrita no storage e o commit da transação
+  ainda pode deixar arquivo órfão. Existe compensação para falhas normais,
+  mas não atomicidade distribuída entre filesystem e banco.
+- O frontend mantém dois warnings preexistentes de `no-img-element` na área
+  de Alpinistas; eles não foram introduzidos pela D.6.
 - Eventos, compromissos genéricos, saúde, atividade canônica, frontends
   D.2–D.5, Excel e integrações externas permanecem fora do escopo, não débitos
-  a resolver nesta fase.
+  a resolver nesta fase. Em especial, o Calendário está conceitualmente
+  preparado para uma agenda mais ampla, mas Eventos ainda não foi
+  implementado nem integrado.
 
 ## Arquivos relevantes
 
@@ -1609,8 +1644,7 @@ Não há decisão de produto bloqueante para iniciar a D.6H.
 
 ## Próximo passo
 
-D.6H — integração, PostgreSQL, regressão e fechamento do Calendário
-Institucional.
+Próxima fase: a definir em checkpoint de produto/arquitetura.
 
 ## Histórico de execução
 
@@ -1659,4 +1693,8 @@ Institucional.
   removidos. Nenhuma correção necessária. Próximo bloco: D.6H.3.
 - 2026-10-07 — D.6H.3 preparada sem executar validações. Auditados e
   documentados os comandos manuais de Django/migrations, backend, frontend,
-  TypeScript, ESLint, build Webpack e Git. Aguardando execução pelo usuário.
+  TypeScript, ESLint, build Webpack e Git.
+- 2026-10-07 — D.6H.3 aprovada e D.6H.4 concluída. PostgreSQL concorrente
+  6/6; regressão backend revisada após correção localizada da logo; módulo de
+  exportação 22/22; frontend 131/131; TypeScript, ESLint, build Webpack,
+  checks Django e grafo de migrations aprovados. D.6 concluída.

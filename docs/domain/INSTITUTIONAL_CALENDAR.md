@@ -63,12 +63,12 @@ A Agenda apresentada ao usuário é uma composição cronológica de fontes
 canônicas, sem tabela visual duplicada:
 
 - dias próprios, vindos de `DiaEncontro`;
-- reuniões preparatórias, vindas de `ReuniaoPreparatoriaEncontro`;
+- Preparatórias, vindas de `ReuniaoPreparatoriaEncontro`;
 - avaliação pós-Encontro, como item simples de agenda vinculado ao Encontro.
 
-Criar ou editar uma reunião pela Agenda atua sobre a reunião real e preserva
-as regras de presença do domínio de trabalho. Um rótulo complementar pode
-qualificar a reunião sem transformar esse complemento em novo tipo de
+Criar ou editar uma Preparatória pela Agenda atua sobre a reunião real e
+preserva as regras de presença do domínio de trabalho. Um rótulo complementar
+pode qualificar a reunião sem transformar esse complemento em novo tipo de
 compromisso.
 
 A avaliação não é reunião, dia do Encontro, presença, participação, trabalho
@@ -76,9 +76,9 @@ ou equipe. Ela existe apenas para compor a cronologia do Encontro e deve ter
 modelagem mínima própria e expansiva. Não serão generalizados outros tipos de
 compromisso nesta fase.
 
-O Calendário Institucional e a futura seção Agenda da página canônica do
-Encontro leem esses mesmos objetos. Não haverá sincronização, cópia ou
-dual-write entre as duas interfaces.
+O Calendário Institucional e a seção Agenda da página canônica do Encontro
+leem esses mesmos objetos. Não há sincronização, cópia ou dual-write entre as
+duas interfaces.
 
 ## Lifecycle, adiamento e reprogramação
 
@@ -144,16 +144,15 @@ O PDF é artefato de divulgação, não fonte de verdade ou edição. Não haver
 exportação Excel, importação de planilha nem sincronização externa nesta
 fase.
 
-Datas provisórias podem ser divulgadas, mas devem receber `*` e uma legenda
-discreta equivalente a "* Data ainda sujeita a confirmação." A redação e a
-apresentação finais pertencem ao checkpoint de UX/UI.
+Datas provisórias podem ser divulgadas, mas devem receber `*` e a legenda
+discreta `* Data ainda sujeita a confirmação.`
 
 O PDF público contém somente itens publicáveis externamente, inicialmente os
-dias publicáveis dos Encontros. Por padrão, não inclui reuniões preparatórias,
-avaliação interna, dados pessoais, equipes, presença ou informações
+dias publicáveis dos Encontros. Por padrão, não inclui Preparatórias,
+Avaliação, dados pessoais, equipes, presença ou informações
 operacionais.
 
-O PDF interno pode reunir dias, reuniões preparatórias e avaliação e recebe
+O PDF interno pode reunir Dias, Preparatórias e Avaliação e recebe
 identificação discreta `USO INTERNO`. Interno significa agenda operacional
 mais completa, não autorização irrestrita para dados pessoais ou sensíveis.
 

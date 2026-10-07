@@ -2,7 +2,7 @@
 
 ## Estado atual
 
-- Data: 6 de outubro de 2026.
+- Data: 7 de outubro de 2026.
 - Branch: `sia/fase-1-modelagem-dominio`.
 - **FASE 0 — ESTABILIZAÇÃO: CONCLUÍDA**
 - **FASE 1 — REMODELAGEM DE DOMÍNIO: EM ANDAMENTO**
@@ -21,7 +21,7 @@
 | 0H PostgreSQL e legado | ✅ Concluída |
 | 0I Débitos técnicos restantes | ✅ Concluída |
 | 0J Gate e auditoria final | ✅ Concluída |
-| Fase 1 Remodelagem de domínio | Em andamento; 1B.3D.5 MME e Propostas de Violeiros concluída; próxima frente global ainda não definida |
+| Fase 1 Remodelagem de domínio | Em andamento; 1B.3D.6 Calendário Institucional concluída; próxima fase a definir em checkpoint de produto/arquitetura |
 
 ## Estado da Fase 1
 
@@ -117,8 +117,30 @@
   incluindo os cinco cenários concorrentes, e validou migrations até
   `core.0034_expand_propostas_violeiros`. A baseline SQLite permaneceu OK com
   14 skips PostgreSQL esperados; o cluster temporário foi removido.
-- A próxima frente global da Fase 1 ainda não possui numeração ou escopo
-  definidos na documentação atual e deve ser formalizada antes da execução.
+- 1B.3D.6 concluiu o Calendário Institucional de Encontros como projeção
+  canônica, sem duplicar `Encontro`. Entregou visões mensal/anual, navegação,
+  filtros, responsividade, drawer, comandos protegidos e Agenda integrada à
+  página canônica com Dias, Preparatórias e Avaliação.
+- Datas em `EM_AGENDAMENTO` são provisórias e marcadas com `*`; `AGENDADO`
+  oficializa a agenda. Reprogramações oficiais preservam versões, o lifecycle
+  permanece manual e conflitos são consultivos.
+- A exportação pública/interna suporta mês mensal, ano em 12 páginas mensais
+  e anual resumido Modelo B. Publicações preservam snapshot, PDF privado,
+  SHA-256 e metadados; republicações coexistem e preview não cria histórico.
+- O checkpoint real em PostgreSQL 16 aprovou 6/6 cenários concorrentes sem
+  acessar `sia_dev`. Na regressão final, a única falha da bateria backend foi
+  a referência antiga da logo, corrigida de forma localizada e validada no
+  teste isolado e no módulo de exportação (22/22). O frontend aprovou 131/131
+  testes, TypeScript e build Webpack; ESLint ficou sem erros e com dois
+  warnings preexistentes de Alpinistas.
+- Os checks Django e de models foram aprovados. A cadeia expansiva da D.6 vai
+  de `core.0035_diaencontro_data_index` a
+  `core.0038_calendario_publicacao_layout`, com `0037` antes de `0038`.
+- Permanecem explícitos o risco de arquivo órfão numa interrupção abrupta
+  entre storage e commit, sem atomicidade distribuída, e a inexistência do
+  domínio de Eventos; a extensibilidade conceitual não representa integração.
+- A próxima fase ainda não possui numeração ou escopo formalizados. Ela deve
+  ser definida em checkpoint de produto/arquitetura antes da execução.
 
 ## Histórico — Fase 0
 
@@ -168,14 +190,17 @@ O fechamento histórico consolidado está em `docs/PHASE_0_CLOSURE.md`.
 
 ### Calendário Institucional
 
-- A decisão 1B.3D.0 está aprovada; seu núcleo temporal de Encontros foi
-  implementado na 1B.3D.1, mas a interface e a projeção institucional ainda
-  não foram implementadas.
-- O calendário será uma projeção integrada dos objetos reais, não uma
-  segunda base de dados.
-- Criar por Calendário ou pelo módulo de origem alcançará o mesmo objeto.
-- Agendas oficiais de Encontros serão versionadas após a confirmação; dias
-  poderão ser não consecutivos.
+- A fatia de Encontros está implementada como projeção dos objetos reais,
+  não como segunda base de dados. Criar pelo Calendário ou pelo módulo de
+  origem alcança o mesmo `Encontro`.
+- A Agenda combina Dias, Preparatórias e Avaliação em ordem cronológica.
+  Agendas oficiais são versionadas e podem conter dias não consecutivos.
+- Todos os papéis de negócio reconhecidos possuem leitura. Diretoria e
+  Suporte possuem gestão; o superuser é bypass técnico separado. As operações
+  são protegidas no backend.
+- PDFs públicos e internos usam WeasyPrint 70, A4 paisagem e o símbolo
+  oficial em `backend/core/static/core/branding/logo-escalada.svg`. Arquivos
+  publicados permanecem em storage privado e têm download autenticado.
 - A visualização pelo calendário não amplia a permissão no objeto de origem.
 - Referência normativa:
   [[decisions/ADR-001-calendario-institucional]].
