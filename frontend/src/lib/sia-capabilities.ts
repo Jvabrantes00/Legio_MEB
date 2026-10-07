@@ -11,6 +11,7 @@ const RECOGNIZED_ROLES = new Set([
   "Suporte", "Diretoria", "Fichas", "MME", "Formação", "Secretaria",
   "Ação Social", "Liturgia", "Eventos", "Comunicação",
 ]);
+const CALENDAR_MANAGEMENT_ROLES = new Set(["Suporte", "Diretoria"]);
 
 function hasRole(session: SiaSession | null, roles: Set<string>): boolean {
   return !!session && (session.superuser || session.roles.some((role) => roles.has(role)));
@@ -37,6 +38,14 @@ export function canManageEncontros(session: SiaSession | null): boolean {
 export const canViewFullEncontro = canManageEncontros;
 export const canManageEncontroParticipacoes = canManageEncontros;
 export const canViewDashboard = canManageEncontros;
+
+export function canViewInstitutionalCalendar(session: SiaSession | null): boolean {
+  return hasRole(session, RECOGNIZED_ROLES);
+}
+
+export function canManageInstitutionalCalendar(session: SiaSession | null): boolean {
+  return hasRole(session, CALENDAR_MANAGEMENT_ROLES);
+}
 
 export function isSiaSession(value: unknown): value is SiaSession {
   if (!value || typeof value !== "object") return false;

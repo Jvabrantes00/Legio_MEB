@@ -2,9 +2,9 @@
 
 ## Status geral
 
-D.6A–D.6E concluídas. Projeção, leitura, comandos, definição humana de UX/UI e
-suporte backend à Agenda canônica estão fechados. Próximo bloco: D.6F —
-frontend personalizado.
+D.6A–D.6E concluídas e D.6F tecnicamente concluída. Projeção, leitura,
+comandos, Agenda canônica e frontend personalizado estão implementados.
+Aguardando revisão visual humana antes da D.6G.
 
 ## Objetivo
 
@@ -80,10 +80,11 @@ canônica, visibilidade e contrato heterogêneo, antes do frontend.
 
 ### D.6F — Frontend personalizado
 
-Status: pendente.
+Status: tecnicamente concluída em 2026-10-06.
 
-Implementará a especificação visual aprovada na D.6D sobre os contratos
-entregues em D.6B–D.6E.
+Implementou a especificação visual aprovada na D.6D sobre os contratos
+entregues em D.6B–D.6E. A implementação está pronta para revisão visual
+humana; eventuais ajustes visuais devem preceder D.6G.
 
 ### D.6G — PDF mensal/anual e histórico de divulgação
 
@@ -369,6 +370,124 @@ equipes, formação ou MME.
   `backend/core/tests/test_calendario_institucional.py`,
   `backend/core/tests/test_calendario_institucional_agenda.py`,
   `docs/00_HOME.md` e `docs/workplans/PHASE_1B_D6.md`.
+
+## Resultado da D.6F
+
+### Rota, navegação e autorização visual
+
+- `/calendario` é a rota canônica no App Router e também integra a navegação
+  desktop/mobile. O BFF permite somente a raiz explícita
+  `calendario-institucional`; JWT, cookies HttpOnly e CSRF permanecem
+  inalterados.
+- Todas as roles reconhecidas podem abrir o calendário. Novo compromisso,
+  `+` contextual e edição exigem simultaneamente a policy local centralizada e
+  a capability real da resposta. Diretoria, Suporte e superuser técnico são os
+  únicos gestores; read-only não recebe controles de escrita.
+- Eventos e Outros permanecem visíveis e desabilitados. Exportar possui lugar
+  reservado, também desabilitado e acessível, sem download ou PDF fictício.
+
+### Mês, ano e identidade
+
+- A entrada usa o mês civil atual na visão mensal. A grade é segunda–domingo,
+  mantém 42 células e dias adjacentes esmaecidos, destaca somente o número do
+  dia atual e limita cada célula a dois mini-cards antes do `+N` acessível.
+- No mobile, a célula usa indicador compacto e a seleção abre a lista completa
+  do dia abaixo da grade. O mesmo fluxo de criação recebe a data selecionada.
+- A visão anual apresenta 12 mini-calendários em 3 × 4 no desktop amplo, duas
+  colunas em largura intermediária e uma no mobile. Mês atual, atividade e
+  contagem são indicados sem repetir nomes completos; selecionar um mês volta
+  à visão mensal.
+- Tokens escopados ao Calendário aplicam a paleta aprovada sem alterar o tema
+  global. Mini-cards usam superfície azul leve, detalhe de categoria,
+  elevação curta e `prefers-reduced-motion`.
+- `EncounterCategoryIcon` é um SVG local próprio, simples e baseado em
+  `currentColor`; usa título quando informativo e `aria-hidden` quando
+  decorativo. Não cria marca ou catálogo artificial de ícones.
+
+### Drawer, criação, edição e Agenda
+
+- O compromisso abre drawer lateral no desktop e painel de largura total no
+  mobile. Ele carrega a Agenda agregada, agrupa Dias do Encontro, Preparação e
+  Pós-Encontro, oferece link canônico ao Encontro e expõe edição somente a
+  gestores.
+- O formulário único cria Encontro e Agenda inicial com múltiplos dias e
+  rótulos editáveis, múltiplas preparatórias com horário/local/complemento e
+  avaliação opcional. O `+` de um dia usa o mesmo componente e preenche apenas
+  a primeira data. Somente as quatro sugestões aprovadas de Escalada existem.
+- A edição chama os comandos semânticos canônicos para dados básicos,
+  planejamento ou reprogramação, reuniões, avaliação, oficialização,
+  adiamento e cancelamento. Não há CRUD direto de models nem lifecycle
+  reconstruído no frontend. Avisos de conflito vêm do backend e são
+  consultivos.
+- A página canônica de Encontro ganhou a seção Agenda para contratos summary e
+  full, lendo o endpoint agregado e sem copiar dados para estado persistente.
+
+### Datas, responsividade e acessibilidade
+
+- Utilities de data civil fazem parse, grade, comparação e formatação de
+  `YYYY-MM-DD` em UTC controlado, sem usar o parse implícito que desloca o dia
+  conforme timezone.
+- Controles usam botões/links reais, labels, foco visível, estados
+  loading/vazio/erro/retry, comunicação textual da categoria e da
+  provisoriedade, Escape, foco inicial/restaurado e contenção de Tab nos dois
+  dialogs.
+- O shell ganhou navegação compacta para mobile sem alterar os módulos ou o
+  conteúdo das páginas existentes.
+
+### Testes e validação
+
+- A suíte frontend passou com 124 testes em 10 arquivos. A cobertura inclui
+  datas civis, segunda–domingo, adjacências, hoje, navegação de mês, projeção,
+  mini-card e `*`, `+N`, lista do dia, ano com 12 meses, Agenda agrupada,
+  payload completo, data contextual, drawer/capabilities, SVG, navegação e
+  allowlist do BFF.
+- TypeScript passou com `npx tsc --noEmit --incremental false`.
+- ESLint passou sem erros e sem avisos novos. Permanecem somente os dois avisos
+  preexistentes e documentados de `<img>` protegido na tela de Alpinistas.
+- O build Next de produção passou com Webpack, incluindo a geração de
+  `/calendario` e das 11 rotas. O Turbopack padrão não pôde abrir sua porta de
+  processo auxiliar neste ambiente (`Operation not permitted`); não houve
+  erro de código e nenhuma configuração foi alterada para contornar a
+  proteção do host.
+- Backend, schema, migrations, PostgreSQL, PDF e publicação não foram tocados.
+
+### Refinamento visual pós-revisão humana
+
+- O drawer recebeu largura útil moderadamente maior, mais espaçamento e grid
+  responsivo por largura disponível, evitando compressão das seções e dos
+  itens da Agenda em desktop, tablet e mobile.
+- No contexto de preparação de Encontros, a nomenclatura visível foi ajustada
+  de Reunião para Preparatória. Identificadores técnicos, payloads e contratos
+  permanecem inalterados.
+- Dias do Encontro não repetem mais o nome já contextualizado no topo do
+  drawer. Complementos informativos das preparatórias permanecem visíveis.
+- A ordenação continua estritamente cronológica pelas datas canônicas e ganhou
+  cobertura explícita contra ordenação pelo rótulo ou número da preparatória.
+
+### Débitos e arquivos alterados
+
+- A validação visual definitiva continua humana. Ajustes de densidade,
+  tipografia ou comportamento em dispositivos reais podem ser feitos antes da
+  D.6G sem reabrir as decisões de produto congeladas.
+- PDF, preview, publicação e histórico continuam integralmente na D.6G;
+  Eventos e Outros permanecem expansões futuras sem dados simulados.
+- Arquivos novos: `frontend/src/app/(painel)/calendario/page.tsx`,
+  `frontend/src/components/CalendarEncounterDrawer.tsx`,
+  `frontend/src/components/CalendarEncounterEditor.tsx`,
+  `frontend/src/components/CalendarEncounterForm.tsx`,
+  `frontend/src/components/EncounterAgendaSection.tsx`,
+  `frontend/src/components/InstitutionalCalendarHeader.tsx`,
+  `frontend/src/components/InstitutionalCalendarViews.tsx`,
+  `frontend/src/components/icons/EncounterCategoryIcon.tsx`,
+  `frontend/src/lib/dialog-focus.ts`,
+  `frontend/src/lib/institutional-calendar.ts` e seu teste.
+- Arquivos ajustados: página canônica de Encontro, layout, Sidebar, estilos
+  globais escopados, proxy/BFF, capabilities, navegação e testes associados,
+  além deste workplan e do roteador `docs/00_HOME.md`.
+
+Implementação pronta para revisão visual humana.
+
+Aguardando revisão visual humana antes da D.6G.
 
 ## Decisões da fase
 
@@ -952,6 +1071,8 @@ ambientes isolados normais.
 
 ## Pendências humanas
 
+- Revisar visualmente a D.6F em navegadores e dispositivos reais antes de
+  iniciar D.6G. A conclusão atual é técnica, não aprovação visual definitiva.
 - Escolher na D.6G entre os modelos anuais A e B depois de comparar
   protótipos com os mesmos dados.
 - Fornecer a logo real do movimento/paróquia quando a prototipagem de PDF
@@ -1010,6 +1131,17 @@ Nenhuma dessas pendências bloqueia o frontend D.6F.
 - `backend/requirements.txt`
 - `frontend/src/app/(painel)/encontros/page.tsx`
 - `frontend/src/app/(painel)/encontros/[id]/page.tsx`
+- `frontend/src/app/(painel)/calendario/page.tsx`
+- `frontend/src/components/CalendarEncounterDrawer.tsx`
+- `frontend/src/components/CalendarEncounterEditor.tsx`
+- `frontend/src/components/CalendarEncounterForm.tsx`
+- `frontend/src/components/EncounterAgendaSection.tsx`
+- `frontend/src/components/InstitutionalCalendarHeader.tsx`
+- `frontend/src/components/InstitutionalCalendarViews.tsx`
+- `frontend/src/components/icons/EncounterCategoryIcon.tsx`
+- `frontend/src/lib/dialog-focus.ts`
+- `frontend/src/lib/institutional-calendar.ts`
+- `frontend/src/lib/institutional-calendar.test.tsx`
 - `frontend/src/lib/encontro-form-contract.ts`
 - `frontend/src/lib/sia-profile-contracts.ts`
 - `frontend/src/lib/sia-capabilities.ts`
@@ -1019,9 +1151,9 @@ Nenhuma dessas pendências bloqueia o frontend D.6F.
 
 ## Próximo passo
 
-D.6F — implementar o frontend personalizado aprovado na D.6D sobre os
-contratos canônicos entregues em D.6B–D.6E. Não iniciar renderer de PDF ou
-publicação neste bloco.
+Aguardando revisão visual humana antes da D.6G. Após esse checkpoint, o
+próximo bloco permanece D.6G — PDF mensal/anual e histórico de divulgação.
+Não iniciar renderer ou publicação antes da revisão.
 
 ## Histórico de execução
 
@@ -1046,3 +1178,8 @@ publicação neste bloco.
   canônicas, avaliação 1:1, visibilidade, conflitos e criação completa foram
   implementados; suíte backend com 539 testes aprovados e seis cenários de
   concorrência reservados ao PostgreSQL na D.6H. Próximo bloco: D.6F.
+- 2026-10-06 — D.6F tecnicamente concluída. Rota, visões mensal/anual,
+  identidade própria, drawer, criação/edição canônicas, Agenda no Encontro,
+  mobile e acessibilidade implementados; 124 testes frontend, lint,
+  TypeScript e build Webpack aprovados. Aguardando revisão visual humana antes
+  da D.6G.

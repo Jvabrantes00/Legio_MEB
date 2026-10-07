@@ -265,6 +265,13 @@ describe("login e logout", () => {
 });
 
 describe("proxy controlado", () => {
+  it("permite somente a raiz explícita do Calendário Institucional", () => {
+    expect(() => validateProxyPath(
+      ["calendario-institucional", "encontros", "7", "agenda"],
+      new URLSearchParams(),
+    )).not.toThrow();
+  });
+
   it("rejeita recursos, travessia e parâmetros de destino arbitrários", () => {
     expect(() => validateProxyPath(["admin"], new URLSearchParams())).toThrow();
     expect(() => validateProxyPath(["alpinistas", ".."], new URLSearchParams())).toThrow();

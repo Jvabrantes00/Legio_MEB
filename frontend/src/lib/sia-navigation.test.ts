@@ -9,12 +9,17 @@ function session(...roles: string[]): SiaSession {
 describe("navegação para rotas existentes", () => {
   it("Fichas vê os módulos atuais", () => {
     expect(siaNavigation(session("Fichas")).map((item) => item.rota))
-      .toEqual(["/", "/alpinistas", "/encontros"]);
+      .toEqual(["/", "/alpinistas", "/encontros", "/calendario"]);
   });
 
   it("Comunicação não vê dashboard nem páginas inexistentes", () => {
     expect(siaNavigation(session("Comunicação")).map((item) => item.rota))
-      .toEqual(["/alpinistas", "/encontros"]);
+      .toEqual(["/alpinistas", "/encontros", "/calendario"]);
+  });
+
+  it("papéis sem acesso ao módulo legado de Encontros ainda leem o Calendário", () => {
+    expect(siaNavigation(session("MME")).map((item) => item.rota))
+      .toEqual(["/alpinistas", "/calendario"]);
   });
 
   it("usuário sem papel mantém sessão sem links de negócio", () => {

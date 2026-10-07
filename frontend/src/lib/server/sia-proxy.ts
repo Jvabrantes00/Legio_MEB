@@ -13,6 +13,7 @@ const ALLOWED_RESOURCES = new Set([
   "participacoes-eventos",
   "logs",
   "dashboard-stats",
+  "calendario-institucional",
   "materiais",
   "entregas-materiais",
 ]);

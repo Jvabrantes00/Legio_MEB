@@ -9,6 +9,7 @@ import { siaFetch } from "../../../../lib/sia-api";
 import { useSiaSession } from "../../../../components/SiaSessionProvider";
 import { EncontroSummaryPanel } from "../../../../components/EncontroSummaryPanel";
 import { ConfirmedAlpinistasTable } from "../../../../components/ConfirmedAlpinistasTable";
+import { EncounterAgendaSection } from "../../../../components/EncounterAgendaSection";
 import { canManageEncontros, canViewEncontros } from "../../../../lib/sia-capabilities";
 import {
     confirmedAlpinistas, isEncontroFull,
@@ -66,6 +67,7 @@ function EncounterSummaryDetails() {
     return <div className="space-y-4">
         <Link href="/encontros" className="text-escalada-azul hover:underline">← Voltar aos encontros</Link>
         <EncontroSummaryPanel encontro={encontro} />
+        <EncounterAgendaSection encontroId={encontroId} />
     </div>;
 }
 
@@ -403,6 +405,8 @@ function ManagedEncounterDetails() {
                     <p className="text-gray-500">Data: {new Date(encontro.data_referencia).toLocaleDateString('pt-BR', { timeZone: 'UTC' })} • Local: {encontro.local}</p>
                 </div>
             </div>
+
+            <EncounterAgendaSection encontroId={encontroId} />
 
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 flex overflow-hidden">
                 

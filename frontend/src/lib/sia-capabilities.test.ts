@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   canManageAlpinistas, canManageEncontroParticipacoes, canManageEncontros,
   canViewAlpinistas, canViewDashboard, canViewEncontros,
+  canManageInstitutionalCalendar, canViewInstitutionalCalendar,
   canViewFullAlpinista, canViewFullEncontro, isSiaSession,
   type SiaSession,
 } from "./sia-capabilities";
@@ -21,6 +22,7 @@ describe("capacidades visuais alinhadas às permissões backend", () => {
     expect(canViewFullEncontro(current)).toBe(true);
     expect(canManageEncontroParticipacoes(current)).toBe(true);
     expect(canViewDashboard(current)).toBe(true);
+    expect(canViewInstitutionalCalendar(current)).toBe(true);
   });
 
   it("Comunicação lê os dois resumos sem controles de Fichas", () => {
@@ -32,6 +34,7 @@ describe("capacidades visuais alinhadas às permissões backend", () => {
     expect(canManageEncontros(current)).toBe(false);
     expect(canManageEncontroParticipacoes(current)).toBe(false);
     expect(canViewDashboard(current)).toBe(false);
+    expect(canViewInstitutionalCalendar(current)).toBe(true);
   });
 
   it.each(["MME", "Formação", "Eventos", "Secretaria", "Ação Social", "Liturgia"])(
@@ -41,6 +44,7 @@ describe("capacidades visuais alinhadas às permissões backend", () => {
       expect(canManageAlpinistas(current)).toBe(false);
       expect(canViewEncontros(current)).toBe(false);
       expect(canViewDashboard(current)).toBe(false);
+      expect(canViewInstitutionalCalendar(current)).toBe(true);
     },
   );
 
@@ -54,6 +58,7 @@ describe("capacidades visuais alinhadas às permissões backend", () => {
     expect(canViewAlpinistas(current)).toBe(false);
     expect(canViewEncontros(current)).toBe(false);
     expect(canViewDashboard(current)).toBe(false);
+    expect(canViewInstitutionalCalendar(current)).toBe(false);
   });
 
   it("superuser usa bypass técnico sem fingir papel Suporte", () => {
@@ -62,6 +67,14 @@ describe("capacidades visuais alinhadas às permissões backend", () => {
     expect(canManageAlpinistas(current)).toBe(true);
     expect(canManageEncontros(current)).toBe(true);
     expect(canViewDashboard(current)).toBe(true);
+    expect(canManageInstitutionalCalendar(current)).toBe(true);
+  });
+
+  it("Calendário separa leitura institucional da gestão", () => {
+    expect(canManageInstitutionalCalendar(session("Suporte"))).toBe(true);
+    expect(canManageInstitutionalCalendar(session("Diretoria"))).toBe(true);
+    expect(canManageInstitutionalCalendar(session("Fichas"))).toBe(false);
+    expect(canManageInstitutionalCalendar(session("Comunicação"))).toBe(false);
   });
 
   it("sessão incompleta não é aceita", () => {
