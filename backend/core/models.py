@@ -1,8 +1,18 @@
+from uuid import uuid4
+
 from django.db import models
 from django.contrib.auth.models import User
 
 from .formacao_catalogo import TIPO_CONTEUDO_FORMATIVO_CHOICES
 from .validators import normalize_cpf, validate_cpf, validate_image_upload_size
+
+
+def calendario_publicacao_upload_to(instance, filename):
+    del filename
+    return (
+        f'calendarios/divulgacoes/{instance.ano}/'
+        f'{instance.periodo.lower()}/{uuid4().hex}.pdf'
+    )
 
 class Pessoa(models.Model):
     class EstadoCivil(models.TextChoices):
@@ -1477,6 +1487,67 @@ class AvaliacaoEncontro(models.Model):
 
     def __str__(self):
         return f'Avaliação — {self.encontro.encontro}'
+
+
+class PublicacaoCalendarioInstitucional(models.Model):
+    class Escopo(models.TextChoices):
+        PUBLICO = 'PUBLICO', 'Público'
+        INTERNO = 'INTERNO', 'Interno'
+
+    class Periodo(models.TextChoices):
+        MENSAL = 'MENSAL', 'Mensal'
+        ANUAL = 'ANUAL', 'Anual'
+
+    escopo = models.CharField(max_length=10, choices=Escopo.choices)
+    periodo = models.CharField(max_length=10, choices=Periodo.choices)
+    ano = models.PositiveSmallIntegerField()
+    mes = models.PositiveSmallIntegerField(null=True, blank=True)
+    publicado_em = models.DateTimeField(auto_now_add=True)
+    publicado_por = models.ForeignKey(
+        User,
+        on_delete=models.PROTECT,
+        related_name='publicacoes_calendario_institucional',
+    )
+    snapshot_schema_version = models.PositiveSmallIntegerField(default=1)
+    snapshot = models.JSONField()
+    arquivo_pdf = models.FileField(
+        upload_to=calendario_publicacao_upload_to,
+        max_length=255,
+    )
+    sha256 = models.CharField(max_length=64)
+
+    class Meta:
+        ordering = ['-publicado_em', '-id']
+        indexes = [
+            models.Index(
+                fields=['periodo', 'ano', 'mes', 'publicado_em'],
+                name='pub_cal_periodo_idx',
+            ),
+        ]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(escopo__in=['PUBLICO', 'INTERNO']),
+                name='pub_cal_escopo_valido',
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(
+                        periodo='MENSAL',
+                        mes__gte=1,
+                        mes__lte=12,
+                    )
+                    | models.Q(periodo='ANUAL', mes__isnull=True)
+                ),
+                name='pub_cal_periodo_mes_coerente',
+            ),
+        ]
+
+    def __str__(self):
+        periodo = f'{self.mes:02d}/{self.ano}' if self.mes else str(self.ano)
+        return (
+            f'{self.get_escopo_display()} '
+            f'{self.get_periodo_display()} — {periodo}'
+        )
 
 
 class PresencaPreparatoria(models.Model):

@@ -8,9 +8,21 @@ gunicorn==26.0.0
 Pillow==12.3.0
 psycopg2-binary==2.9.12
 python-dotenv==1.1.1
+WeasyPrint==70.0
 
 # Dependências transitivas fixadas para instalações reproduzíveis
 asgiref==3.12.1
+Brotli==1.2.0
+cffi==2.1.1
+cssselect2==0.10.1
+fonttools==4.66.1
 packaging==26.2
+pycparser==3.0
+pydyf==0.12.1
 PyJWT==2.13.0
+Pyphen==0.18.1
 sqlparse==0.5.5
+tinycss2==1.5.1
+tinyhtml5==2.1.0
+webencodings==0.6.1
+zopfli==0.4.3

@@ -588,6 +588,45 @@ class PeriodoCalendarioQuerySerializer(StrictCommandSerializer):
         return attrs
 
 
+class PreviewCalendarioQuerySerializer(StrictCommandSerializer):
+    escopo = serializers.ChoiceField(choices=('PUBLICO', 'INTERNO'))
+    periodo = serializers.ChoiceField(choices=('MENSAL', 'ANUAL'))
+    ano = serializers.IntegerField(min_value=2000, max_value=9999)
+    mes = serializers.IntegerField(
+        required=False,
+        min_value=1,
+        max_value=12,
+    )
+    modelo_anual = serializers.ChoiceField(
+        choices=('A', 'B'),
+        required=False,
+    )
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        if attrs['periodo'] == 'MENSAL':
+            if 'mes' not in attrs:
+                raise serializers.ValidationError({
+                    'mes': ['O preview mensal exige o mês.'],
+                })
+            if 'modelo_anual' in attrs:
+                raise serializers.ValidationError({
+                    'modelo_anual': [
+                        'O modelo anual não se aplica ao preview mensal.'
+                    ],
+                })
+        else:
+            if 'mes' in attrs:
+                raise serializers.ValidationError({
+                    'mes': ['O preview anual não aceita mês.'],
+                })
+            if 'modelo_anual' not in attrs:
+                raise serializers.ValidationError({
+                    'modelo_anual': ['O preview anual exige o Modelo A ou B.'],
+                })
+        return attrs
+
+
 class ConflitoCalendarioSerializer(serializers.Serializer):
     data = serializers.DateField(read_only=True)
     encontro_ids = serializers.ListField(

@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <style>
+    @page { size: A4 landscape; margin: 9mm 10mm 8mm; }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; color: #001c38; font-family: "DejaVu Sans", sans-serif; font-size: 9pt; }
+    header { height: 19mm; display: flex; align-items: flex-start; justify-content: space-between; border-bottom: 2px solid #005ee9; padding: 0 0 3mm; }
+    .eyebrow { color: #005ee9; font-size: 7.5pt; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; }
+    h1 { margin: 1.5mm 0 0; font-size: 20pt; line-height: 1; }
+    .logo-slot { width: 34mm; min-height: 14mm; }
+    .internal { margin-top: 2mm; color: #fd1e2e; font-size: 7.5pt; font-weight: 800; letter-spacing: 0.12em; }
+    main { padding-top: 4mm; }
+    .weekdays, .week { display: grid; grid-template-columns: repeat(7, 1fr); }
+    .weekdays { border: 1px solid #dce4ec; border-bottom: 0; border-radius: 3mm 3mm 0 0; overflow: hidden; }
+    .weekday { padding: 2mm; background: #eaf1f7; color: #005ee9; font-size: 7pt; font-weight: 800; text-align: center; text-transform: uppercase; }
+    .month-grid { border-left: 1px solid #dce4ec; border-top: 1px solid #dce4ec; }
+    .day { height: 23mm; border-right: 1px solid #dce4ec; border-bottom: 1px solid #dce4ec; padding: 1.3mm; overflow: hidden; }
+    .day.outside { background: #f6fafd; color: #9aabba; }
+    .day-number { font-size: 7pt; font-weight: 800; }
+    .entries { margin-top: 1mm; display: flex; flex-direction: column; gap: 1mm; text-align: center; }
+    .entry { border-left: 1.2mm solid #005ee9; border-radius: 1.5mm; background: #eaf1f7; padding: 1mm; overflow-wrap: anywhere; }
+    .entry-title { font-size: 6.7pt; font-weight: 800; line-height: 1.15; }
+    .entry-label { margin-top: .4mm; color: #005ee9; font-size: 6.1pt; font-weight: 700; line-height: 1.15; }
+    .entry-complement { margin-top: .3mm; color: #52687b; font-size: 5.8pt; line-height: 1.15; }
+    .more { color: #52687b; font-size: 6pt; font-weight: 700; }
+    .annual-grid { display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(4, 1fr); gap: 2.5mm; height: 151mm; }
+    .annual-month { border: 1px solid #dce4ec; border-radius: 2.5mm; padding: 1.5mm; overflow: hidden; break-inside: avoid; }
+    .annual-month h2 { margin: 0 0 1.2mm; display: flex; justify-content: space-between; font-size: 9pt; }
+    .annual-count { color: #52687b; font-size: 5.5pt; font-weight: 600; }
+    .mini-weekdays, .mini-week { display: grid; grid-template-columns: repeat(7, 1fr); text-align: center; }
+    .mini-weekdays span { color: #7a8fa1; font-size: 4.4pt; font-weight: 800; }
+    .mini-day { position: relative; height: 3.6mm; padding: .15mm; color: #52687b; font-size: 4.3pt; overflow: hidden; }
+    .mini-day.outside { color: #cad4dd; }
+    .mini-day.busy { border-radius: 1mm; background: #eaf1f7; color: #001c38; font-weight: 800; }
+    .mini-entry { display: block; color: #005ee9; font-size: 3.5pt; line-height: 1.05; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .activity-dot { display: inline-block; width: 1.5mm; height: 1.5mm; margin-left: .5mm; border-radius: 50%; background: #005ee9; }
+    .compact-agenda { margin: 1mm 0 0; padding: 1mm 0 0; border-top: 1px solid #dce4ec; list-style: none; }
+    .compact-agenda li { display: grid; grid-template-columns: 6mm 1fr; gap: 1mm; margin-top: .45mm; font-size: 4.4pt; line-height: 1.08; }
+    .compact-agenda time { color: #005ee9; font-weight: 800; }
+    footer { position: fixed; right: 0; bottom: 0; left: 0; display: flex; justify-content: space-between; gap: 4mm; color: #52687b; font-size: 6.5pt; }
+    .preview { font-weight: 800; letter-spacing: .08em; }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <div class="eyebrow">Calendário Institucional</div>
+      <h1>{{ titulo_periodo }}</h1>
+      {% if interno %}<div class="internal">USO INTERNO</div>{% endif %}
+    </div>
+    <div class="logo-slot" aria-label="Espaço reservado para a logo oficial"></div>
+  </header>
+
+  <main>
+    {% if snapshot.periodo == "MENSAL" %}
+      {% with mes=meses.0 %}
+        <div class="weekdays">
+          {% for dia_semana in dias_semana %}<div class="weekday">{{ dia_semana }}</div>{% endfor %}
+        </div>
+        <div class="month-grid">
+          {% for semana in mes.semanas %}
+            <div class="week">
+              {% for dia in semana %}
+                <section class="day{% if not dia.mes_atual %} outside{% endif %}">
+                  <div class="day-number">{{ dia.numero_dia }}</div>
+                  {% if dia.mes_atual %}
+                    <div class="entries">
+                      {% for item in dia.itens|slice:":1" %}
+                        <div class="entry">
+                          <div class="entry-title">{{ item.titulo }}</div>
+                          {% if item.rotulo %}<div class="entry-label">{{ item.rotulo }}</div>{% endif %}
+                          {% if item.complemento %}<div class="entry-complement">{{ item.complemento }}</div>{% endif %}
+                        </div>
+                      {% endfor %}
+                      {% if dia.itens|length > 1 %}<div class="more">+ outros compromissos neste dia</div>{% endif %}
+                    </div>
+                  {% endif %}
+                </section>
+              {% endfor %}
+            </div>
+          {% endfor %}
+        </div>
+      {% endwith %}
+    {% else %}
+      <div class="annual-grid model-{{ modelo_anual|lower }}">
+        {% for mes in meses %}
+          <section class="annual-month">
+            <h2><span>{{ mes.nome }}</span><span class="annual-count">{{ mes.quantidade }} compromisso{{ mes.quantidade|pluralize }}</span></h2>
+            <div class="mini-weekdays">{% for dia_semana in dias_semana %}<span>{{ dia_semana|slice:":1" }}</span>{% endfor %}</div>
+            {% for semana in mes.semanas %}
+              <div class="mini-week">
+                {% for dia in semana %}
+                  <div class="mini-day{% if not dia.mes_atual %} outside{% endif %}{% if dia.itens and dia.mes_atual %} busy{% endif %}">
+                    {{ dia.numero_dia }}
+                    {% if modelo_anual == "A" and dia.mes_atual %}
+                      {% for item in dia.itens|slice:":2" %}<span class="mini-entry">{{ item.titulo }}</span>{% endfor %}
+                      {% if dia.itens|length > 2 %}<span class="mini-entry">+ mais</span>{% endif %}
+                    {% elif modelo_anual == "B" and dia.itens and dia.mes_atual %}<span class="activity-dot"></span>{% endif %}
+                  </div>
+                {% endfor %}
+              </div>
+            {% endfor %}
+            {% if modelo_anual == "B" and mes.agenda %}
+              <ul class="compact-agenda">
+                {% for dia in mes.agenda|slice:":5" %}
+                  <li><time>{{ dia.dia|stringformat:"02d" }}</time><span>{% for item in dia.itens %}{{ item.titulo }}{% if not forloop.last %}; {% endif %}{% endfor %}</span></li>
+                {% endfor %}
+                {% if mes.agenda|length > 5 %}<li><span></span><span>+ outros dias com compromissos</span></li>{% endif %}
+              </ul>
+            {% endif %}
+          </section>
+        {% endfor %}
+      </div>
+    {% endif %}
+  </main>
+
+  <footer>
+    <span class="preview">PREVIEW — NÃO PUBLICADO</span>
+    <span>{% if interno %}USO INTERNO • {% endif %}* Data ainda sujeita a confirmação.</span>
+  </footer>
+</body>
+</html>

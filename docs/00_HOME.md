@@ -23,9 +23,9 @@ substitui os documentos de referência nem os `AGENTS.md` aplicáveis.
   autorização e validação PostgreSQL.
 - 1B.3D.5 — MME e Propostas de Violeiros concluída, com services, API,
   autorização, compatibilidade e validação de concorrência em PostgreSQL.
-- 1B.3D.6 — Calendário Institucional: D.6A–D.6F concluídas tecnicamente;
-  frontend pronto e aguardando revisão visual humana antes da D.6G, PDF e
-  histórico de divulgação.
+- 1B.3D.6 — Calendário Institucional: D.6A–D.6G.2 concluídas; Modelo B anual e
+  mensal de ano completo aprovados. Próximo bloco: D.6G.3, renderer e
+  publicação definitivos.
 
 O estado vivo e o roadmap estão em [[PROJECT_STATE]].
 

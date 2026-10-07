@@ -2,9 +2,9 @@
 
 ## Status geral
 
-D.6A–D.6E concluídas e D.6F tecnicamente concluída. Projeção, leitura,
-comandos, Agenda canônica e frontend personalizado estão implementados.
-Aguardando revisão visual humana antes da D.6G.
+D.6A–D.6F e D.6G.1–D.6G.2 concluídas. Projeção, leitura, comandos, Agenda
+canônica, frontend personalizado, fundação da exportação e decisões humanas
+dos PDFs estão fechados. Próximo bloco: D.6G.3.
 
 ## Objetivo
 
@@ -67,8 +67,8 @@ delegando aos services canônicos com auditoria transacional.
 Status: concluída em 2026-10-06.
 
 O checkpoint humano aprovou visões, navegação, criação, Agenda agregada,
-identidade, responsividade, filtros e modalidades de PDF. A escolha do modelo
-anual definitivo permanece como checkpoint posterior entre dois protótipos.
+identidade, responsividade, filtros e modalidades de PDF. A escolha posterior
+do renderer anual foi concluída na D.6G.2.
 
 ### D.6E — Suporte backend à Agenda aprovada
 
@@ -86,20 +86,37 @@ Implementou a especificação visual aprovada na D.6D sobre os contratos
 entregues em D.6B–D.6E. A implementação está pronta para revisão visual
 humana; eventuais ajustes visuais devem preceder D.6G.
 
-### D.6G — PDF mensal/anual e histórico de divulgação
+### D.6G.1 — Fundação técnica e spike visual
+
+Status: concluída em 2026-10-07.
+
+Implementou renderer HTML/CSS, snapshot allowlist, previews mensais e anuais,
+endpoint protegido de preview e fundação expansiva do histórico imutável. Os
+modelos anuais A/B usam o mesmo dataset e nenhum foi escolhido.
+
+### D.6G.2 — Checkpoint humano dos PDFs
+
+Status: concluída em 2026-10-07.
+
+Escolheu o Modelo B como renderer anual oficial, aprovou a modalidade mensal
+de ano completo em um único PDF de 12 páginas, separou período de layout e
+definiu para o cabeçalho somente o símbolo oficial do pé. O Modelo A permanece
+registrado apenas como alternativa avaliada no spike.
+
+### D.6G.3 — Renderer e publicação definitivos
 
 Status: pendente.
 
-Começará pelo spike dos dois modelos anuais com os mesmos dados e checkpoint
-humano antes do renderer anual definitivo. Depois implementará PDFs públicos
-e internos, preview, publicação e histórico imutável.
+Implementará mensal de um mês, mensal de ano completo, anual resumido Modelo
+B, modalidades pública/interna, preview, publicação imutável, logo/rodapé,
+histórico, download privado, UI final e compensação de storage.
 
 ### D.6H — Integração, PostgreSQL, regressão e fechamento
 
 Status: pendente.
 
-Validará integração, migrations, os cinco testes concorrentes preparados na
-D.6C, publicação/storage e regressão backend/frontend.
+Validará integração, migrations, os seis cenários concorrentes acumulados na
+D.6C/D.6E, publicação/storage e regressão backend/frontend.
 
 ## Resultado da D.6B
 
@@ -489,9 +506,127 @@ equipes, formação ou MME.
   globais escopados, proxy/BFF, capabilities, navegação e testes associados,
   além deste workplan e do roteador `docs/00_HOME.md`.
 
-Implementação pronta para revisão visual humana.
+Implementação da D.6F revisada e liberada para o spike D.6G.1.
 
-Aguardando revisão visual humana antes da D.6G.
+## Resultado da D.6G.1
+
+### Renderer e snapshot
+
+- O spike confirmou `WeasyPrint 70.0` sobre Python 3.12 e as bibliotecas de
+  sistema já disponíveis no Ubuntu. A alternativa preserva HTML/CSS de
+  impressão controlado sem adicionar Chromium; ReportLab exigiria layout de
+  baixo nível. Dependências diretas e transitivas foram fixadas em
+  `backend/requirements.txt` para instalações reproduzíveis.
+- O renderer usa template Django escapado, A4 paisagem, DejaVu Sans local e
+  bloqueia qualquer busca externa. O layout aplica somente a paleta aprovada e
+  reserva o canto superior direito para a logo, sem placeholder falso.
+- `SnapshotCalendario` e `ItemExportacaoCalendario` são DTOs imutáveis e
+  serializáveis. A captura consome a projeção canônica, preserva ordenação,
+  provisoriedade, rótulos e `publicavel_externamente`, sem participantes,
+  equipes, presença, saúde ou contatos.
+- O Público filtra pela semântica canônica e contém somente Dias do Encontro.
+  O Interno inclui Dias, Preparatórias e Avaliação, ainda sem dados pessoais.
+  A apresentação converte o identificador legado `Nª Reunião` no termo
+  aprovado `Nª Preparatória` apenas na fronteira visual.
+
+### PDFs comparáveis e preview
+
+- Mensal Público e Mensal Interno usam grade segunda–domingo, marcador `*`
+  somente em datas provisórias, legenda aprovada e `USO INTERNO` discreto.
+  Dias densos mostram um compromisso legível e um resumo adicional; nomes,
+  rótulos e complementos longos quebram dentro da célula sem redução extrema.
+- Anual A insere nomes curtos nos próprios mini-calendários. Anual B mantém os
+  mini-calendários limpos e associa uma agenda compacta a cada mês. Ambos usam
+  exatamente o mesmo snapshot controlado. Também foram geradas as duas
+  variantes internas, sem selecionar modelo definitivo.
+- `GET /api/calendario-institucional/preview-pdf/` gera PDF transitório em
+  memória e exige Diretoria, Suporte ou superuser técnico. O preview usa
+  `no-store`, é identificado como não publicado e não cria histórico.
+- O comando `gerar_previews_calendario` produz os seis artefatos controlados
+  em `/tmp/sia_calendar_pdf_previews`, sem dados pessoais reais e sem
+  versioná-los.
+
+### Fundação da publicação
+
+- A migration expansiva `0037_publicacao_calendario_institucional` cria
+  `PublicacaoCalendarioInstitucional` com escopo, período, ano/mês, autoria
+  protegida, data, snapshot versionado, arquivo, SHA-256, checks e índice
+  histórico. Republicações do mesmo período coexistem.
+- O path lógico usa UUID sob `calendarios/divulgacoes/{ano}/{periodo}/`, sem
+  texto fornecido pelo usuário. O projeto continua sem servir `/media`
+  diretamente. Não há `RunPython`, backfill ou persistência dos previews.
+- A geração do hash sobre os bytes finais está pronta; comandos de publicação,
+  download e compensação de storage permanecem deliberadamente para D.6G.3.
+
+### Validação e débitos
+
+- Foram adicionados 13 testes para público/interno, publicabilidade canônica,
+  terminologia, provisoriedade, snapshot sem dados pessoais, HTML escapado,
+  mensal, A/B com dataset idêntico, A4 paisagem, densidade, hash, autorização,
+  preview sem publicação, constraints e path privado.
+- A suíte backend completa passou com 552 testes, dos quais 20 foram ignorados
+  por dependerem de concorrência real em PostgreSQL. `check` e
+  `makemigrations --check --dry-run` passaram sem pendências.
+- Os seis PDFs gerados possuem uma página A4 paisagem. A inspeção visual do
+  spike confirmou separação público/interno, legibilidade e os dois conceitos
+  anuais, sem constituir aprovação humana do modelo final.
+- Logo oficial: aguardando asset oficial da logo.
+- Arquivos novos: service de exportação, template PDF, comando de preview,
+  migration `0037` e testes de exportação. Models, serializer, view, rota,
+  requirements, matriz de autorização, roteador e este workplan foram
+  ajustados.
+
+Estado registrado ao fim da G.1: aguardando revisão humana dos PDFs.
+
+## Resultado da D.6G.2
+
+### Decisões visuais
+
+- O **Modelo B** foi escolhido como renderer anual oficial: uma página A4
+  paisagem com 12 meses em composição 3 × 4, mini-calendários limpos, dias com
+  compromissos destacados e agenda compacta associada a cada mês.
+- O Modelo A foi avaliado com o mesmo dataset e não será o renderer oficial.
+  Permanece documentado somente como alternativa testada no spike.
+- A marca aprovada para os PDFs contém somente o símbolo oficial do pé, no
+  canto superior direito. A versão completa com o nome do Movimento não será
+  usada. O asset oficial será incorporado na D.6G.3.
+
+### Modalidades finais
+
+- **Mensal — mês selecionado:** período de um mês, layout mensal e uma página.
+- **Mensal — ano completo:** período de um ano, layout mensal e um único PDF
+  com 12 páginas, de janeiro a dezembro, reutilizando o renderer mensal em
+  cada página. Não produz 12 arquivos separados.
+- **Anual resumido:** período de um ano, layout anual resumido Modelo B e uma
+  página A4 paisagem.
+- As três modalidades existem em escopo Público e Interno e preservam a
+  semântica canônica de publicabilidade. O anual resumido oferece visão geral;
+  o mensal de ano completo oferece espaço e legibilidade. Um não substitui o
+  outro.
+
+### Ajuste de modelagem reservado à D.6G.3
+
+- Período e layout passam a ser conceitos independentes. Os nomes concretos
+  recomendados são `Periodo.MES`/`Periodo.ANO` e
+  `Layout.MENSAL`/`Layout.ANUAL_RESUMIDO`.
+- Combinações válidas: `MES + MENSAL`, `ANO + MENSAL` e
+  `ANO + ANUAL_RESUMIDO`. `MES + ANUAL_RESUMIDO` é inválida.
+- A fundação G.1 ainda usa `periodo=MENSAL|ANUAL` e `modelo_anual=A|B`, tanto
+  no snapshot/preview quanto em `PublicacaoCalendarioInstitucional`. Isso
+  mistura período e apresentação e não representa o PDF mensal de 12 páginas.
+  A D.6G.3 deve ajustar esses contratos e a migration expansiva `0037` antes
+  de congelar API e publicação. Nenhuma migration nova foi criada na G.2.
+
+### Escopo da D.6G.3
+
+- Finalizar renderer mensal de uma página e composição anual de 12 páginas.
+- Finalizar renderer anual resumido exclusivamente no Modelo B.
+- Cobrir Público e Interno, preview, publicação imutável, snapshot, SHA-256,
+  private media, histórico e download autenticado.
+- Incorporar o asset oficial do símbolo do pé e implementar a UI final de
+  exportação/publicação.
+
+D.6G.2 concluída por decisão humana. Próximo bloco: D.6G.3.
 
 ## Decisões da fase
 
@@ -512,8 +647,10 @@ Aguardando revisão visual humana antes da D.6G.
 - Publicações efetivas são históricas e não podem ser sobrescritas.
 - D.6E concluiu o gate técnico da Agenda; o frontend D.6F pode consumir o
   contrato canônico aprovado.
-- O renderer anual depende de checkpoint humano entre os modelos A e B na
-  D.6G.
+- O renderer anual oficial é o Modelo B. O Modelo A permanece somente como
+  alternativa testada no spike.
+- Período e layout são conceitos independentes; o período anual admite layout
+  mensal multipágina ou anual resumido.
 
 ## Descobertas técnicas da D.6A — baseline auditado
 
@@ -854,12 +991,13 @@ tipos genéricos de compromisso nesta fase.
 
 ### Modalidades e conteúdo
 
-- **Público Mensal** e **Público Anual:** somente itens publicáveis
-  externamente, inicialmente dias dos Encontros. Excluem reuniões
-  preparatórias, avaliação interna, pessoas, equipes, presença e operação.
-- **Interno Mensal** e **Interno Anual:** podem incluir dias, reuniões e
-  avaliação. Recebem `USO INTERNO`, mas continuam sem dados pessoais ou
-  sensíveis por padrão.
+- Público e Interno oferecem: mensal de um mês, mensal do ano completo em um
+  PDF de 12 páginas e anual resumido Modelo B em uma página.
+- **Público:** somente itens publicáveis externamente, inicialmente dias dos
+  Encontros. Exclui preparatórias, avaliação interna, pessoas, equipes,
+  presença e operação.
+- **Interno:** pode incluir dias, preparatórias e avaliação. Recebe `USO
+  INTERNO`, mas continua sem dados pessoais ou sensíveis por padrão.
 - Não existe Excel. PDF é saída de divulgação e nunca fonte de edição.
 - A decisão publicável/interno pertence ao item/domínio apropriado; o renderer
   não será acoplado a uma lista fixa de classes.
@@ -879,9 +1017,11 @@ tipos genéricos de compromisso nesta fase.
   legenda/overflow quando necessário.
 - **Modelo B:** mini-calendários mais limpos, datas destacadas e lista curta
   abaixo de cada mês.
-- A D.6G começa com os dois protótipos usando exatamente os mesmos dados. Um
-  checkpoint humano escolhe o modelo antes do renderer anual oficial; nenhuma
-  escolha automática foi feita na D.6D.
+- A D.6G.1 comparou os dois protótipos com exatamente os mesmos dados. A
+  D.6G.2 escolheu humanamente o Modelo B; o Modelo A permanece apenas como
+  alternativa testada.
+- O anual resumido Modelo B não substitui o mensal de ano completo. Este
+  reutiliza a composição mensal em 12 páginas dentro de um único PDF.
 
 ### Snapshot publicável
 
@@ -900,11 +1040,11 @@ pessoais, saúde, observações internas e capabilities não entram.
 - ReportLab exigiria layout de baixo nível; browser/Playwright adicionaria
   runtime Chromium e superfície operacional maior. Nenhuma das bibliotecas
   está instalada diretamente hoje.
-- D.6G deverá fixar a dependência escolhida, validar bibliotecas de sistema no
-  servidor e impedir busca de recursos remotos. Templates escapam títulos e
-  usam apenas assets/fontes locais controlados.
-- O renderer mensal segue a decisão aprovada; o anual aguarda a escolha entre
-  os dois protótipos.
+- A D.6G.1 fixou a dependência escolhida, validou as bibliotecas de sistema no
+  servidor e bloqueou recursos remotos. Templates escapam títulos e usam
+  apenas assets/fontes locais controlados.
+- O renderer mensal segue a decisão aprovada; o anual resumido usa o Modelo B
+  escolhido na D.6G.2.
 
 ### Preview e publicação
 
@@ -912,10 +1052,11 @@ pessoais, saúde, observações internas e capabilities não entram.
   imediato do arquivo temporário.
 - Publicar é comando explícito: captura um snapshot novo, renderiza, calcula
   hash e persiste a versão imutável. Somente essa operação compõe o histórico.
-- A UX exata de preview/publicar será definida no spike, preservando essa
-  separação.
-- A implementação precisa da logo real do movimento/paróquia, preferencialmente
-  SVG ou PNG em boa resolução. Não haverá placeholder como artefato final.
+- O spike preservou a separação; a UI definitiva de preview/publicar será
+  fechada na D.6G.3 com as modalidades aprovadas.
+- A implementação precisa do asset oficial contendo somente o símbolo do pé,
+  preferencialmente SVG ou PNG em boa resolução, no canto superior direito.
+  A versão completa da marca não será usada e não haverá placeholder final.
 - Toda versão publicada usa rodapé discreto
   `Gerado pelo SIA • Versão publicada em DD/MM/AAAA`; a modalidade interna
   também traz `USO INTERNO`.
@@ -933,13 +1074,14 @@ pessoais, saúde, observações internas e capabilities não entram.
   por fidelidade histórica, auditoria e backup. Esta é a arquitetura aprovada
   tecnicamente para D.6G.
 
-### Model proposto
+### Model proposto — ajuste requerido pela D.6G.2
 
 `PublicacaoCalendarioInstitucional`, sem FK para Encontro individual:
 
 - `id`;
-- `tipo`: `MENSAL` ou `ANUAL`;
-- `ano` e `mes` opcional, obrigatório apenas para mensal;
+- `periodo`: `MES` ou `ANO`;
+- `layout`: `MENSAL` ou `ANUAL_RESUMIDO`;
+- `ano` e `mes` opcional, obrigatório apenas para `MES`;
 - `publicado_em`;
 - `publicado_por`, FK para `User` com `PROTECT` para preservar autoria;
 - `snapshot_schema_version`;
@@ -949,8 +1091,13 @@ pessoais, saúde, observações internas e capabilities não entram.
 
 Não há unicidade por período: republicações legítimas coexistem. A ordem
 histórica usa `publicado_em` e PK, evitando numeração concorrente artificial.
-Checks locais garantem mês 1–12 para mensal e mês nulo para anual. Índice por
-`tipo`, `ano`, `mes` e `publicado_em` atende listagem histórica.
+Checks locais devem permitir somente `MES + MENSAL`, `ANO + MENSAL` e
+`ANO + ANUAL_RESUMIDO`; mês é 1–12 apenas para `MES` e nulo para `ANO`.
+Índice por período, layout, ano, mês e `publicado_em` atende listagem
+histórica. A estrutura criada na G.1 ainda mistura período/layout e será
+revista na D.6G.3. Antes de congelar o contrato, essa etapa deve confirmar o
+estado de aplicação da `0037` e fazer o ajuste de schema/migration de forma
+segura.
 
 A publicação é imutável por service e contrato: API oferece criar, listar,
 recuperar e baixar, sem PATCH, PUT ou DELETE. Não existe cleanup automático de
@@ -1075,18 +1222,14 @@ ambientes isolados normais.
 
 ## Pendências humanas
 
-- Revisar visualmente a D.6F em navegadores e dispositivos reais antes de
-  iniciar D.6G. A conclusão atual é técnica, não aprovação visual definitiva.
-- Escolher na D.6G entre os modelos anuais A e B depois de comparar
-  protótipos com os mesmos dados.
-- Fornecer a logo real do movimento/paróquia quando a prototipagem de PDF
-  começar; não usar placeholder final.
-- Refinar no spike a UX de preview/publicar sem permitir que preview entre no
-  histórico.
+- Fornecer o asset oficial da versão da marca que contém somente o símbolo do
+  pé para incorporação na D.6G.3; não usar placeholder final.
+- Fechar na D.6G.3 a UI de preview/publicar sem permitir que preview entre no
+  histórico, aplicando as modalidades já aprovadas.
 - A política de consulta/download histórico permanece conservadoramente
   restrita a Suporte/Diretoria/superuser até decisão explícita diferente.
 
-Nenhuma dessas pendências bloqueia o frontend D.6F.
+Não há decisão de produto bloqueante para iniciar a D.6G.3.
 
 ## Débitos
 
@@ -1097,8 +1240,8 @@ Nenhuma dessas pendências bloqueia o frontend D.6F.
   para consumidores existentes; não serão removidos nesta fase.
 - Publicações exigem backup conjunto de banco e media; automação operacional
   de backup não pertence à D.6.
-- A dependência de PDF e seus pacotes de sistema precisam de spike no ambiente
-  real na D.6G, sem instalação antecipada.
+- A instalação de WeasyPrint precisa permanecer reproduzível no deploy e
+  conservar as bibliotecas de sistema validadas pelo spike.
 - Eventos, compromissos genéricos, saúde, atividade canônica, frontends
   D.2–D.5, Excel e integrações externas permanecem fora do escopo, não débitos
   a resolver nesta fase.
@@ -1155,9 +1298,9 @@ Nenhuma dessas pendências bloqueia o frontend D.6F.
 
 ## Próximo passo
 
-Aguardando revisão visual humana antes da D.6G. Após esse checkpoint, o
-próximo bloco permanece D.6G — PDF mensal/anual e histórico de divulgação.
-Não iniciar renderer ou publicação antes da revisão.
+D.6G.3 — renderer e publicação definitivos, aplicando o Modelo B anual, o
+mensal de um mês e o mensal de ano completo em 12 páginas, nos escopos Público
+e Interno.
 
 ## Histórico de execução
 
@@ -1187,3 +1330,11 @@ Não iniciar renderer ou publicação antes da revisão.
   mobile e acessibilidade implementados; 126 testes frontend, lint,
   TypeScript e build Webpack aprovados. Aguardando revisão visual humana antes
   da D.6G.
+- 2026-10-07 — D.6G.1 concluída. WeasyPrint, snapshot allowlist, seis PDFs de
+  spike, preview protegido e fundação expansiva da publicação implementados;
+  13 testes específicos aprovados. A/B permanecem abertos. Próximo bloco:
+  D.6G.2, aguardando revisão humana dos PDFs e asset oficial da logo.
+- 2026-10-07 — D.6G.2 concluída documentalmente. Modelo B escolhido para o
+  anual resumido; mensal de ano completo aprovado como PDF único de 12
+  páginas; período/layout separados conceitualmente; marca restrita ao símbolo
+  oficial do pé. Próximo bloco: D.6G.3.

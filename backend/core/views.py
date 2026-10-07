@@ -1,4 +1,5 @@
 import mimetypes
+from io import BytesIO
 from pathlib import Path
 
 from django.core.exceptions import ValidationError as django_core_validation_error
@@ -53,6 +54,7 @@ from .serializers import (
     CriacaoEncontroCalendarioCommandSerializer,
     DadosBasicosCalendarioCommandSerializer,
     PlanejamentoCalendarioCommandSerializer,
+    PreviewCalendarioQuerySerializer,
     ReuniaoAgendaCriacaoCommandSerializer,
     ReuniaoAgendaEdicaoCommandSerializer,
     RotuloDiaCalendarioCommandSerializer,
@@ -83,6 +85,7 @@ from .services import formacoes as formacao_services
 from .services import propostas_violeiros as proposta_violeiros_services
 from .services import calendario_institucional as calendario_services
 from .services import comandos_calendario as calendario_command_services
+from .services import exportacao_calendario as exportacao_calendario_services
 from .serializers import _erro_de_dominio, _erro_de_trabalho
 from .formacao_catalogo import TEMAS_FORMATIVOS
 from .roles import (
@@ -183,6 +186,42 @@ def agenda_encontro(request, encontro_id):
     encontro = get_object_or_404(Encontro, pk=encontro_id)
     resultado = calendario_services.consultar_agenda_encontro(encontro)
     return Response(AgendaEncontroSerializer(resultado).data)
+
+
+@api_view(['GET'])
+@permission_classes([
+    require_sia_roles(*INSTITUTIONAL_CALENDAR_MANAGEMENT_ROLES),
+])
+def preview_calendario_institucional(request):
+    query = PreviewCalendarioQuerySerializer(data=request.query_params)
+    query.is_valid(raise_exception=True)
+    dados = query.validated_data
+    snapshot = exportacao_calendario_services.capturar_snapshot(
+        escopo=dados['escopo'],
+        periodo=dados['periodo'],
+        ano=dados['ano'],
+        mes=dados.get('mes'),
+    )
+    conteudo = exportacao_calendario_services.renderizar_pdf(
+        snapshot,
+        modelo_anual=dados.get('modelo_anual'),
+    )
+    sufixo = (
+        f"{dados['ano']}-{dados['mes']:02d}"
+        if dados['periodo'] == 'MENSAL'
+        else f"{dados['ano']}-modelo-{dados['modelo_anual'].lower()}"
+    )
+    resposta = FileResponse(
+        BytesIO(conteudo),
+        as_attachment=False,
+        filename=(
+            f"preview-calendario-{dados['escopo'].lower()}-{sufixo}.pdf"
+        ),
+        content_type='application/pdf',
+    )
+    resposta['Cache-Control'] = 'no-store, private'
+    resposta['X-Content-Type-Options'] = 'nosniff'
+    return resposta
 
 
 class CalendarioEncontroCommandViewSet(viewsets.GenericViewSet):
