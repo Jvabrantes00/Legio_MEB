@@ -2,8 +2,9 @@
 
 ## Status
 
-R.1 concluída documentalmente em 2026-10-07 e aguardando validação humana.
-Este documento não altera, substitui ou renumera o roadmap.
+R.1 concluída e validada humanamente. R.2 concluída documentalmente em
+2026-10-07 e aguardando aprovação humana. Este documento não altera,
+substitui ou renumera o roadmap.
 
 ## Objetivo
 
@@ -199,3 +200,265 @@ transformar correspondência temática em avaliação de atendimento.
 Essas questões permanecem registradas para as etapas futuras e não serão
 resolvidas nesta R.1. Questões de correspondência, prioridade, maturidade e
 nova arquitetura pertencem aos blocos posteriores.
+
+## R.2 — Planejado × implementado × faltante
+
+### Critério de classificação
+
+- **IMPLEMENTADO:** a capacidade identificável existe hoje.
+- **IMPLEMENTADO EM OUTRO BLOCO:** existe, mas foi entregue fora da fase
+  histórica à qual estava associada.
+- **PARCIAL:** uma parte concreta existe e outra parte prevista não foi
+  localizada.
+- **NÃO LOCALIZADO:** não foi encontrada evidência atual suficiente.
+- **LEGADO / A REVALIDAR:** existe implementação antiga que não pode ser
+  tratada automaticamente como o domínio futuro pretendido.
+
+Os estados descrevem somente existência e cobertura estrutural. Não avaliam
+qualidade, suficiência de produto, UX ou maturidade. Débitos técnicos não
+mudam por si só o estado de uma capacidade existente.
+
+### Fase 0 — Estabilização
+
+| Capacidade histórica | Estado atual | Onde existe hoje | Evidência | Observação factual |
+|---|---|---|---|---|
+| Segurança da aplicação | IMPLEMENTADO | 0A, 0E, 0F e 0J | `PHASE_0_CLOSURE`; `ARCHITECTURE` | Secrets, JWT/BFF, CSRF, mídia e gate estão documentados. |
+| Configuração por ambiente | IMPLEMENTADO | 0A | `PHASE_0_CLOSURE`; settings | Debug, hosts, CORS, Origin e secrets usam ambiente. |
+| Ambiente e dependências reproduzíveis | IMPLEMENTADO | 0B | `PHASE_0_CLOSURE`; `README.md` | Versões e dependências possuem fontes versionadas. |
+| Baseline automatizado de testes | IMPLEMENTADO | 0C e 0J | `PHASE_0_CLOSURE` | Backend, frontend, checks e build compõem o gate registrado. |
+| Consistência de dados e contratos | IMPLEMENTADO | 0D, 0G e 0I | `PROJECT_STATE`; `PHASE_0_CLOSURE` | CPF, status, paginação, payloads e atomicidade foram tratados. |
+| Autorização e privacidade | IMPLEMENTADO | 0E e 0J | `AUTHORIZATION_MATRIX`; `ARCHITECTURE` | Default deny, summary/full e superuser separado estão documentados. |
+| Infraestrutura de desenvolvimento | IMPLEMENTADO | 0B e infraestrutura atual | `PROJECT_STATE`; `ARCHITECTURE` | Notebook Ubuntu, PostgreSQL local, Remote SSH e systemd. |
+| Observabilidade técnica | PARCIAL | Auditoria funcional e logs atuais | `PROJECT_STATE`; `LogSistema` | Auditoria existe; logging técnico estruturado permanece como débito. |
+
+### Fase 1 — Remodelagem
+
+| Capacidade histórica | Estado atual | Onde existe hoje | Evidência | Observação factual |
+|---|---|---|---|---|
+| Pessoa e PerfilAlpinista | IMPLEMENTADO | 1B.3B | `PROJECT_STATE`; models/migration `0025` | Pessoa foi separada do perfil. |
+| Grupo | IMPLEMENTADO | 1B.3C | `PROJECT_STATE`; models | Inclui Paróquia, configuração, vínculo e coordenação. |
+| Frequência | IMPLEMENTADO | 1B.3C | `PROJECT_STATE`; `Frequencia` | Registro pertence ao perfil e pode referenciar Grupo. |
+| Lifecycle de Encontro | IMPLEMENTADO | 1B.3D.1 | `PROJECT_STATE`; services de Encontro | Lifecycle administrativo é separado da projeção legada. |
+| CalendarioEncontro e DiaEncontro | IMPLEMENTADO | 1B.3D.1 | `PROJECT_STATE`; migration `0028` | Agendas oficiais possuem versões e dias explícitos. |
+| Inscrição | IMPLEMENTADO | 1B.3D.2 | `ENCOUNTER_PARTICIPATION`; D.2 | Fila de Escalada/ESPPA separada de convite e resultado. |
+| ConviteEncontro | IMPLEMENTADO | 1B.3D.2 | `ENCOUNTER_PARTICIPATION`; D.2 | Participar e trabalhar são finalidades explícitas. |
+| ParticipacaoEncontro | IMPLEMENTADO | 1B.3D.2 | `ENCOUNTER_PARTICIPATION`; D.2 | Resultado efetivo usa Pessoa e estados próprios. |
+| Equipes | IMPLEMENTADO | 1B.3D.3 | `ENCOUNTER_WORK`; D.3 | Templates e snapshots por Encontro existem. |
+| TrabalhoEncontro | IMPLEMENTADO | 1B.3D.3 | `ENCOUNTER_WORK`; D.3 | Alocação e trabalho efetivo permanecem separados do convite. |
+| Preparatórias | IMPLEMENTADO | 1B.3D.3 | `ENCOUNTER_WORK`; D.3 | Reuniões ordenadas pertencem ao Encontro. |
+| Presença preparatória | IMPLEMENTADO | 1B.3D.3 | `ENCOUNTER_WORK`; D.3 | Presença referencia o trabalho no mesmo Encontro. |
+| Autorização contextual | IMPLEMENTADO | 1B.3D.3 | `AUTHORIZATION_MATRIX`; D.3 | Coordenação Geral recebe capacidade contextual limitada. |
+| Formação em Encontros | IMPLEMENTADO | 1B.3D.4 | `ENCOUNTER_FORMATION`; D.4 | Sessões, palestrantes e histórico derivado existem. |
+| MME e propostas de Violeiros | IMPLEMENTADO | 1B.3D.5 | `ENCOUNTER_MME`; D.5 | Propostas e disponibilidade derivada são separadas da escala oficial. |
+| Calendário Institucional | IMPLEMENTADO | 1B.3D.6 | `INSTITUTIONAL_CALENDAR`; D.6 | É projeção canônica da fatia de Encontros. |
+| Agenda do Encontro | IMPLEMENTADO | 1B.3D.6 | `INSTITUTIONAL_CALENDAR`; D.6 | Reúne Dias, Preparatórias e Avaliação. |
+| Exportação PDF | IMPLEMENTADO | 1B.3D.6 | D.6; service de exportação | Há modalidades mensal e anual, pública e interna. |
+| Publicação e histórico imutáveis | IMPLEMENTADO | 1B.3D.6 | D.6; `PublicacaoCalendarioInstitucional` | Snapshot, arquivo privado, hash e autoria são persistidos. |
+| Mappings, backfills e preparação do legado | PARCIAL | 1B.3B–D.6 e `core/legacy` | `PROJECT_STATE`; `ARCHITECTURE` | Houve backfill inicial e cutovers lógicos; loader e migração final não foram localizados. |
+
+### Fase 2 — Pessoas
+
+| Capacidade histórica | Estado atual | Onde existe hoje | Evidência | Observação factual |
+|---|---|---|---|---|
+| Pessoa | IMPLEMENTADO EM OUTRO BLOCO | Fase 1 / 1B.3B | `Pessoa`; `PROJECT_STATE` | Entidade canônica existe. |
+| PerfilAlpinista | IMPLEMENTADO EM OUTRO BLOCO | Fase 1 / 1B.3B–D.2 | `PerfilAlpinista`; D.2 | Perfil é separado de Pessoa e pode nascer por conclusão elegível. |
+| Status ativo/inativo da Pessoa/Perfil | LEGADO / A REVALIDAR | `Alpinista.status` legado | `models.py`; `PROJECT_STATE` | O novo `Pessoa`/`PerfilAlpinista` não possui esse status. |
+| Histórico da Pessoa/Alpinista | PARCIAL | Históricos derivados em D.2–D.5 | `PROJECT_STATE`; workplans | Há históricos de Encontro, Grupo, equipe e formação; não foi localizado um histórico geral único. |
+| Grupo | IMPLEMENTADO EM OUTRO BLOCO | Fase 1 / 1B.3C | `Grupo`; `ConfiguracaoGrupo` | Grupo e configuração temporal existem. |
+| Vínculo com Grupo | IMPLEMENTADO EM OUTRO BLOCO | Fase 1 / 1B.3C | `VinculoGrupo` | Datas de início/fim preservam histórico. |
+| Frequência | IMPLEMENTADO EM OUTRO BLOCO | Fase 1 / 1B.3C | `Frequencia` | Capacidade estrutural existe. |
+| Vínculo conjugal | IMPLEMENTADO EM OUTRO BLOCO | Fase 1 / 1B.3B | `VinculoConjugal` | Relação canônica entre duas Pessoas existe. |
+| Outros vínculos familiares entre Pessoas | NÃO LOCALIZADO | — | Busca dirigida em models/docs | Responsável é dado associado, não vínculo Pessoa–Pessoa geral. |
+| Dados de responsável | IMPLEMENTADO EM OUTRO BLOCO | Fase 1 / 1B.3B | `ResponsavelPessoa` | Nome, parentesco, telefone e principal existem. |
+| Sacramentos | IMPLEMENTADO EM OUTRO BLOCO | Fase 1 / 1B.3B | `Pessoa` | Batismo, primeira comunhão e crisma preservam estado tri-state. |
+| CPF e deduplicação | PARCIAL | Fase 0 e Fase 1 | validators, constraints e backfill | CPF é normalizado/único; deduplicação final do legado não foi localizada. |
+
+### Fase 3 — Encontros
+
+| Capacidade histórica | Estado atual | Onde existe hoje | Evidência | Observação factual |
+|---|---|---|---|---|
+| Encontro canônico | IMPLEMENTADO EM OUTRO BLOCO | Fase 1 / D.1 | `PROJECT_STATE`; models | O model legado foi expandido com lifecycle canônico. |
+| Lifecycle administrativo | IMPLEMENTADO EM OUTRO BLOCO | Fase 1 / D.1 | D.1; services | Permanece manual e separado de `status_encontro`. |
+| Calendário e versionamento | IMPLEMENTADO EM OUTRO BLOCO | Fase 1 / D.1 | `CalendarioEncontro` | Reprogramações oficiais preservam versões. |
+| Dias do Encontro | IMPLEMENTADO EM OUTRO BLOCO | Fase 1 / D.1 | `DiaEncontro` | Dias explícitos podem ser não consecutivos. |
+| Inscrição | IMPLEMENTADO EM OUTRO BLOCO | Fase 1 / D.2 | `Inscricao` | Inscrição ativa é separada da edição do Encontro. |
+| Convite | IMPLEMENTADO EM OUTRO BLOCO | Fase 1 / D.2 | `ConviteEncontro` | Confirmação pertence ao convite. |
+| Participação/resultado | IMPLEMENTADO EM OUTRO BLOCO | Fase 1 / D.2 | `ParticipacaoEncontro` | Conclusão, falta e desistência são resultados. |
+| Preparatórias | IMPLEMENTADO EM OUTRO BLOCO | Fase 1 / D.3 | `ReuniaoPreparatoriaEncontro` | Pertencem ao Encontro e ao fluxo de trabalho. |
+| Agenda agregada | IMPLEMENTADO EM OUTRO BLOCO | Fase 1 / D.6 | D.6; query service | Dias, Preparatórias e Avaliação são ordenados. |
+| Avaliação de agenda | IMPLEMENTADO EM OUTRO BLOCO | Fase 1 / D.6 | `AvaliacaoEncontro` | Existe um item simples por Encontro. |
+| Conflitos temporais consultivos | IMPLEMENTADO EM OUTRO BLOCO | Fase 1 / D.6 | D.6 | Conflitos avisam e não bloqueiam. |
+| Publicação do Calendário | IMPLEMENTADO EM OUTRO BLOCO | Fase 1 / D.6 | D.6 | Publicação cobre a projeção institucional de Encontros. |
+
+O domínio de Encontro é a fonte canônica; o Calendário Institucional é
+uma projeção e uma interface sobre parte desse domínio.
+
+### Fase 4 — Equipes
+
+| Capacidade histórica | Estado atual | Onde existe hoje | Evidência | Observação factual |
+|---|---|---|---|---|
+| Templates de equipe | IMPLEMENTADO EM OUTRO BLOCO | Fase 1 / D.3 | `TemplateEquipeEncontro` | Templates são separados do histórico. |
+| Snapshots de equipe | IMPLEMENTADO EM OUTRO BLOCO | Fase 1 / D.3 | `EquipeEncontro` | Mudança no template não altera snapshot. |
+| Funções/roles | IMPLEMENTADO EM OUTRO BLOCO | Fase 1 / D.3 | `TemplateRoleEquipe`; `RoleEquipeEncontro` | Roles também são copiadas para o Encontro. |
+| Alocação/membro | IMPLEMENTADO EM OUTRO BLOCO | Fase 1 / D.3 | `TrabalhoEncontro` | Pessoa é alocada no contexto do Encontro. |
+| Trabalho efetivamente realizado | IMPLEMENTADO EM OUTRO BLOCO | Fase 1 / D.3 | `TrabalhoEncontro` e services | Estado distingue planejamento de trabalho realizado. |
+| Histórico de trabalho | IMPLEMENTADO EM OUTRO BLOCO | Fase 1 / D.3 | `historico_equipes`; D.3 | Deriva somente de trabalho efetivo. |
+| Elegibilidade | IMPLEMENTADO EM OUTRO BLOCO | Fase 1 / D.3 | evaluator de elegibilidade; D.3 | Produz bloqueios/avisos explícitos. |
+| Disponibilidade consultiva | IMPLEMENTADO EM OUTRO BLOCO | Fase 1 / D.3–D.5 | D.3; D.5 | Há avaliação advisory e disponibilidade derivada nas propostas. |
+| Preparatórias e presença do trabalho | IMPLEMENTADO EM OUTRO BLOCO | Fase 1 / D.3 | models/services da D.3 | Presença referencia `TrabalhoEncontro`. |
+
+### Fase 5 — Sugestões
+
+| Capacidade histórica | Estado atual | Onde existe hoje | Evidência | Observação factual |
+|---|---|---|---|---|
+| Propostas específicas de Violeiros | IMPLEMENTADO EM OUTRO BLOCO | Fase 1 / D.5 | `ENCOUNTER_MME`; D.5 | É uma aplicação específica de apoio à decisão. |
+| Disponibilidade derivada | IMPLEMENTADO EM OUTRO BLOCO | Fase 1 / D.5 | services da D.5 | Deriva da escala oficial e não reserva Pessoa. |
+| Regras advisory de elegibilidade | IMPLEMENTADO EM OUTRO BLOCO | Fase 1 / D.3 | evaluator da D.3 | Avisos e bloqueios possuem razões explícitas. |
+| Explicabilidade das propostas/avisos | IMPLEMENTADO EM OUTRO BLOCO | Fase 1 / D.3–D.5 | workplans D.3 e D.5 | Resultados consultivos expõem motivos. |
+| Motor genérico de sugestões | NÃO LOCALIZADO | — | Busca dirigida em docs/código | Não foi localizada infraestrutura genérica reutilizável de sugestão. |
+
+A existência das propostas do MME não é tratada como equivalência com a
+Fase 5 inteira.
+
+### Fase 6 — Pastas / Permissões
+
+| Capacidade histórica | Estado atual | Onde existe hoje | Evidência | Observação factual |
+|---|---|---|---|---|
+| Roles de negócio | IMPLEMENTADO EM OUTRO BLOCO | Fase 0 | `roles.py`; matriz | Papéis reconhecidos são centralizados. |
+| Default deny | IMPLEMENTADO EM OUTRO BLOCO | Fase 0 | `permissions.py`; matriz | Ausência de regra resulta em negação. |
+| Mapa de permissões por recurso/ação | IMPLEMENTADO EM OUTRO BLOCO | Fase 0 e Fase 1 | `AUTHORIZATION_MATRIX`; permissions | Método/action e recursos especializados são mapeados. |
+| Capabilities de apresentação | IMPLEMENTADO EM OUTRO BLOCO | Fase 0 e D.6 | serializers/frontend | UI recebe capabilities sem substituir o backend. |
+| Autorização contextual | IMPLEMENTADO EM OUTRO BLOCO | Fase 1 / D.3 | D.3; matriz | Escopo da Coordenação Geral é limitado ao Encontro. |
+| Enforcement no backend | IMPLEMENTADO EM OUTRO BLOCO | Fase 0 e Fase 1 | permissions/views/tests documentados | Operações protegidas não dependem da UI. |
+| Enforcement no BFF | IMPLEMENTADO EM OUTRO BLOCO | Fase 0 | `ARCHITECTURE` | Proxy usa allowlist e preserva autenticação/CSRF. |
+| Suporte e Diretoria | IMPLEMENTADO EM OUTRO BLOCO | Fase 0 e Fase 1 | matriz | São roles de negócio com capacidades explícitas. |
+| Demais papéis/áreas | IMPLEMENTADO EM OUTRO BLOCO | Fase 0 e Fase 1 | matriz | Fichas, MME, Formação, Eventos, Comunicação e outros estão mapeados. |
+| Superuser técnico separado | IMPLEMENTADO EM OUTRO BLOCO | Fase 0 | `ARCHITECTURE`; matriz | Não equivale a Suporte. |
+| Pastas | NÃO LOCALIZADO | — | Busca dirigida em docs/código | Não há conceito atual inequívoco equivalente. |
+
+### Fase 7 — Eventos
+
+| Capacidade histórica | Estado atual | Onde existe hoje | Evidência | Observação factual |
+|---|---|---|---|---|
+| CRUD de Evento existente | LEGADO / A REVALIDAR | API/model legado | `Evento`; `AUTHORIZATION_MATRIX` | Model possui nome, data e local. |
+| Participação em Evento existente | LEGADO / A REVALIDAR | API/model legado | `ParticipacaoEvento` | Relação usa `Alpinista` legado. |
+| Novo domínio de Eventos | NÃO LOCALIZADO | — | ADR-001; D.6 | Documentos reservam essa modelagem para o futuro. |
+| Equipes de Eventos no novo domínio | NÃO LOCALIZADO | — | Busca dirigida em docs/código | Nenhuma estrutura canônica nova foi localizada. |
+| Integração institucional/Calendário | NÃO LOCALIZADO | — | `INSTITUTIONAL_CALENDAR` | Filtros existem desabilitados, sem dados simulados. |
+
+### Fase 8 — Comunicação
+
+| Capacidade histórica | Estado atual | Onde existe hoje | Evidência | Observação factual |
+|---|---|---|---|---|
+| Role Comunicação, fotos e galeria | IMPLEMENTADO | Fase 0 / superfícies atuais | `AUTHORIZATION_MATRIX` | Role possui summary e gestão de foto/galeria. |
+| Convites e confirmações internas | PARCIAL | Fase 1 / D.2 | `ConviteEncontro` e services | Fluxo funcional existe dentro do SIA, sem representar envio externo. |
+| Envio real de e-mail | NÃO LOCALIZADO | — | Busca dirigida em código/docs | Campo de e-mail não constitui canal de envio. |
+| Envio real por WhatsApp | NÃO LOCALIZADO | — | Busca dirigida em código/docs | Telefone/flag WhatsApp não constitui integração externa. |
+| Lembretes | NÃO LOCALIZADO | — | Busca dirigida em código/docs | Nenhum scheduler ou fluxo de lembrete foi localizado. |
+| Notificações institucionais | NÃO LOCALIZADO | — | D.5 as mantém fora de escopo | Avisos consultivos atuais não enviam notificações. |
+
+### Fase 9 — Relatórios
+
+| Capacidade histórica | Estado atual | Onde existe hoje | Evidência | Observação factual |
+|---|---|---|---|---|
+| Dashboard e indicadores | IMPLEMENTADO | Fase 0 / estado atual | `PROJECT_STATE` | Usa agregados do backend e não infere totais de paginação. |
+| Logs consultáveis | IMPLEMENTADO | Fase 0 | `LogSistema`; matriz | Leitura é protegida para Suporte/Diretoria. |
+| PDFs do Calendário | IMPLEMENTADO | Fase 1 / D.6 | D.6 | Export específico, autorizado e minimizado. |
+| Histórico de publicações | IMPLEMENTADO | Fase 1 / D.6 | `PublicacaoCalendarioInstitucional` | Preserva snapshot, PDF e metadados. |
+| Plataforma geral de relatórios | NÃO LOCALIZADO | — | Busca dirigida em docs/código | Export do Calendário não é plataforma geral. |
+| Exportação Excel | NÃO LOCALIZADO | — | D.6 exclui Excel | Nenhum export Excel foi localizado. |
+| Outros relatórios formais autorizados | NÃO LOCALIZADO | — | Busca dirigida em docs/código | Históricos de domínio não foram classificados como relatórios gerais. |
+
+### Fase 10 — Produção
+
+| Capacidade histórica | Estado atual | Onde existe hoje | Evidência | Observação factual |
+|---|---|---|---|---|
+| Servidor, PostgreSQL e systemd | PARCIAL | Infraestrutura de desenvolvimento | `ARCHITECTURE`; `PROJECT_STATE` | Ambiente atual é servidor dedicado de desenvolvimento, não produção comprovada. |
+| Migrations expansivas e backfill inicial | PARCIAL | Fase 1 | migrations `0025`–`0038`; workplans | Estruturas e um backfill inicial existem; migração final não foi localizada. |
+| Controles de segurança | IMPLEMENTADO EM OUTRO BLOCO | Fase 0 | `PHASE_0_CLOSURE`; `ARCHITECTURE` | Há baseline de segurança aplicado. |
+| Revisão final de segurança para produção | NÃO LOCALIZADO | — | Busca dirigida em docs | Gate 0J não é apresentado como aceite produtivo final. |
+| Migração/cutover definitivo do legado | NÃO LOCALIZADO | — | `ARCHITECTURE`; `PROJECT_STATE` | `core/legacy` ainda não possui loader produtivo. |
+| Deduplicação/limpeza final | NÃO LOCALIZADO | — | `PROJECT_STATE` | CPF único não equivale ao saneamento final dos dados legados. |
+| Deploy produtivo real | NÃO LOCALIZADO | — | Busca dirigida em docs/repositório | Não foi localizada evidência de ambiente produtivo ativo. |
+| Operação produtiva | NÃO LOCALIZADO | — | Débitos operacionais documentados | Rotinas atuais pertencem ao desenvolvimento/operação local. |
+| Observabilidade técnica | PARCIAL | Auditoria e logs atuais | `PROJECT_STATE`; `LogSistema` | Logging estruturado/centralizado permanece como débito. |
+| Backup e retenção operacionais | NÃO LOCALIZADO | — | D.6 registra necessidade de backup | Nenhuma automação/política produtiva foi localizada. |
+
+### Resumo por fase
+
+Na coluna **Implementado**, a contagem inclui `IMPLEMENTADO` e
+`IMPLEMENTADO EM OUTRO BLOCO`. Os números contam capacidades das tabelas
+acima; não constituem nota ou percentual de conclusão da fase.
+
+| Fase | Implementado | Parcial | Não localizado | Legado/a revalidar | Principal sobreposição |
+|---|---:|---:|---:|---:|---|
+| 0 — Estabilização | 7 | 1 | 0 | 0 | Baseline transversal usado pelas fases seguintes |
+| 1 — Remodelagem | 19 | 1 | 0 | 0 | Expandiu-se por domínios de Pessoas, Encontros, Equipes e Sugestões |
+| 2 — Pessoas | 8 | 2 | 1 | 1 | Capacidades entregues sobretudo em 1B.3B–1B.3C |
+| 3 — Encontros | 12 | 0 | 0 | 0 | Capacidades entregues em D.1–D.6 |
+| 4 — Equipes | 9 | 0 | 0 | 0 | Capacidades entregues em D.3 e apoio de D.5 |
+| 5 — Sugestões | 4 | 0 | 1 | 0 | Aplicações específicas em D.3/D.5, sem motor genérico localizado |
+| 6 — Pastas / Permissões | 10 | 0 | 1 | 0 | Permissões distribuídas entre Fase 0 e autorização contextual da Fase 1 |
+| 7 — Eventos | 0 | 0 | 3 | 2 | CRUD/participação legados separados do futuro domínio |
+| 8 — Comunicação | 1 | 1 | 4 | 0 | Role/galeria atuais e convite interno não equivalem a canais externos |
+| 9 — Relatórios | 4 | 0 | 3 | 0 | Dashboard/logs e export especializado do Calendário |
+| 10 — Produção | 1 | 3 | 6 | 0 | Segurança e preparação técnica fora de um deploy produtivo comprovado |
+
+## Capacidades absorvidas pela Fase 1
+
+O termo “absorvidas” neste mapa significa apenas que a implementação foi
+registrada dentro da Remodelagem; não elimina nem redefine a fase histórica.
+
+| Capacidade | Fase historicamente associada | Onde apareceu |
+|---|---|---|
+| Pessoa e PerfilAlpinista | Fase 2 — Pessoas | 1B.3B e D.2 |
+| Grupo, vínculos e Frequência | Fase 2 — Pessoas | 1B.3C |
+| Lifecycle, agenda temporal e dias | Fase 3 — Encontros | D.1 |
+| Inscrição, Convite e Participação | Fase 3 — Encontros | D.2 |
+| Agenda agregada, conflitos e publicação | Fase 3 — Encontros | D.6 |
+| Templates, equipes, roles, trabalho e presença | Fase 4 — Equipes | D.3 |
+| Elegibilidade e avisos advisory | Fase 5 — Sugestões | D.3 |
+| Propostas específicas do MME | Fase 5 — Sugestões | D.5 |
+| Autorização contextual | Fase 6 — Pastas / Permissões | D.3 |
+
+## Capacidades atuais fora do encaixe histórico claro
+
+- Formação em Encontros possui domínio próprio na D.4, mas não foi citada
+  explicitamente nas intenções históricas 0–10 recuperadas.
+- Materiais e entregas possuem models e autorização atuais, sem fase
+  histórica inequívoca na R.1.
+- Galeria/fotos se relaciona à role Comunicação, mas não equivale ao produto
+  histórico de comunicação institucional externa.
+- O Calendário Institucional e sua publicação PDF cruzam Encontros e exports,
+  sem precisar ser forçados exclusivamente para a Fase 3 ou a Fase 9.
+- Dados de saúde existem associados a Pessoa, mas saúde não aparece como
+  objetivo histórico autônomo no roadmap recuperado.
+
+## Itens prioritários para revisão de maturidade na R.3
+
+Os itens abaixo possuem implementação suficiente para permitir futura
+observação de fluxos e uso. Esta lista não avalia nem prescreve correções:
+
+- Pessoas, PerfilAlpinista, Grupos, vínculos e históricos;
+- Encontros, lifecycle, inscrição, convite, participação e Agenda;
+- Equipes, TrabalhoEncontro, elegibilidade, Preparatórias e presença;
+- propostas específicas do MME e sua disponibilidade derivada;
+- permissões globais/contextuais e sua aplicação backend/BFF/frontend;
+- Calendário Institucional, exportação, publicação e histórico.
+
+## Lacunas para validação humana após a R.2
+
+1. Qual capacidade concreta o rótulo histórico “Pastas” representava e ela
+   ainda é necessária?
+2. Qual fronteira deve ser usada futuramente entre CRUD/participação legados
+   de Eventos e o novo domínio com equipes e integração institucional?
+3. A futura plataforma de Relatórios deve agregar os exports especializados
+   existentes ou permanecer um produto separado? A R.2 apenas constatou ambos.
+4. Quais evidências operacionais definirão “produção” para o SIA? O servidor
+   atual está documentado como ambiente de desenvolvimento.
+
+## Próximo checkpoint
+
+Após aprovação humana da R.2: **R.3 — Revisão de maturidade**. A R.2 não
+inicia testes manuais de produto, não prioriza implementações e não propõe o
+Roadmap v2.
