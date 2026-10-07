@@ -8,6 +8,16 @@ import {
   officializeAgendaFromDrawer,
 } from "../components/CalendarEncounterDrawer";
 import { CalendarEncounterForm } from "../components/CalendarEncounterForm";
+import {
+  CalendarExportDialog,
+  PublicationConfirmation,
+  buildCalendarExportParams,
+  publicationSummary,
+  publishCalendarVersion,
+  requestCalendarPreview,
+  requestCalendarPublicationDownload,
+  requestCalendarPublicationHistory,
+} from "../components/CalendarExportDialog";
 import { InstitutionalCalendarHeader } from "../components/InstitutionalCalendarHeader";
 import { MonthView, OccurrenceCard, YearView } from "../components/InstitutionalCalendarViews";
 import { EncounterCategoryIcon } from "../components/icons/EncounterCategoryIcon";
@@ -71,7 +81,7 @@ describe("datas civis do Calendário", () => {
 
 describe("contratos e apresentação do Calendário", () => {
   it("cabeçalho expõe navegação, modos e filtros futuros sem ação falsa", () => {
-    const common = { cursor: { year: 2026, month: 9 }, view: "month" as const, filter: "all" as const, onMove: () => {}, onToday: () => {}, onView: () => {}, onFilter: () => {}, onCreate: () => {} };
+    const common = { cursor: { year: 2026, month: 9 }, view: "month" as const, filter: "all" as const, onMove: () => {}, onToday: () => {}, onView: () => {}, onFilter: () => {}, onExport: () => {}, onCreate: () => {} };
     const readOnly = renderToStaticMarkup(<InstitutionalCalendarHeader {...common} canManage={false} />);
     const manager = renderToStaticMarkup(<InstitutionalCalendarHeader {...common} canManage />);
     expect(readOnly).toContain("Outubro 2026");
@@ -82,7 +92,81 @@ describe("contratos e apresentação do Calendário", () => {
     expect(readOnly).toMatch(/Outros<\/button>/);
     expect(readOnly).not.toContain("Novo compromisso");
     expect(manager).toContain("Novo compromisso");
-    expect(manager).toMatch(/disabled=""[^>]*>[\s\S]*Exportar/);
+    expect(manager).toContain("Exportar");
+    const exportButton = manager.match(/<button[^>]*class="calendar-control gap-2[^>]*>[\s\S]*?Exportar<\/button>/)?.[0] ?? "";
+    expect(exportButton).not.toContain("disabled");
+  });
+
+  it("mapeia as três modalidades finais sem expor o Modelo A", () => {
+    const base = { scope: "PUBLICO" as const, year: 2027, month: 2 };
+    expect(Object.fromEntries(buildCalendarExportParams({ ...base, format: "MONTH" }))).toEqual({ escopo: "PUBLICO", ano: "2027", periodo: "MES", layout: "MENSAL", mes: "3" });
+    expect(Object.fromEntries(buildCalendarExportParams({ ...base, format: "YEAR_MONTHLY" }))).toEqual({ escopo: "PUBLICO", ano: "2027", periodo: "ANO", layout: "MENSAL" });
+    expect(Object.fromEntries(buildCalendarExportParams({ ...base, format: "YEAR_SUMMARY" }))).toEqual({ escopo: "PUBLICO", ano: "2027", periodo: "ANO", layout: "ANUAL_RESUMIDO" });
+    expect(buildCalendarExportParams({ ...base, format: "YEAR_SUMMARY" }).toString()).not.toContain("modelo");
+  });
+
+  it("dialog de exportação é responsivo, acessível e oculta mês na visão anual", () => {
+    const monthly = renderToStaticMarkup(<CalendarExportDialog open year={2027} month={2} view="month" canManage onClose={() => {}} />);
+    const annual = renderToStaticMarkup(<CalendarExportDialog open year={2027} month={2} view="year" canManage onClose={() => {}} />);
+    const readOnly = renderToStaticMarkup(<CalendarExportDialog open year={2027} month={2} view="month" canManage={false} onClose={() => {}} />);
+    expect(monthly).toContain('role="dialog"');
+    expect(monthly).toContain("Mês selecionado");
+    expect(monthly).toContain("Ano completo — páginas mensais");
+    expect(monthly).toContain("Ano completo — visão resumida");
+    expect(monthly).toContain("Gerar preview");
+    expect(monthly).toContain("Histórico de publicações");
+    expect(annual).toMatch(/<input(?=[^>]*value="MONTH")(?=[^>]*disabled="")[^>]*>/);
+    expect(annual).toContain("Abra um mês para usar esta opção.");
+    expect(readOnly).toBe("");
+  });
+
+  it("confirma publicação com contexto e aviso de imutabilidade", () => {
+    const selection = { scope: "INTERNO" as const, format: "YEAR_SUMMARY" as const, year: 2027, month: 2 };
+    const html = renderToStaticMarkup(<PublicationConfirmation selection={selection} busy={false} onCancel={() => {}} onPublish={() => {}} />);
+    expect(publicationSummary(selection)).toEqual(["Interno", "Ano 2027", "Formato: Ano completo — visão resumida"]);
+    expect(html).toContain("Publicar esta versão do Calendário Institucional?");
+    expect(html).toContain("não poderá ser alterada");
+    expect(html).toContain("Publicar versão");
+  });
+
+  it("preview e publicação usam requests separados", async () => {
+    const calls: Array<{ path: string; init?: RequestInit }> = [];
+    const request = async (path: string, init?: RequestInit) => {
+      calls.push({ path, init });
+      return new Response(null, { status: init?.method === "POST" ? 201 : 200 });
+    };
+    const selection = { scope: "PUBLICO" as const, format: "YEAR_MONTHLY" as const, year: 2027, month: 2 };
+    await requestCalendarPreview(selection, request);
+    await publishCalendarVersion(selection, request);
+    expect(calls[0].path).toBe("/calendario-institucional/preview-pdf/?escopo=PUBLICO&ano=2027&periodo=ANO&layout=MENSAL");
+    expect(calls[0].init).toBeUndefined();
+    expect(calls[1]).toEqual({
+      path: "/calendario-institucional/publicacoes/",
+      init: {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ escopo: "PUBLICO", ano: "2027", periodo: "ANO", layout: "MENSAL" }),
+      },
+    });
+  });
+
+  it("histórico e download usam somente endpoints autenticados do BFF", async () => {
+    const calls: string[] = [];
+    const request = async (path: string) => {
+      calls.push(path);
+      return new Response(null, { status: 200 });
+    };
+
+    await requestCalendarPublicationHistory(request);
+    await requestCalendarPublicationDownload(
+      "/calendario-institucional/publicacoes/17/download/",
+      request,
+    );
+
+    expect(calls).toEqual([
+      "/calendario-institucional/publicacoes/",
+      "/calendario-institucional/publicacoes/17/download/",
+    ]);
   });
 
   it("achata a Agenda preservando vínculo e capability do Encontro", () => {

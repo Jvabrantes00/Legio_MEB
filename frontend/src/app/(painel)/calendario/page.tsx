@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { CalendarEncounterDrawer } from "../../../components/CalendarEncounterDrawer";
 import { CalendarEncounterForm } from "../../../components/CalendarEncounterForm";
+import { CalendarExportDialog } from "../../../components/CalendarExportDialog";
 import { MonthView, YearView } from "../../../components/InstitutionalCalendarViews";
 import { InstitutionalCalendarHeader } from "../../../components/InstitutionalCalendarHeader";
 import { useSiaSession } from "../../../components/SiaSessionProvider";
@@ -38,6 +39,7 @@ export default function InstitutionalCalendarPage() {
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [selectedEncounterId, setSelectedEncounterId] = useState<number | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
   const [createDate, setCreateDate] = useState("");
   const [conflictNotice, setConflictNotice] = useState(0);
 
@@ -107,7 +109,7 @@ export default function InstitutionalCalendarPage() {
 
   return (
     <div className="institutional-calendar space-y-5">
-      <InstitutionalCalendarHeader cursor={cursor} view={view} filter={filter} canManage={canManage} onMove={move} onToday={goToday} onView={setView} onFilter={setFilter} onCreate={() => openCreate()} />
+      <InstitutionalCalendarHeader cursor={cursor} view={view} filter={filter} canManage={canManage} onMove={move} onToday={goToday} onView={setView} onFilter={setFilter} onExport={() => setExportOpen(true)} onCreate={() => openCreate()} />
 
       {conflictNotice > 0 ? <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900" role="status">Existe outro compromisso em {conflictNotice} data(s). A criação foi concluída; conflitos são consultivos.</p> : null}
       <p className="text-xs font-medium text-slate-500"><span aria-hidden="true">*</span><span className="sr-only">Asterisco:</span> Data ainda sujeita a confirmação.</p>
@@ -121,6 +123,7 @@ export default function InstitutionalCalendarPage() {
 
       <CalendarEncounterDrawer key={selectedEncounterId ?? "closed"} encounter={selectedEncounter} canManage={canManage} onClose={() => setSelectedEncounterId(null)} onChanged={async () => { await load(); }} />
       {createOpen ? <CalendarEncounterForm open initialDate={createDate} onClose={() => setCreateOpen(false)} onCreated={(warnings) => { setConflictNotice(warnings); setRetry((value) => value + 1); }} /> : null}
+      {exportOpen ? <CalendarExportDialog key={`${view}-${cursor.year}-${cursor.month}`} open year={cursor.year} month={cursor.month} view={view} canManage={canManage} onClose={() => setExportOpen(false)} /> : null}
     </div>
   );
 }

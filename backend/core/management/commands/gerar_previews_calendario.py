@@ -6,10 +6,10 @@ from django.core.management.base import BaseCommand
 from core.services.exportacao_calendario import (
     ESCOPO_INTERNO,
     ESCOPO_PUBLICO,
-    MODELO_ANUAL_A,
-    MODELO_ANUAL_B,
-    PERIODO_ANUAL,
-    PERIODO_MENSAL,
+    LAYOUT_ANUAL_RESUMIDO,
+    LAYOUT_MENSAL,
+    PERIODO_ANO,
+    PERIODO_MES,
     ItemExportacaoCalendario,
     montar_snapshot,
     renderizar_pdf,
@@ -80,7 +80,8 @@ class Command(BaseCommand):
         itens = dataset_controlado()
         mensal_publico = montar_snapshot(
             escopo=ESCOPO_PUBLICO,
-            periodo=PERIODO_MENSAL,
+            periodo=PERIODO_MES,
+            layout=LAYOUT_MENSAL,
             ano=2027,
             mes=3,
             itens=itens,
@@ -88,15 +89,35 @@ class Command(BaseCommand):
         )
         mensal_interno = montar_snapshot(
             escopo=ESCOPO_INTERNO,
-            periodo=PERIODO_MENSAL,
+            periodo=PERIODO_MES,
+            layout=LAYOUT_MENSAL,
             ano=2027,
             mes=3,
             itens=itens,
             gerado_em=gerado_em,
         )
+        ano_publico_mensal = montar_snapshot(
+            escopo=ESCOPO_PUBLICO,
+            periodo=PERIODO_ANO,
+            layout=LAYOUT_MENSAL,
+            ano=2027,
+            mes=None,
+            itens=itens,
+            gerado_em=gerado_em,
+        )
+        ano_interno_mensal = montar_snapshot(
+            escopo=ESCOPO_INTERNO,
+            periodo=PERIODO_ANO,
+            layout=LAYOUT_MENSAL,
+            ano=2027,
+            mes=None,
+            itens=itens,
+            gerado_em=gerado_em,
+        )
         anual_publico = montar_snapshot(
             escopo=ESCOPO_PUBLICO,
-            periodo=PERIODO_ANUAL,
+            periodo=PERIODO_ANO,
+            layout=LAYOUT_ANUAL_RESUMIDO,
             ano=2027,
             mes=None,
             itens=itens,
@@ -104,21 +125,22 @@ class Command(BaseCommand):
         )
         anual_interno = montar_snapshot(
             escopo=ESCOPO_INTERNO,
-            periodo=PERIODO_ANUAL,
+            periodo=PERIODO_ANO,
+            layout=LAYOUT_ANUAL_RESUMIDO,
             ano=2027,
             mes=None,
             itens=itens,
             gerado_em=gerado_em,
         )
         artefatos = (
-            ('mensal-publico.pdf', mensal_publico, None),
-            ('mensal-interno.pdf', mensal_interno, None),
-            ('anual-publico-modelo-a.pdf', anual_publico, MODELO_ANUAL_A),
-            ('anual-publico-modelo-b.pdf', anual_publico, MODELO_ANUAL_B),
-            ('anual-interno-modelo-a.pdf', anual_interno, MODELO_ANUAL_A),
-            ('anual-interno-modelo-b.pdf', anual_interno, MODELO_ANUAL_B),
+            ('calendario-publico-marco-2027.pdf', mensal_publico),
+            ('calendario-interno-marco-2027.pdf', mensal_interno),
+            ('calendario-publico-2027-mensal.pdf', ano_publico_mensal),
+            ('calendario-interno-2027-mensal.pdf', ano_interno_mensal),
+            ('calendario-publico-2027-resumido.pdf', anual_publico),
+            ('calendario-interno-2027-resumido.pdf', anual_interno),
         )
-        for nome, snapshot, modelo in artefatos:
+        for nome, snapshot in artefatos:
             destino = output_dir / nome
-            destino.write_bytes(renderizar_pdf(snapshot, modelo_anual=modelo))
+            destino.write_bytes(renderizar_pdf(snapshot))
             self.stdout.write(str(destino))

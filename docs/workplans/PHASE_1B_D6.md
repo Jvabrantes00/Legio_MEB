@@ -2,9 +2,9 @@
 
 ## Status geral
 
-D.6A–D.6F e D.6G.1–D.6G.2 concluídas. Projeção, leitura, comandos, Agenda
-canônica, frontend personalizado, fundação da exportação e decisões humanas
-dos PDFs estão fechados. Próximo bloco: D.6G.3.
+D.6A–D.6F e D.6G.1–D.6G.3 concluídas. Projeção, leitura, comandos, Agenda
+canônica, frontend personalizado, exportação definitiva, publicação imutável
+e histórico privado estão implementados. Próximo bloco: D.6H.
 
 ## Objetivo
 
@@ -105,9 +105,9 @@ registrado apenas como alternativa avaliada no spike.
 
 ### D.6G.3 — Renderer e publicação definitivos
 
-Status: pendente.
+Status: concluída em 2026-10-07.
 
-Implementará mensal de um mês, mensal de ano completo, anual resumido Modelo
+Implementou mensal de um mês, mensal de ano completo, anual resumido Modelo
 B, modalidades pública/interna, preview, publicação imutável, logo/rodapé,
 histórico, download privado, UI final e compensação de storage.
 
@@ -628,6 +628,76 @@ Estado registrado ao fim da G.1: aguardando revisão humana dos PDFs.
 
 D.6G.2 concluída por decisão humana. Próximo bloco: D.6G.3.
 
+## Resultado da D.6G.3
+
+### Renderer e modalidades definitivas
+
+- O contrato separa `periodo=MES|ANO` de
+  `layout=MENSAL|ANUAL_RESUMIDO` e aceita somente as três combinações
+  aprovadas. O snapshot allowlist passou à versão 2 e registra ambas as
+  dimensões.
+- O renderer mensal produz uma página para o mês selecionado ou, para o ano,
+  um único PDF com exatamente 12 páginas mensais. O anual resumido produz uma
+  página A4 paisagem exclusivamente no Modelo B; o Modelo A não integra mais
+  API, UI ou código de produção.
+- Os seis artefatos controlados Público/Interno foram gerados com as contagens
+  de 1, 12 e 1 páginas esperadas e inspecionados visualmente.
+- O SVG oficial `core/static/core/branding/Logo Escalada.svg`, contendo apenas
+  o símbolo do pé, é incorporado como data URI controlada no canto superior
+  direito. O fetcher do WeasyPrint bloqueia recursos externos.
+
+### Publicação, histórico e segurança
+
+- Preview continua transitório, identificado e sem persistência. Publicar é
+  comando separado: captura novo snapshot canônico, renderiza os bytes finais,
+  calcula SHA-256 e persiste PDF e metadados imutáveis em media privada.
+- Republicações coexistem. A API não expõe alteração ou remoção; o model
+  também bloqueia `save()` posterior e `delete()`. Falha de banco após escrita
+  do arquivo aciona compensação de storage.
+- Filesystem e banco não participam da mesma transação distribuída. A
+  compensação cobre exceções observáveis, mas uma interrupção abrupta do
+  processo entre salvar o arquivo e confirmar a linha ainda pode deixar um
+  arquivo órfão; nenhuma publicação parcial fica consultável pela aplicação.
+- Listagem e download usam ID autenticado, `FileResponse`, nome controlado,
+  `private, no-store` e não revelam paths. Publicações públicas são legíveis
+  pelas roles funcionais reconhecidas; internas ficam restritas a
+  Diretoria/Suporte/superuser.
+- A migration expansiva `0038_calendario_publicacao_layout` adiciona layout,
+  índice histórico e check de combinação, preservando os valores físicos de
+  período criados na `0037`. Não há `RunPython`, backfill ou mudança
+  destrutiva.
+
+### Frontend
+
+- O diálogo de exportação oferece escopo e as três modalidades finais,
+  desabilita o mês selecionado na visão anual com explicação, gera preview e
+  exige confirmação contextual antes de publicar.
+- O histórico apresenta formato, data, autoria e hash abreviado, com download
+  autenticado. Estados de carregamento, erro, sucesso e vazio, foco preso no
+  modal, Escape, restauração de foco e adaptação mobile foram preservados.
+- A UI usa o BFF existente e nunca lê JWT. A ação permanece disponível apenas
+  a gestores do Calendário.
+
+### Validação e débitos reservados
+
+- Testes cobrem modalidades, 12 páginas, Modelo B, logo local, snapshot sem
+  PII, publicabilidade, imutabilidade, SHA-256, republicação, falhas de
+  renderer/storage/banco, autorização, IDOR, UI e separação preview/publicar.
+- Os 22 testes backend focados e a suíte backend completa de 561 testes
+  passaram, com 20 skips PostgreSQL previstos. `check` e
+  `makemigrations --check --dry-run` passaram sem mudanças pendentes.
+- No frontend, 131 testes, TypeScript, ESLint e build de produção Webpack
+  passaram. O lint manteve somente dois warnings preexistentes de `<img>` em
+  Alpinistas. O Turbopack não pôde abrir sua porta interna na sandbox; o build
+  Webpack foi validado sem deixar alteração de configuração.
+- D.6H permanece responsável pela validação PostgreSQL dos cenários
+  concorrentes acumulados, regressão integrada final e fechamento da D.6.
+- A imutabilidade física depende das permissões operacionais do banco/storage;
+  não foi introduzido trigger ou política de retenção fora do escopo aprovado.
+
+D.6G.3 concluída. Próximo bloco: D.6H — integração, PostgreSQL, regressão e
+fechamento.
+
 ## Decisões da fase
 
 - O ADR-001 permanece a decisão arquitetural principal e não será duplicado.
@@ -1025,7 +1095,7 @@ tipos genéricos de compromisso nesta fase.
 
 ### Snapshot publicável
 
-O renderer receberá um snapshot já allowlisted, nunca QuerySets ou models. O
+O renderer recebe um snapshot já allowlisted, nunca QuerySets ou models. O
 snapshot possui versão de schema, período, instante de captura, legenda de
 provisoriedade e somente ocorrências publicáveis com categoria, ID de origem,
 nome, status, datas e indicador provisório. Participantes, equipes, dados
@@ -1048,15 +1118,14 @@ pessoais, saúde, observações internas e capabilities não entram.
 
 ### Preview e publicação
 
-- Recomenda-se preview transitório, sem registro oficial e com descarte
-  imediato do arquivo temporário.
+- O preview é transitório, sem registro oficial e sem persistência em media.
 - Publicar é comando explícito: captura um snapshot novo, renderiza, calcula
   hash e persiste a versão imutável. Somente essa operação compõe o histórico.
-- O spike preservou a separação; a UI definitiva de preview/publicar será
-  fechada na D.6G.3 com as modalidades aprovadas.
-- A implementação precisa do asset oficial contendo somente o símbolo do pé,
-  preferencialmente SVG ou PNG em boa resolução, no canto superior direito.
-  A versão completa da marca não será usada e não haverá placeholder final.
+- A UI definitiva preserva a separação entre preview e publicação explícita,
+  aplicando as modalidades aprovadas.
+- O asset oficial SVG contém somente o símbolo do pé e aparece no canto
+  superior direito. A versão completa da marca não é usada e não há
+  placeholder final.
 - Toda versão publicada usa rodapé discreto
   `Gerado pelo SIA • Versão publicada em DD/MM/AAAA`; a modalidade interna
   também traz `USO INTERNO`.
@@ -1094,10 +1163,8 @@ histórica usa `publicado_em` e PK, evitando numeração concorrente artificial.
 Checks locais devem permitir somente `MES + MENSAL`, `ANO + MENSAL` e
 `ANO + ANUAL_RESUMIDO`; mês é 1–12 apenas para `MES` e nulo para `ANO`.
 Índice por período, layout, ano, mês e `publicado_em` atende listagem
-histórica. A estrutura criada na G.1 ainda mistura período/layout e será
-revista na D.6G.3. Antes de congelar o contrato, essa etapa deve confirmar o
-estado de aplicação da `0037` e fazer o ajuste de schema/migration de forma
-segura.
+histórica. A `0038` ajustou expansivamente a estrutura da G.1, preservando os
+valores físicos `MENSAL|ANUAL` da `0037` e expondo `MES|ANO` no contrato.
 
 A publicação é imutável por service e contrato: API oferece criar, listar,
 recuperar e baixar, sem PATCH, PUT ou DELETE. Não existe cleanup automático de
@@ -1140,10 +1207,14 @@ material publicado; eventual retenção exigirá política explícita.
 - **D.6E:** concluída com `0036_expand_agenda_encontro`, que adiciona rótulo de
   dia, complemento de reunião, avaliação 1:1 e seu índice de data, sem
   `RunPython` ou backfill.
-- **D.6G:** migration expansiva para `PublicacaoCalendarioInstitucional`,
-  checks de tipo/período, índice histórico, FK protegida, snapshot e arquivo.
-- A migration atual mais recente é `0036_expand_agenda_encontro`. As
-  próximas devem confirmar novamente a folha da cadeia antes de receber número.
+- **D.6G.1:** concluída com a migration expansiva
+  `0037_publicacao_calendario_institucional`, que criou publicação, checks,
+  índice histórico, FK protegida, snapshot e arquivo privado.
+- **D.6G.3:** concluída com a migration expansiva
+  `0038_calendario_publicacao_layout`, que separa layout de período, adiciona
+  check das combinações válidas e índice de consulta, preservando os dados da
+  `0037`.
+- A migration atual mais recente é `0038_calendario_publicacao_layout`.
 - Não haverá `RunPython`, seed, backfill ou alteração destrutiva.
 
 ## Testes e validações
@@ -1222,14 +1293,11 @@ ambientes isolados normais.
 
 ## Pendências humanas
 
-- Fornecer o asset oficial da versão da marca que contém somente o símbolo do
-  pé para incorporação na D.6G.3; não usar placeholder final.
-- Fechar na D.6G.3 a UI de preview/publicar sem permitir que preview entre no
-  histórico, aplicando as modalidades já aprovadas.
-- A política de consulta/download histórico permanece conservadoramente
-  restrita a Suporte/Diretoria/superuser até decisão explícita diferente.
+- Nenhuma decisão humana permanece aberta na D.6G.3. O asset oficial foi
+  incorporado, a UI foi fechada e a política de histórico foi implementada:
+  público para roles funcionais autenticadas e interno apenas para gestores.
 
-Não há decisão de produto bloqueante para iniciar a D.6G.3.
+Não há decisão de produto bloqueante para iniciar a D.6H.
 
 ## Débitos
 
@@ -1258,7 +1326,11 @@ Não há decisão de produto bloqueante para iniciar a D.6G.3.
 - `backend/core/services/avaliacoes_encontro.py`
 - `backend/core/services/calendario_institucional.py`
 - `backend/core/services/comandos_calendario.py`
+- `backend/core/services/exportacao_calendario.py`
 - `backend/core/services/reunioes_preparatorias.py`
+- `backend/core/templates/core/calendario_institucional_pdf.html`
+- `backend/core/management/commands/gerar_previews_calendario.py`
+- `backend/core/static/core/branding/Logo Escalada.svg`
 - `backend/core/serializers.py`
 - `backend/core/views.py`
 - `backend/core/urls.py`
@@ -1268,9 +1340,12 @@ Não há decisão de produto bloqueante para iniciar a D.6G.3.
 - `backend/core/migrations/0034_expand_propostas_violeiros.py`
 - `backend/core/migrations/0035_diaencontro_data_index.py`
 - `backend/core/migrations/0036_expand_agenda_encontro.py`
+- `backend/core/migrations/0037_publicacao_calendario_institucional.py`
+- `backend/core/migrations/0038_calendario_publicacao_layout.py`
 - `backend/core/tests/test_nucleo_encontros.py`
 - `backend/core/tests/test_calendario_institucional.py`
 - `backend/core/tests/test_calendario_institucional_agenda.py`
+- `backend/core/tests/test_calendario_institucional_export.py`
 - `backend/core/tests/test_authorization.py`
 - `backend/core/tests/test_authorization_paths.py`
 - `backend/setup/settings.py`
@@ -1282,6 +1357,7 @@ Não há decisão de produto bloqueante para iniciar a D.6G.3.
 - `frontend/src/components/CalendarEncounterDrawer.tsx`
 - `frontend/src/components/CalendarEncounterEditor.tsx`
 - `frontend/src/components/CalendarEncounterForm.tsx`
+- `frontend/src/components/CalendarExportDialog.tsx`
 - `frontend/src/components/EncounterAgendaSection.tsx`
 - `frontend/src/components/InstitutionalCalendarHeader.tsx`
 - `frontend/src/components/InstitutionalCalendarViews.tsx`
@@ -1298,9 +1374,8 @@ Não há decisão de produto bloqueante para iniciar a D.6G.3.
 
 ## Próximo passo
 
-D.6G.3 — renderer e publicação definitivos, aplicando o Modelo B anual, o
-mensal de um mês e o mensal de ano completo em 12 páginas, nos escopos Público
-e Interno.
+D.6H — integração, PostgreSQL, regressão e fechamento do Calendário
+Institucional.
 
 ## Histórico de execução
 
@@ -1338,3 +1413,6 @@ e Interno.
   anual resumido; mensal de ano completo aprovado como PDF único de 12
   páginas; período/layout separados conceitualmente; marca restrita ao símbolo
   oficial do pé. Próximo bloco: D.6G.3.
+- 2026-10-07 — D.6G.3 concluída. Renderers definitivos, símbolo oficial,
+  preview, publicação imutável com snapshot/SHA-256/private media, histórico,
+  download autenticado e UI final implementados. Próximo bloco: D.6H.

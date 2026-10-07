@@ -9,6 +9,7 @@ from .models import (
     FotoEncontro, FuncaoEncontro, Inscricao, LogSistema, Material, Palestra,
     ParticipacaoEncontro as ResultadoParticipacaoEncontro, ParticipacaoEvento,
     PalestranteSessao, PerfilAlpinista, Pessoa, PresencaPreparatoria,
+    PublicacaoCalendarioInstitucional,
     ItemPropostaVioleiros, PropostaVioleiros,
     ReuniaoPreparatoriaEncontro, RoleEquipeEncontro, SessaoFormativa,
     TrabalhoEncontro,
@@ -588,43 +589,91 @@ class PeriodoCalendarioQuerySerializer(StrictCommandSerializer):
         return attrs
 
 
-class PreviewCalendarioQuerySerializer(StrictCommandSerializer):
+class ExportacaoCalendarioCommandSerializer(StrictCommandSerializer):
     escopo = serializers.ChoiceField(choices=('PUBLICO', 'INTERNO'))
-    periodo = serializers.ChoiceField(choices=('MENSAL', 'ANUAL'))
+    periodo = serializers.ChoiceField(choices=('MES', 'ANO'))
+    layout = serializers.ChoiceField(
+        choices=('MENSAL', 'ANUAL_RESUMIDO'),
+    )
     ano = serializers.IntegerField(min_value=2000, max_value=9999)
     mes = serializers.IntegerField(
         required=False,
         min_value=1,
         max_value=12,
     )
-    modelo_anual = serializers.ChoiceField(
-        choices=('A', 'B'),
-        required=False,
-    )
-
     def validate(self, attrs):
         attrs = super().validate(attrs)
-        if attrs['periodo'] == 'MENSAL':
+        combinacao = (attrs['periodo'], attrs['layout'])
+        if combinacao not in {
+            ('MES', 'MENSAL'),
+            ('ANO', 'MENSAL'),
+            ('ANO', 'ANUAL_RESUMIDO'),
+        }:
+            raise serializers.ValidationError({
+                'modalidade': ['Combinação de período e layout inválida.'],
+            })
+        if attrs['periodo'] == 'MES':
             if 'mes' not in attrs:
                 raise serializers.ValidationError({
-                    'mes': ['O preview mensal exige o mês.'],
-                })
-            if 'modelo_anual' in attrs:
-                raise serializers.ValidationError({
-                    'modelo_anual': [
-                        'O modelo anual não se aplica ao preview mensal.'
-                    ],
+                    'mes': ['O período MES exige o mês.'],
                 })
         else:
             if 'mes' in attrs:
                 raise serializers.ValidationError({
-                    'mes': ['O preview anual não aceita mês.'],
-                })
-            if 'modelo_anual' not in attrs:
-                raise serializers.ValidationError({
-                    'modelo_anual': ['O preview anual exige o Modelo A ou B.'],
+                    'mes': ['O período ANO não aceita mês.'],
                 })
         return attrs
+
+
+class HistoricoPublicacaoCalendarioQuerySerializer(StrictCommandSerializer):
+    escopo = serializers.ChoiceField(
+        choices=('PUBLICO', 'INTERNO'),
+        required=False,
+    )
+
+
+class PublicacaoCalendarioSerializer(serializers.ModelSerializer):
+    periodo = serializers.SerializerMethodField()
+    publicado_por = serializers.CharField(
+        source='publicado_por.username',
+        read_only=True,
+    )
+    hash_abreviado = serializers.SerializerMethodField()
+    download_url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = PublicacaoCalendarioInstitucional
+        fields = (
+            'id',
+            'escopo',
+            'periodo',
+            'layout',
+            'ano',
+            'mes',
+            'publicado_em',
+            'publicado_por',
+            'sha256',
+            'hash_abreviado',
+            'download_url',
+        )
+        read_only_fields = fields
+
+    def get_periodo(self, obj):
+        return (
+            'MES'
+            if obj.periodo == PublicacaoCalendarioInstitucional.Periodo.MES
+            else 'ANO'
+        )
+
+    def get_hash_abreviado(self, obj):
+        return obj.sha256[:12]
+
+    def get_download_url(self, obj):
+        return reverse(
+            'calendario-institucional-publicacao-download',
+            kwargs={'publicacao_id': obj.pk},
+            request=self.context.get('request'),
+        )
 
 
 class ConflitoCalendarioSerializer(serializers.Serializer):

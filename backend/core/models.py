@@ -1,7 +1,9 @@
 from uuid import uuid4
 
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.contrib.auth.models import User
+from django.utils import timezone
 
 from .formacao_catalogo import TIPO_CONTEUDO_FORMATIVO_CHOICES
 from .validators import normalize_cpf, validate_cpf, validate_image_upload_size
@@ -1495,14 +1497,23 @@ class PublicacaoCalendarioInstitucional(models.Model):
         INTERNO = 'INTERNO', 'Interno'
 
     class Periodo(models.TextChoices):
+        MES = 'MENSAL', 'Mês'
+        ANO = 'ANUAL', 'Ano'
+
+    class Layout(models.TextChoices):
         MENSAL = 'MENSAL', 'Mensal'
-        ANUAL = 'ANUAL', 'Anual'
+        ANUAL_RESUMIDO = 'ANUAL_RESUMIDO', 'Anual resumido'
 
     escopo = models.CharField(max_length=10, choices=Escopo.choices)
     periodo = models.CharField(max_length=10, choices=Periodo.choices)
+    layout = models.CharField(
+        max_length=20,
+        choices=Layout.choices,
+        default=Layout.MENSAL,
+    )
     ano = models.PositiveSmallIntegerField()
     mes = models.PositiveSmallIntegerField(null=True, blank=True)
-    publicado_em = models.DateTimeField(auto_now_add=True)
+    publicado_em = models.DateTimeField(default=timezone.now, editable=False)
     publicado_por = models.ForeignKey(
         User,
         on_delete=models.PROTECT,
@@ -1523,6 +1534,10 @@ class PublicacaoCalendarioInstitucional(models.Model):
                 fields=['periodo', 'ano', 'mes', 'publicado_em'],
                 name='pub_cal_periodo_idx',
             ),
+            models.Index(
+                fields=['periodo', 'layout', 'ano', 'mes', 'publicado_em'],
+                name='pub_cal_layout_idx',
+            ),
         ]
         constraints = [
             models.CheckConstraint(
@@ -1540,13 +1555,36 @@ class PublicacaoCalendarioInstitucional(models.Model):
                 ),
                 name='pub_cal_periodo_mes_coerente',
             ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(periodo='MENSAL', layout='MENSAL')
+                    | models.Q(
+                        periodo='ANUAL',
+                        layout__in=['MENSAL', 'ANUAL_RESUMIDO'],
+                    )
+                ),
+                name='pub_cal_periodo_layout_valido',
+            ),
         ]
 
     def __str__(self):
         periodo = f'{self.mes:02d}/{self.ano}' if self.mes else str(self.ano)
         return (
             f'{self.get_escopo_display()} '
-            f'{self.get_periodo_display()} — {periodo}'
+            f'{self.get_periodo_display()} / {self.get_layout_display()} '
+            f'— {periodo}'
+        )
+
+    def save(self, *args, **kwargs):
+        if self.pk and type(self).objects.filter(pk=self.pk).exists():
+            raise ValidationError(
+                'Uma publicação do Calendário Institucional é imutável.'
+            )
+        return super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        raise ValidationError(
+            'Uma publicação do Calendário Institucional não pode ser removida.'
         )
 
 

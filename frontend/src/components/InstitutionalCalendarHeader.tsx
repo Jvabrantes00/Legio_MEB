@@ -13,11 +13,12 @@ interface InstitutionalCalendarHeaderProps {
   onToday: () => void;
   onView: (view: CalendarView) => void;
   onFilter: (filter: CalendarFilter) => void;
+  onExport: () => void;
   onCreate: () => void;
 }
 
 export function InstitutionalCalendarHeader({
-  cursor, view, filter, canManage, onMove, onToday, onView, onFilter, onCreate,
+  cursor, view, filter, canManage, onMove, onToday, onView, onFilter, onExport, onCreate,
 }: InstitutionalCalendarHeaderProps) {
   return (
     <header className="rounded-3xl border border-[var(--calendar-border)] bg-white p-5 shadow-sm sm:p-7">
@@ -47,7 +48,7 @@ export function InstitutionalCalendarHeader({
           <button type="button" disabled className="calendar-filter" title="Disponível quando outros compromissos forem implementados">Outros</button>
         </div>
         {canManage ? <div className="flex flex-wrap gap-2">
-          <button type="button" disabled aria-disabled="true" title="Exportação será disponibilizada na D.6G" className="calendar-control cursor-not-allowed gap-2 px-3 text-sm font-bold opacity-50"><Download size={16} />Exportar</button>
+          <button type="button" onClick={onExport} className="calendar-control gap-2 px-3 text-sm font-bold"><Download size={16} />Exportar</button>
           <button type="button" onClick={onCreate} className="inline-flex items-center gap-2 rounded-xl bg-blue-700 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-blue-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700"><Plus size={17} />Novo compromisso</button>
         </div> : null}
       </div>

@@ -131,12 +131,14 @@ Encontros.
 
 ## PDFs de divulgação
 
-Existem quatro modalidades aprovadas:
+Existem três combinações de período/layout nos escopos Público e Interno:
 
-- PDF Público Mensal;
-- PDF Público Anual;
-- PDF Interno Mensal;
-- PDF Interno Anual.
+- mês selecionado + layout mensal: uma página;
+- ano completo + layout mensal: um único PDF de 12 páginas;
+- ano completo + anual resumido Modelo B: uma página A4 paisagem.
+
+Mês + anual resumido não é uma combinação válida. Período e layout são
+dimensões independentes do contrato.
 
 O PDF é artefato de divulgação, não fonte de verdade ou edição. Não haverá
 exportação Excel, importação de planilha nem sincronização externa nesta
@@ -155,13 +157,14 @@ O PDF interno pode reunir dias, reuniões preparatórias e avaliação e recebe
 identificação discreta `USO INTERNO`. Interno significa agenda operacional
 mais completa, não autorização irrestrita para dados pessoais ou sensíveis.
 
-As modalidades mensal e anual preservam linguagem de calendário. O mensal
-parte de A4 paisagem. A composição anual definitiva depende de comparação
-humana entre os dois protótipos registrados no workplan.
+As modalidades preservam linguagem de calendário em A4 paisagem. O anual
+resumido definitivo é o Modelo B, em composição 3 × 4; o Modelo A permanece
+somente como alternativa avaliada no spike. Os PDFs usam apenas o símbolo
+oficial do pé no canto superior direito.
 
 Somente Diretoria, Suporte e o bypass técnico do superuser podem gerar ou
-publicar PDFs. Consulta e download do histórico permanecem restritos a esses
-gestores até decisão explícita diferente.
+publicar PDFs. Todas as roles funcionais reconhecidas podem consultar e baixar
+publicações públicas; publicações internas permanecem restritas aos gestores.
 
 ## Histórico de divulgação
 

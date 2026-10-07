@@ -6,7 +6,7 @@ from django.core.exceptions import ValidationError as django_core_validation_err
 from django.http import FileResponse, Http404
 from rest_framework import filters, mixins, status, viewsets
 from rest_framework.decorators import api_view, permission_classes, action
-from rest_framework.exceptions import MethodNotAllowed, ValidationError
+from rest_framework.exceptions import APIException, MethodNotAllowed, PermissionDenied, ValidationError
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
@@ -19,7 +19,7 @@ from .models import (
     ParticipacaoEncontro as ResultadoParticipacaoEncontro,
     ParticipacaoEvento, LogSistema, Material, PalestranteSessao,
     PerfilAlpinista, PresencaPreparatoria, ReuniaoPreparatoriaEncontro,
-    SessaoFormativa, TrabalhoEncontro,
+    PublicacaoCalendarioInstitucional, SessaoFormativa, TrabalhoEncontro,
     ItemPropostaVioleiros, PropostaVioleiros,
     VinculoEncontroLegado as ParticipacaoEncontro,
 )
@@ -54,7 +54,9 @@ from .serializers import (
     CriacaoEncontroCalendarioCommandSerializer,
     DadosBasicosCalendarioCommandSerializer,
     PlanejamentoCalendarioCommandSerializer,
-    PreviewCalendarioQuerySerializer,
+    ExportacaoCalendarioCommandSerializer,
+    HistoricoPublicacaoCalendarioQuerySerializer,
+    PublicacaoCalendarioSerializer,
     ReuniaoAgendaCriacaoCommandSerializer,
     ReuniaoAgendaEdicaoCommandSerializer,
     RotuloDiaCalendarioCommandSerializer,
@@ -149,6 +151,11 @@ def protected_image_response(image_field, filename):
     )
 
 
+class ExportacaoCalendarioIndisponivel(APIException):
+    status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+    default_code = 'calendar_export_unavailable'
+
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def current_user(request):
@@ -193,33 +200,118 @@ def agenda_encontro(request, encontro_id):
     require_sia_roles(*INSTITUTIONAL_CALENDAR_MANAGEMENT_ROLES),
 ])
 def preview_calendario_institucional(request):
-    query = PreviewCalendarioQuerySerializer(data=request.query_params)
+    query = ExportacaoCalendarioCommandSerializer(data=request.query_params)
     query.is_valid(raise_exception=True)
     dados = query.validated_data
     snapshot = exportacao_calendario_services.capturar_snapshot(
         escopo=dados['escopo'],
         periodo=dados['periodo'],
+        layout=dados['layout'],
         ano=dados['ano'],
         mes=dados.get('mes'),
     )
     conteudo = exportacao_calendario_services.renderizar_pdf(
         snapshot,
-        modelo_anual=dados.get('modelo_anual'),
-    )
-    sufixo = (
-        f"{dados['ano']}-{dados['mes']:02d}"
-        if dados['periodo'] == 'MENSAL'
-        else f"{dados['ano']}-modelo-{dados['modelo_anual'].lower()}"
     )
     resposta = FileResponse(
         BytesIO(conteudo),
         as_attachment=False,
-        filename=(
-            f"preview-calendario-{dados['escopo'].lower()}-{sufixo}.pdf"
-        ),
+        filename=exportacao_calendario_services.nome_arquivo(snapshot),
         content_type='application/pdf',
     )
     resposta['Cache-Control'] = 'no-store, private'
+    resposta['X-Content-Type-Options'] = 'nosniff'
+    return resposta
+
+
+def _pode_gerir_exportacao_calendario(user):
+    return user.is_superuser or user_has_any_role(
+        user,
+        *INSTITUTIONAL_CALENDAR_MANAGEMENT_ROLES,
+    )
+
+
+@api_view(['GET', 'POST'])
+@permission_classes([
+    require_sia_roles(*INSTITUTIONAL_CALENDAR_READ_ROLES),
+])
+def publicacoes_calendario_institucional(request):
+    pode_gerir = _pode_gerir_exportacao_calendario(request.user)
+    if request.method == 'POST':
+        if not pode_gerir:
+            raise PermissionDenied(
+                'Seu papel não pode publicar o Calendário Institucional.'
+            )
+        comando = ExportacaoCalendarioCommandSerializer(data=request.data)
+        comando.is_valid(raise_exception=True)
+        try:
+            publicacao = exportacao_calendario_services.publicar_calendario(
+                **comando.validated_data,
+                autor=request.user,
+            )
+        except exportacao_calendario_services.LogoOficialIndisponivel as error:
+            raise ExportacaoCalendarioIndisponivel(str(error)) from error
+        return Response(
+            PublicacaoCalendarioSerializer(
+                publicacao,
+                context={'request': request},
+            ).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+    query = HistoricoPublicacaoCalendarioQuerySerializer(
+        data=request.query_params,
+    )
+    query.is_valid(raise_exception=True)
+    escopo = query.validated_data.get('escopo')
+    if escopo == 'INTERNO' and not pode_gerir:
+        raise PermissionDenied(
+            'Seu papel não pode consultar publicações internas.'
+        )
+    publicacoes = PublicacaoCalendarioInstitucional.objects.select_related(
+        'publicado_por',
+    )
+    if pode_gerir:
+        if escopo:
+            publicacoes = publicacoes.filter(escopo=escopo)
+    else:
+        publicacoes = publicacoes.filter(escopo='PUBLICO')
+    return Response(PublicacaoCalendarioSerializer(
+        publicacoes,
+        many=True,
+        context={'request': request},
+    ).data)
+
+
+@api_view(['GET'])
+@permission_classes([
+    require_sia_roles(*INSTITUTIONAL_CALENDAR_READ_ROLES),
+])
+def download_publicacao_calendario(request, publicacao_id):
+    publicacao = get_object_or_404(
+        PublicacaoCalendarioInstitucional,
+        pk=publicacao_id,
+    )
+    if (
+        publicacao.escopo == 'INTERNO'
+        and not _pode_gerir_exportacao_calendario(request.user)
+    ):
+        raise PermissionDenied(
+            'Seu papel não pode baixar publicações internas.'
+        )
+    try:
+        arquivo = publicacao.arquivo_pdf.open('rb')
+    except (FileNotFoundError, OSError) as error:
+        raise Http404('Arquivo da publicação não encontrado.') from error
+    resposta = FileResponse(
+        arquivo,
+        as_attachment=True,
+        filename=exportacao_calendario_services.nome_arquivo_publicacao(
+            publicacao
+        ),
+        content_type='application/pdf',
+    )
+    resposta['Cache-Control'] = 'private, no-store'
     resposta['X-Content-Type-Options'] = 'nosniff'
     return resposta
 

@@ -136,9 +136,11 @@ comandos explícitos sobre o domínio canônico de Encontros.
 - Suporte e Diretoria podem criar Encontro, alterar dados básicos e
   planejamento, oficializar, reprogramar, adiar, iniciar novo planejamento e
   cancelar por comandos explícitos. Não existe CRUD direto de agenda ou dia.
-- Suporte e Diretoria podem gerar previews transitórios dos PDFs público e
-  interno. Preview não publica nem cria histórico; publicação e download
-  histórico permanecem indisponíveis até a D.6G.3.
+- Suporte e Diretoria podem gerar previews transitórios e publicar PDFs
+  públicos ou internos. Preview não publica nem cria histórico.
+- Todas as roles funcionais reconhecidas podem listar e baixar publicações
+  públicas. Publicações internas permanecem restritas a Suporte, Diretoria e
+  ao bypass técnico do superuser.
 - As demais roles funcionais permanecem somente leitura. A capability de
   gestão deriva da mesma política aplicada aos comandos.
 - O superuser permanece como bypass técnico separado.

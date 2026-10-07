@@ -23,6 +23,8 @@ from .views import catalogo_formacao
 from .views import calendario_institucional
 from .views import agenda_encontro
 from .views import preview_calendario_institucional
+from .views import publicacoes_calendario_institucional
+from .views import download_publicacao_calendario
 from .authentication import SiaTokenRefreshSerializer
 from .permissions import IsSiaSuperuser
 
@@ -100,6 +102,16 @@ router.register(r'entregas-materiais', EntregaMaterialViewSet)
 
 # Exporta as rotas 
 urlpatterns = [
+    path(
+        'calendario-institucional/publicacoes/<int:publicacao_id>/download/',
+        download_publicacao_calendario,
+        name='calendario-institucional-publicacao-download',
+    ),
+    path(
+        'calendario-institucional/publicacoes/',
+        publicacoes_calendario_institucional,
+        name='calendario-institucional-publicacoes',
+    ),
     path(
         'calendario-institucional/preview-pdf/',
         preview_calendario_institucional,
