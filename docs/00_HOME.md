@@ -26,9 +26,10 @@ substitui os documentos de referência nem os `AGENTS.md` aplicáveis.
 - 1B.3D.6 — Calendário Institucional concluída, incluindo frontend, Agenda,
   PDFs, publicação privada, regressão final e checkpoint de concorrência em
   PostgreSQL 16 com 6/6 cenários aprovados.
-- Próxima fase: a definir em checkpoint de produto/arquitetura. Antes de uma
-  nova etapa com decisão arquitetural relevante, levantar com o usuário as
-  necessidades de produto e uso.
+- Roadmap Re-baseline iniciado. Checkpoint atual: R.1 — auditoria histórica,
+  documentada e aguardando aprovação humana.
+- Após a aprovação da R.1: R.2 — Planejado × implementado × faltante. O
+  re-baseline não antecipa uma nova fase de implementação.
 
 O estado vivo e o roadmap estão em [[PROJECT_STATE]].
 
@@ -52,6 +53,18 @@ O estado vivo e o roadmap estão em [[PROJECT_STATE]].
   débitos e histórico de uma fase.
 - Não carregue documentos desses dois grupos indiscriminadamente em tarefas de
   outros domínios.
+
+### Roadmap Re-baseline
+
+Se a tarefa envolver a auditoria do roadmap histórico, comparação entre
+planejado e implementado, maturidade, checkpoint de produto/arquitetura ou
+Roadmap v2, leia:
+
+1. `docs/workplans/ROADMAP_REBASELINE.md`;
+2. `docs/PROJECT_STATE.md` somente quando o estado atual for necessário;
+3. fontes históricas citadas pelo workplan conforme a etapa em execução.
+
+Não avance de uma etapa R para a seguinte sem o checkpoint previsto.
 
 ### Calendário Institucional — fatia de Encontros
 
