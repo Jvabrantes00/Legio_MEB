@@ -34,7 +34,7 @@ LOGO_OFICIAL_PATH = Path(
     'static',
     'core',
     'branding',
-    'Logo Escalada.svg',
+    'logo-escalada.svg',
 )
 
 _MESES = (

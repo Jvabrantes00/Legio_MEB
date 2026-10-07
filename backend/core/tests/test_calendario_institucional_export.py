@@ -233,7 +233,7 @@ class RendererCalendarioTests(TestCase):
 
         self.assertEqual(
             exportacao.LOGO_OFICIAL_PATH.name,
-            'Logo Escalada.svg',
+            'logo-escalada.svg',
         )
         self.assertIn('<svg', texto)
         self.assertNotIn('<text', texto)

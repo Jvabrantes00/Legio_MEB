@@ -3,8 +3,9 @@
 ## Status geral
 
 D.6A–D.6F e D.6G.1–D.6G.3 concluídas. O checkpoint D.6H.1/H.2 aprovou os seis
-cenários concorrentes em PostgreSQL 16 real. Próximo bloco: D.6H.3 — regressão
-final. A D.6 permanece aberta até a revisão e o fechamento documental H.4.
+cenários concorrentes em PostgreSQL 16 real. A D.6H.3 preparou a regressão
+final e aguarda execução manual pelo usuário. A D.6 permanece aberta até a
+revisão e o fechamento documental H.4.
 
 ## Objetivo
 
@@ -124,7 +125,7 @@ Subdivisão operacional:
 - **D.6H.1:** auditoria dos testes, ambiente efêmero e comandos manuais,
   concluída;
 - **D.6H.2:** checkpoint humano aprovado com 6/6 cenários em PostgreSQL 16;
-- **D.6H.3:** preparação e execução manual da regressão final;
+- **D.6H.3:** regressão final preparada; execução manual pendente;
 - **D.6H.4:** revisão final, documentação, `PROJECT_STATE` e fechamento da D.6.
 
 ## Resultado da D.6B
@@ -651,7 +652,7 @@ D.6G.2 concluída por decisão humana. Próximo bloco: D.6G.3.
   API, UI ou código de produção.
 - Os seis artefatos controlados Público/Interno foram gerados com as contagens
   de 1, 12 e 1 páginas esperadas e inspecionados visualmente.
-- O SVG oficial `core/static/core/branding/Logo Escalada.svg`, contendo apenas
+- O SVG oficial `core/static/core/branding/logo-escalada.svg`, contendo apenas
   o símbolo do pé, é incorporado como data URI controlada no canto superior
   direito. O fetcher do WeasyPrint bloqueia recursos externos.
 
@@ -852,6 +853,85 @@ PostgreSQL D.6H.1/H.2 está concluído, mas a D.6 permanece aberta.
   Django check. Nenhuma dessas validações foi executada na H.2.
 - **D.6H.4 — fechamento definitivo:** revisar os resultados, atualizar a
   documentação e o `PROJECT_STATE` e somente então fechar a D.6.
+
+## Preparação da D.6H.3
+
+### Regressão auditada
+
+- A suíte backend canônica é executada em `backend/` com
+  `./.venv/bin/python manage.py test --settings=setup.test_settings`.
+  `setup.test_settings` usa SQLite em memória e configura segredos exclusivos
+  de teste; os cenários condicionais a PostgreSQL aparecem como skips
+  esperados. Os seis testes concorrentes já aprovados na H.2 não serão
+  repetidos.
+- `check`, `makemigrations --check --dry-run` e `showmigrations --plan` usam o
+  mesmo settings isolado. `showmigrations` apenas carrega e apresenta o grafo;
+  não aplica migrations nem acessa `sia_dev`. A sequência deve incluir
+  `0037_publicacao_calendario_institucional` seguida de
+  `0038_calendario_publicacao_layout`.
+- O `package.json` confirma `npm test` como Vitest serializado em um worker e
+  `npm run lint` como ESLint. Não existe script `typecheck`; a validação real é
+  `npx tsc --noEmit --incremental false`.
+- O build definitivo usa `npm run build -- --webpack`, modo explícito já
+  validado na D.6. O build Turbopack não é necessário para este checkpoint e
+  teve bloqueio ambiental de porta apenas dentro da sandbox do Codex.
+- Nenhuma cobertura essencial ausente foi identificada. Não houve alteração
+  de código, teste ou configuração e nenhuma validação foi executada na H.3.
+
+### Ordem e comandos manuais
+
+Executar cada comando separadamente e parar imediatamente se uma etapa falhar.
+
+Backend:
+
+```bash
+cd /home/vinicius/projects/Legio_MEB/backend
+./.venv/bin/python manage.py check --settings=setup.test_settings
+./.venv/bin/python manage.py makemigrations --check --dry-run --settings=setup.test_settings
+./.venv/bin/python manage.py showmigrations core --plan --settings=setup.test_settings
+./.venv/bin/python manage.py test --settings=setup.test_settings
+```
+
+Frontend:
+
+```bash
+cd /home/vinicius/projects/Legio_MEB/frontend
+npm test
+npx tsc --noEmit --incremental false
+npm run lint
+npm run build -- --webpack
+```
+
+Geral:
+
+```bash
+cd /home/vinicius/projects/Legio_MEB
+git diff --check
+git status --short
+```
+
+### Critério do checkpoint
+
+- Django check sem erro; migration check com `No changes detected`; grafo
+  carregado com `0037` antes da `0038`; suíte backend verde, registrando a
+  quantidade real de testes e os skips PostgreSQL esperados.
+- Suíte frontend e TypeScript verdes; ESLint sem erros. São aceitáveis somente
+  os dois warnings preexistentes `@next/next/no-img-element` na área de
+  Alpinistas; qualquer warning novo exige revisão.
+- Build Webpack verde, `git diff --check` sem saída e worktree sem alteração
+  inesperada. A quantidade de testes deve ser a observada, não um número
+  previamente congelado.
+
+Em caso de falha, interromper a bateria, enviar a saída completa da etapa e
+corrigir somente o problema observado. Executar primeiro o menor comando
+relevante, repetir a etapa afetada e só reiniciar regressão mais ampla quando o
+alcance da correção justificar.
+
+Para o fechamento H.4, o usuário deve enviar: comando e linha final de cada
+etapa; quantidade e resultado das suítes; relação de skips; warnings do lint;
+resumo do build; `git diff --check`; e `git status --short`. Em falha, enviar
+também traceback/erro integral. A D.6H.3 está preparada, mas ainda não
+aprovada; a D.6 permanece aberta.
 
 ## Decisões da fase
 
@@ -1485,7 +1565,7 @@ Não há decisão de produto bloqueante para iniciar a D.6H.
 - `backend/core/services/reunioes_preparatorias.py`
 - `backend/core/templates/core/calendario_institucional_pdf.html`
 - `backend/core/management/commands/gerar_previews_calendario.py`
-- `backend/core/static/core/branding/Logo Escalada.svg`
+- `backend/core/static/core/branding/logo-escalada.svg`
 - `backend/core/serializers.py`
 - `backend/core/views.py`
 - `backend/core/urls.py`
@@ -1577,3 +1657,6 @@ Institucional.
 - 2026-10-07 — D.6H.2 concluída. O usuário executou os seis cenários no
   PostgreSQL 16 efêmero: 6/6 aprovados; `test_postgres` e cluster `16/regress`
   removidos. Nenhuma correção necessária. Próximo bloco: D.6H.3.
+- 2026-10-07 — D.6H.3 preparada sem executar validações. Auditados e
+  documentados os comandos manuais de Django/migrations, backend, frontend,
+  TypeScript, ESLint, build Webpack e Git. Aguardando execução pelo usuário.
