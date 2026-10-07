@@ -2,9 +2,9 @@
 
 ## Status geral
 
-D.6A–D.6F e D.6G.1–D.6G.3 concluídas. Projeção, leitura, comandos, Agenda
-canônica, frontend personalizado, exportação definitiva, publicação imutável
-e histórico privado estão implementados. Próximo bloco: D.6H.
+D.6A–D.6F e D.6G.1–D.6G.3 concluídas. O checkpoint D.6H.1/H.2 aprovou os seis
+cenários concorrentes em PostgreSQL 16 real. Próximo bloco: D.6H.3 — regressão
+final. A D.6 permanece aberta até a revisão e o fechamento documental H.4.
 
 ## Objetivo
 
@@ -113,10 +113,19 @@ histórico, download privado, UI final e compensação de storage.
 
 ### D.6H — Integração, PostgreSQL, regressão e fechamento
 
-Status: pendente.
+Status: em andamento; checkpoint PostgreSQL D.6H.1/H.2 concluído em
+2026-10-07.
 
 Validará integração, migrations, os seis cenários concorrentes acumulados na
 D.6C/D.6E, publicação/storage e regressão backend/frontend.
+
+Subdivisão operacional:
+
+- **D.6H.1:** auditoria dos testes, ambiente efêmero e comandos manuais,
+  concluída;
+- **D.6H.2:** checkpoint humano aprovado com 6/6 cenários em PostgreSQL 16;
+- **D.6H.3:** preparação e execução manual da regressão final;
+- **D.6H.4:** revisão final, documentação, `PROJECT_STATE` e fechamento da D.6.
 
 ## Resultado da D.6B
 
@@ -697,6 +706,152 @@ D.6G.2 concluída por decisão humana. Próximo bloco: D.6G.3.
 
 D.6G.3 concluída. Próximo bloco: D.6H — integração, PostgreSQL, regressão e
 fechamento.
+
+## Preparação da D.6H.1
+
+### Ambiente PostgreSQL temporário
+
+- O host possui `pg_virtualenv`, PostgreSQL server/client **16.15**,
+  `postgresql-common` e o driver Python `psycopg2-binary==2.9.12` já instalado
+  no virtualenv do backend. Docker ou mecanismo paralelo não é necessário.
+- `pg_virtualenv -v 16` cria cluster, usuário bootstrap, senha, banco
+  `postgres`, porta e diretório temporários. O trap do utilitário encerra e
+  remove cluster/configuração ao terminar, inclusive quando o comando falha.
+- O comando mapeia `PGDATABASE`, `PGUSER`, `PGPASSWORD`, `PGHOST` e `PGPORT`
+  do cluster para as variáveis `POSTGRES_*` consumidas por `setup.settings`.
+  `setup.test_settings` não deve ser usado neste checkpoint porque fixa SQLite
+  em memória.
+- O test runner cria seu próprio banco `test_postgres` dentro do cluster
+  descartável. Nada aponta para `sia_dev`; não há concessão persistente de
+  `CREATEDB`, mudança global ou cleanup manual.
+- O comando deve ser executado manualmente fora da sandbox apenas no escopo do
+  `pg_virtualenv`; não requer Full Access nem enfraquecimento do host.
+
+### Auditoria dos seis cenários
+
+| Cenário | Teste e arquivo | Invariante protegida | Condição concorrente | Resultado esperado |
+| --- | --- | --- | --- | --- |
+| Oficialização simultânea | `CalendarioInstitucionalConcurrencyTests.test_oficializacao_concorrente_tem_um_unico_sucesso` em `test_calendario_institucional_commands.py` | Uma única transição para `AGENDADO`, uma agenda vigente oficial | Duas threads oficializam o mesmo planejamento | Um sucesso, um erro de domínio, uma agenda vigente |
+| Edição simultânea | `CalendarioInstitucionalConcurrencyTests.test_edicoes_concorrentes_nao_misturam_dias` no mesmo arquivo | Dias da agenda formam um conjunto atômico de uma edição | Duas threads substituem os dias por conjuntos distintos | Ambas serializam; estado final é exatamente um dos conjuntos, nunca mistura |
+| Reprogramação simultânea | `CalendarioInstitucionalConcurrencyTests.test_reprogramacoes_concorrentes_preservam_todas_as_versoes` no mesmo arquivo | Histórico monotônico e apenas uma versão vigente | Duas threads reprogramam a mesma agenda oficial | Três versões `1, 2, 3`, ambas as operações concluídas e uma vigente |
+| Edição versus oficialização | `CalendarioInstitucionalConcurrencyTests.test_edicao_concorrente_com_oficializacao_preserva_invariantes` no mesmo arquivo | Agenda oficial íntegra e Encontro `AGENDADO` | Uma thread edita enquanto outra oficializa | Ordem válida serializada; agenda oficial com um dia, sem estado parcial |
+| Edição versus cancelamento | `CalendarioInstitucionalConcurrencyTests.test_edicao_concorrente_com_cancelamento_nao_corrompe_agenda` no mesmo arquivo | Cancelamento preserva uma agenda vigente íntegra | Uma thread edita enquanto outra cancela | Encontro `CANCELADO`, uma agenda vigente e um dia coerente |
+| Criação simultânea da Avaliação | `AgendaEncontroConcurrencyTests.test_criacao_concorrente_mantem_uma_avaliacao` em `test_calendario_institucional_agenda.py` | Relação 1:1 de avaliação por Encontro | Duas threads criam avaliação para o mesmo Encontro | Um sucesso, um erro de domínio e exatamente uma avaliação |
+
+Os seis casos usam `TransactionTestCase`, `ThreadPoolExecutor`, `Barrier` e
+`close_old_connections()`. Cada callback consulta o objeto após a barreira e
+usa conexão própria da thread; não há mock transacional, sequência disfarçada
+ou simulação de `IntegrityError`. Os decorators exigem
+`connection.vendor == "postgresql"`. Os services exercitados usam
+`transaction.atomic`, `select_for_update` e constraints reais.
+
+Cada teste cria os próprios Encontros, agendas e avaliações no banco isolado
+do test runner. Não há fixture de `sia_dev`, estado compartilhado ou
+dependência de ordem. Não foi necessário criar ou alterar teste/harness.
+
+### Comando manual — seis cenários
+
+Executar a partir de `backend/`:
+
+```bash
+cd /home/vinicius/projects/Legio_MEB/backend
+pg_virtualenv -v 16 bash -c '
+export DJANGO_SECRET_KEY="test-only-key-not-for-production"
+export JWT_SIGNING_KEY="test-only-jwt-key-not-for-production"
+export DJANGO_ALLOWED_HOSTS="testserver,localhost"
+export POSTGRES_DB="$PGDATABASE"
+export POSTGRES_USER="$PGUSER"
+export POSTGRES_PASSWORD="$PGPASSWORD"
+export POSTGRES_HOST="$PGHOST"
+export POSTGRES_PORT="$PGPORT"
+exec ./.venv/bin/python manage.py test "$@" \
+  --settings=setup.settings --verbosity=2 --noinput
+' bash \
+core.tests.test_calendario_institucional_commands.CalendarioInstitucionalConcurrencyTests.test_oficializacao_concorrente_tem_um_unico_sucesso \
+core.tests.test_calendario_institucional_commands.CalendarioInstitucionalConcurrencyTests.test_edicoes_concorrentes_nao_misturam_dias \
+core.tests.test_calendario_institucional_commands.CalendarioInstitucionalConcurrencyTests.test_reprogramacoes_concorrentes_preservam_todas_as_versoes \
+core.tests.test_calendario_institucional_commands.CalendarioInstitucionalConcurrencyTests.test_edicao_concorrente_com_oficializacao_preserva_invariantes \
+core.tests.test_calendario_institucional_commands.CalendarioInstitucionalConcurrencyTests.test_edicao_concorrente_com_cancelamento_nao_corrompe_agenda \
+core.tests.test_calendario_institucional_agenda.AgendaEncontroConcurrencyTests.test_criacao_concorrente_mantem_uma_avaliacao
+```
+
+`--verbosity=2` identifica cada label e preserva traceback/erro PostgreSQL sem
+ativar logging global excessivo.
+
+### Execução individual
+
+Na mesma sessão de terminal, definir a função uma vez:
+
+```bash
+cd /home/vinicius/projects/Legio_MEB/backend
+run_calendar_pg_test() {
+  local label="$1"
+  pg_virtualenv -v 16 bash -c '
+  export DJANGO_SECRET_KEY="test-only-key-not-for-production"
+  export JWT_SIGNING_KEY="test-only-jwt-key-not-for-production"
+  export DJANGO_ALLOWED_HOSTS="testserver,localhost"
+  export POSTGRES_DB="$PGDATABASE"
+  export POSTGRES_USER="$PGUSER"
+  export POSTGRES_PASSWORD="$PGPASSWORD"
+  export POSTGRES_HOST="$PGHOST"
+  export POSTGRES_PORT="$PGPORT"
+  exec ./.venv/bin/python manage.py test "$1" \
+    --settings=setup.settings --verbosity=2 --noinput
+  ' bash "$label"
+}
+```
+
+Executar somente o cenário necessário com um destes labels:
+
+```bash
+run_calendar_pg_test core.tests.test_calendario_institucional_commands.CalendarioInstitucionalConcurrencyTests.test_oficializacao_concorrente_tem_um_unico_sucesso
+run_calendar_pg_test core.tests.test_calendario_institucional_commands.CalendarioInstitucionalConcurrencyTests.test_edicoes_concorrentes_nao_misturam_dias
+run_calendar_pg_test core.tests.test_calendario_institucional_commands.CalendarioInstitucionalConcurrencyTests.test_reprogramacoes_concorrentes_preservam_todas_as_versoes
+run_calendar_pg_test core.tests.test_calendario_institucional_commands.CalendarioInstitucionalConcurrencyTests.test_edicao_concorrente_com_oficializacao_preserva_invariantes
+run_calendar_pg_test core.tests.test_calendario_institucional_commands.CalendarioInstitucionalConcurrencyTests.test_edicao_concorrente_com_cancelamento_nao_corrompe_agenda
+run_calendar_pg_test core.tests.test_calendario_institucional_agenda.AgendaEncontroConcurrencyTests.test_criacao_concorrente_mantem_uma_avaliacao
+```
+
+### Checkpoint manual
+
+A D.6H.1 não executou testes automatizados nem iniciou correções preventivas.
+O usuário deve enviar para a D.6H.2 a saída completa do comando conjunto,
+incluindo criação/remoção do cluster, os seis resultados, traceback integral e
+as últimas linhas do log PostgreSQL que `pg_virtualenv` imprime em caso de
+falha. A D.6 permanece aberta.
+
+## Resultado da D.6H.2
+
+### Checkpoint PostgreSQL aprovado
+
+- O usuário executou manualmente os seis testes em PostgreSQL **16** real,
+  usando `pg_virtualenv` e o banco temporário `test_postgres`.
+- Resultado: **6/6 aprovados** em 0,895 segundo, sem falhas ou erros.
+- O test runner destruiu `test_postgres` e o `pg_virtualenv` removeu o cluster
+  temporário `16/regress` ao final.
+- `sia_dev` não foi acessado ou alterado. Nenhuma configuração, permissão ou
+  dado persistente do PostgreSQL de desenvolvimento foi modificado.
+
+### Invariantes validadas
+
+1. oficialização concorrente preserva uma única transição válida;
+2. edições concorrentes não misturam conjuntos de dias;
+3. reprogramações concorrentes preservam todas as versões e uma única vigente;
+4. edição concorrente com oficialização mantém agenda oficial íntegra;
+5. edição concorrente com cancelamento não corrompe a agenda;
+6. criação concorrente de avaliação mantém exatamente uma avaliação por
+   Encontro.
+
+Nenhuma correção de código, teste ou harness foi necessária. O checkpoint
+PostgreSQL D.6H.1/H.2 está concluído, mas a D.6 permanece aberta.
+
+### Próximos blocos
+
+- **D.6H.3 — regressão final:** preparar os comandos para execução manual da
+  regressão backend e frontend, TypeScript, ESLint, build, migration check e
+  Django check. Nenhuma dessas validações foi executada na H.2.
+- **D.6H.4 — fechamento definitivo:** revisar os resultados, atualizar a
+  documentação e o `PROJECT_STATE` e somente então fechar a D.6.
 
 ## Decisões da fase
 
@@ -1416,3 +1571,9 @@ Institucional.
 - 2026-10-07 — D.6G.3 concluída. Renderers definitivos, símbolo oficial,
   preview, publicação imutável com snapshot/SHA-256/private media, histórico,
   download autenticado e UI final implementados. Próximo bloco: D.6H.
+- 2026-10-07 — D.6H.1 preparada sem executar testes. Auditados os seis casos
+  concorrentes reais e documentados os comandos manuais com PostgreSQL 16 em
+  `pg_virtualenv`. Próximo checkpoint: execução pelo usuário e análise na H.2.
+- 2026-10-07 — D.6H.2 concluída. O usuário executou os seis cenários no
+  PostgreSQL 16 efêmero: 6/6 aprovados; `test_postgres` e cluster `16/regress`
+  removidos. Nenhuma correção necessária. Próximo bloco: D.6H.3.
