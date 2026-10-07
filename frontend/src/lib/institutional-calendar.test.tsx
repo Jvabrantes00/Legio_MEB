@@ -2,7 +2,11 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import { AgendaItems } from "../components/EncounterAgendaSection";
-import { CalendarEncounterDrawer } from "../components/CalendarEncounterDrawer";
+import {
+  CalendarEncounterDrawer,
+  canOfficializeAgenda,
+  officializeAgendaFromDrawer,
+} from "../components/CalendarEncounterDrawer";
 import { CalendarEncounterForm } from "../components/CalendarEncounterForm";
 import { InstitutionalCalendarHeader } from "../components/InstitutionalCalendarHeader";
 import { MonthView, OccurrenceCard, YearView } from "../components/InstitutionalCalendarViews";
@@ -194,8 +198,51 @@ describe("contratos e apresentação do Calendário", () => {
     const manager = renderToStaticMarkup(<CalendarEncounterDrawer encounter={encounter} canManage onClose={() => {}} onChanged={() => {}} />);
     expect(readOnly).toContain('role="dialog"');
     expect(readOnly).toContain('href="/encontros/7"');
+    expect(readOnly).not.toContain("Oficializar agenda");
     expect(readOnly).not.toContain("Editar calendário");
+    expect(manager).toContain("Oficializar agenda");
     expect(manager).toContain("Editar calendário");
+    expect(manager).toContain("Abrir Encontro completo");
+    expect(canOfficializeAgenda(encounter, true)).toBe(true);
+  });
+
+  it("drawer não oferece oficialização para agenda já oficial", () => {
+    const encounter: InstitutionalCalendarResponse["itens"][number] = {
+      categoria: "ENCONTRO", encontro_id: 7, titulo: "Escalada 2027", tipo: "Escalada",
+      status: "agendado", calendario_id: 1, calendario_versao: 1,
+      origem_agenda: "CANONICA", confirmacao: "OFICIAL", dias: [], agenda: [occurrence],
+      pode_editar_calendario: true,
+    };
+    const html = renderToStaticMarkup(<CalendarEncounterDrawer encounter={encounter} canManage onClose={() => {}} onChanged={() => {}} />);
+    expect(html).not.toContain("Oficializar agenda");
+    expect(html).toContain("Editar calendário");
+    expect(html).toContain("Abrir Encontro completo");
+    expect(canOfficializeAgenda(encounter, true)).toBe(false);
+  });
+
+  it("oficialização direta usa comando canônico e atualiza calendário e Agenda", async () => {
+    const calls: Array<{ path: string; init?: RequestInit }> = [];
+    let calendarReloads = 0;
+    let agendaReloads = 0;
+    const warnings = await officializeAgendaFromDrawer({
+      encounterId: 7,
+      onChanged: () => { calendarReloads += 1; },
+      reloadAgenda: async () => { agendaReloads += 1; },
+      request: async (path, init) => {
+        calls.push({ path, init });
+        return new Response(JSON.stringify({ avisos_conflito: [{ data: "2027-03-21" }] }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      },
+    });
+    expect(calls).toEqual([{
+      path: "/calendario-institucional/encontros/7/oficializar/",
+      init: { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" },
+    }]);
+    expect(calendarReloads).toBe(1);
+    expect(agendaReloads).toBe(1);
+    expect(warnings).toBe(1);
   });
 
   it("formulário único aceita data contextual e toda a Agenda inicial", () => {

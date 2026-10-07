@@ -436,7 +436,7 @@ equipes, formação ou MME.
 
 ### Testes e validação
 
-- A suíte frontend passou com 124 testes em 10 arquivos. A cobertura inclui
+- A suíte frontend passou com 126 testes em 10 arquivos. A cobertura inclui
   datas civis, segunda–domingo, adjacências, hoje, navegação de mês, projeção,
   mini-card e `*`, `+N`, lista do dia, ano com 12 meses, Agenda agrupada,
   payload completo, data contextual, drawer/capabilities, SVG, navegação e
@@ -463,6 +463,10 @@ equipes, formação ou MME.
   drawer. Complementos informativos das preparatórias permanecem visíveis.
 - A ordenação continua estritamente cronológica pelas datas canônicas e ganhou
   cobertura explícita contra ordenação pelo rótulo ou número da preparatória.
+- O drawer passou a oferecer oficialização direta quando a capability e o
+  estado canônico retornado permitem. O atalho usa o command existente,
+  preserva erros e avisos consultivos, refaz Calendário e Agenda após sucesso e
+  desaparece quando a resposta atualizada informa agenda oficial.
 
 ### Débitos e arquivos alterados
 
@@ -1180,6 +1184,6 @@ Não iniciar renderer ou publicação antes da revisão.
   concorrência reservados ao PostgreSQL na D.6H. Próximo bloco: D.6F.
 - 2026-10-06 — D.6F tecnicamente concluída. Rota, visões mensal/anual,
   identidade própria, drawer, criação/edição canônicas, Agenda no Encontro,
-  mobile e acessibilidade implementados; 124 testes frontend, lint,
+  mobile e acessibilidade implementados; 126 testes frontend, lint,
   TypeScript e build Webpack aprovados. Aguardando revisão visual humana antes
   da D.6G.
