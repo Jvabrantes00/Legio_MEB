@@ -107,7 +107,24 @@ git log -1 --oneline
 
 ## Testes
 
-Backend:
+- Implemente o código solicitado e crie ou atualize os testes automatizados
+  necessários, mas não execute por padrão a suíte backend completa, a suíte
+  frontend completa, o build de produção nem testes PostgreSQL/concurrency.
+- Entregue ao usuário os comandos exatos para executar manualmente as
+  validações que não foram rodadas.
+- Suítes completas e testes reais em PostgreSQL ficam reservados para
+  checkpoints explícitos e são executados manualmente pelo usuário.
+- Validações baratas podem ser executadas quando apropriado: `git diff
+  --check`, `python manage.py check` e `python manage.py makemigrations
+  --check --dry-run`.
+- Execute um teste focado e pequeno somente quando ele for necessário para
+  investigar uma falha, materialmente útil para validar uma implementação
+  específica ou solicitado explicitamente pelo usuário.
+- Quando o usuário fornecer uma falha de teste, investigue a falha específica,
+  evite repetir suítes inteiras e execute, se necessário, apenas o menor teste
+  relevante.
+
+Comandos para execução manual da suíte backend completa:
 
 ```bash
 cd backend
@@ -116,7 +133,7 @@ cd backend
 ./.venv/bin/python manage.py makemigrations --check --dry-run
 ```
 
-Frontend:
+Comandos para execução manual das validações frontend completas:
 
 ```bash
 cd frontend
