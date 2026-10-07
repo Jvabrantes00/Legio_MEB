@@ -529,6 +529,7 @@ class DiaEncontro(models.Model):
     )
     ordem = models.PositiveIntegerField()
     data = models.DateField()
+    rotulo = models.CharField(max_length=80, blank=True, default='')
     descricao = models.CharField(max_length=255, blank=True, default='')
 
     class Meta:
@@ -1426,6 +1427,7 @@ class ReuniaoPreparatoriaEncontro(models.Model):
     data = models.DateField()
     horario = models.TimeField()
     local = models.CharField(max_length=255)
+    complemento = models.CharField(max_length=255, blank=True, default='')
     observacoes = models.TextField(blank=True, default='')
     criado_em = models.DateTimeField(auto_now_add=True)
     atualizado_em = models.DateTimeField(auto_now=True)
@@ -1455,6 +1457,26 @@ class ReuniaoPreparatoriaEncontro(models.Model):
 
     def __str__(self):
         return f'{self.encontro.encontro} — reunião {self.ordem}'
+
+
+class AvaliacaoEncontro(models.Model):
+    encontro = models.OneToOneField(
+        Encontro,
+        on_delete=models.PROTECT,
+        related_name='avaliacao_agenda',
+    )
+    data = models.DateField()
+    criado_em = models.DateTimeField(auto_now_add=True)
+    atualizado_em = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['data', 'id']
+        indexes = [
+            models.Index(fields=['data'], name='aval_encontro_data_idx'),
+        ]
+
+    def __str__(self):
+        return f'Avaliação — {self.encontro.encontro}'
 
 
 class PresencaPreparatoria(models.Model):

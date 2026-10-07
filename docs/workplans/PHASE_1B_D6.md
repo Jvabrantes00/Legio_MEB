@@ -2,10 +2,9 @@
 
 ## Status geral
 
-D.6A–D.6D concluídas. Projeção, leitura, comandos e definição humana de UX/UI
-estão fechados. A D.6D identificou suporte canônico adicional de Agenda que
-deve anteceder o frontend. Próximo bloco: D.6E — suporte backend à Agenda
-aprovada.
+D.6A–D.6E concluídas. Projeção, leitura, comandos, definição humana de UX/UI e
+suporte backend à Agenda canônica estão fechados. Próximo bloco: D.6F —
+frontend personalizado.
 
 ## Objetivo
 
@@ -73,9 +72,9 @@ anual definitivo permanece como checkpoint posterior entre dois protótipos.
 
 ### D.6E — Suporte backend à Agenda aprovada
 
-Status: pendente.
+Status: concluída em 2026-10-06.
 
-Implementará somente os deltas técnicos revelados pela D.6D: rótulos públicos,
+Implementou os deltas técnicos revelados pela D.6D: rótulos públicos,
 reuniões preparatórias na projeção/Agenda, avaliação simples, agregação
 canônica, visibilidade e contrato heterogêneo, antes do frontend.
 
@@ -261,6 +260,116 @@ equipes, formação ou MME.
 - `docs/AUTHORIZATION_MATRIX.md`;
 - `docs/workplans/PHASE_1B_D6.md`.
 
+## Resultado da D.6E
+
+### Schema e migration expansiva
+
+- `DiaEncontro.rotulo` é um texto curto opcional de até 80 caracteres. O campo
+  é independente de `descricao`, não possui choices e não infere valor por
+  ordem ou tipo do Encontro.
+- `ReuniaoPreparatoriaEncontro.complemento` preserva um subtítulo curto de
+  agenda sem expor nem reinterpretar `observacoes`, que continua operacional.
+- `AvaliacaoEncontro` é a modelagem mínima aprovada: uma avaliação por
+  Encontro, data, timestamps e FK 1:1 com `PROTECT`. Não possui participantes,
+  presença, trabalho, frequência ou vínculo com outros módulos.
+- O índice `aval_encontro_data_idx` atende a projeção institucional por
+  período; a unicidade 1:1 impede duas avaliações para o mesmo Encontro.
+- A migration expansiva `0036_expand_agenda_encontro` adiciona os dois campos
+  e a nova tabela. Não contém `RunPython`, seed, backfill, remoção ou alteração
+  destrutiva. O teste de migration preserva dias, descrições, reuniões e
+  observações anteriores com os novos campos vazios.
+
+### Agenda agregada e contrato
+
+- `consultar_agenda_encontro` reúne cronologicamente a agenda vigente do
+  Encontro, reuniões reais e avaliação, sem tabela visual, cópia ou
+  dual-write. Encontro sem calendário mantém o fallback legado explícito.
+- O DTO imutável e allowlisted expõe identificador estável, ID e tipo da fonte,
+  data, título, subtítulo opcional, confirmação quando aplicável, indicador
+  `publicavel_externamente`, `encontro_id` e conflito consultivo.
+- Os tipos são `DIA_ENCONTRO`, `REUNIAO_PREPARATORIA` e `AVALIACAO`. Na mesma
+  data, a ordenação técnica determinística usa essa ordem, seguida de título e
+  ID da fonte; não depende da ordem casual do banco.
+- Dias são publicáveis externamente. Reuniões e avaliação são internas por
+  derivação da fonte, sem booleanos redundantes persistidos.
+- Rótulo de dia e complemento de reunião entram no DTO; `descricao`,
+  `observacoes` e qualquer dado pessoal ou operacional ficam fora.
+- `GET /api/calendario-institucional/encontros/{id}/agenda/` fornece a agenda
+  canônica para todas as roles de leitura, sem ampliar permissão de gestão.
+
+### Projeção, conflitos e compatibilidade
+
+- O endpoint institucional preserva todos os campos D.6B/D.6C e acrescenta
+  `agenda` a cada Encontro e `rotulo` às ocorrências de dia.
+- Reunião ou avaliação dentro do intervalo projeta o Encontro mesmo quando
+  nenhum dia próprio cai no período. Um Encontro continua sendo um único item
+  agregado, com vínculo explícito em todas as ocorrências.
+- O detector central considera dias vigentes, reuniões, avaliações e fallback
+  legado. Duas fontes do mesmo Encontro na mesma data não geram conflito entre
+  si; Encontros distintos geram aviso consultivo, nunca bloqueio.
+- O fallback legado e os contratos antigos permanecem. Não houve backfill,
+  interpretação de `data_exato`, mudança destrutiva nem remoção de API.
+
+### Comandos, transações e auditoria
+
+- A criação pelo Calendário aceita opcionalmente múltiplas reuniões e uma
+  avaliação junto dos dias. Uma transação cria Encontro, calendário, dias,
+  reuniões canônicas e avaliação; falha em qualquer fonte reverte tudo.
+- Reuniões criadas ou editadas pela Agenda delegam aos services da D.3, com os
+  locks e a unicidade de ordem existentes. Presenças permanecem ligadas ao
+  mesmo objeto canônico e não são copiadas.
+- Avaliação possui services mínimos para criar, editar e remover. Todos
+  bloqueiam o Encontro; criação concorrente também depende da unicidade 1:1.
+- Os comandos foram expostos como ações semânticas aninhadas do Encontro:
+  criar/editar reunião e criar/editar/remover avaliação. Nested mismatch
+  retorna `404`; validação de domínio retorna `400`.
+- Diretoria, Suporte e superuser técnico gerem esses comandos. As demais roles
+  continuam somente leitura. Cada operação administrativa usa `LogSistema`
+  dentro da mesma transação e registra apenas IDs e operação.
+- Edição e versionamento de dias continuam nos services temporais D.6C;
+  rótulos acompanham o payload estruturado sem criar caminho paralelo.
+
+### Testes, validação e concorrência
+
+- Foram acrescentados 14 testes para rótulos, agregação, ordenação na mesma
+  data, identificadores, visibilidade, projeção, conflitos, avaliação 1:1,
+  integridade referencial, criação completa, rollback, comandos, allowlist,
+  autorização, migration e efeitos nulos em participação, trabalho e
+  frequência.
+- Os testes existentes de Calendário, commands e reuniões preparatórias
+  passaram junto dos novos. A suíte backend completa encerrou com 539 testes
+  aprovados e 20 skips.
+- `manage.py check` passou. `makemigrations --check --dry-run` retornou
+  `No changes detected`, além do aviso esperado de PostgreSQL inacessível na
+  sandbox.
+- Um teste condicional novo cobre duas criações concorrentes da avaliação sob
+  PostgreSQL. Com os cinco testes temporais da D.6C, a D.6H passa a ter seis
+  cenários concorrentes pendentes de execução real.
+- PostgreSQL não foi necessário nesta etapa. Frontend, PDF, renderer,
+  publicação e histórico não foram iniciados.
+
+### Débitos e arquivos alterados
+
+- A remoção de reunião não ganhou endpoint: o domínio D.3 não possui comando
+  canônico para isso e presenças históricas usam `PROTECT`. Definir essa
+  semântica exigiria decisão própria; criação e edição aprovadas estão cobertas.
+- Sugestões visuais de rótulo permanecem para a D.6F, sem catálogo ou choices
+  persistidos.
+- Os débitos legados de `data_referencia`, `data_exato`, `status_encontro` e
+  CRUD antigo permanecem inalterados.
+- Arquivos alterados: `backend/core/models.py`,
+  `backend/core/services/encontros.py`,
+  `backend/core/services/reunioes_preparatorias.py`,
+  `backend/core/services/avaliacoes_encontro.py`,
+  `backend/core/services/calendario_institucional.py`,
+  `backend/core/services/comandos_calendario.py`,
+  `backend/core/serializers.py`, `backend/core/views.py`,
+  `backend/core/urls.py`,
+  `backend/core/migrations/0036_expand_agenda_encontro.py`,
+  `backend/core/tests/test_calendario_institucional.py`,
+  `backend/core/tests/test_calendario_institucional_agenda.py`,
+  `docs/00_HOME.md` e `docs/workplans/PHASE_1B_D6.md`.
+
 ## Decisões da fase
 
 - O ADR-001 permanece a decisão arquitetural principal e não será duplicado.
@@ -278,8 +387,8 @@ equipes, formação ou MME.
 - PDFs possuem modalidades pública e interna, sem ampliar acesso a dados
   pessoais ou sensíveis.
 - Publicações efetivas são históricas e não podem ser sobrescritas.
-- D.6D foi concluída; o suporte backend da Agenda em D.6E é o gate técnico
-  antes do frontend.
+- D.6E concluiu o gate técnico da Agenda; o frontend D.6F pode consumir o
+  contrato canônico aprovado.
 - O renderer anual depende de checkpoint humano entre os modelos A e B na
   D.6G.
 
@@ -600,15 +709,14 @@ A futura página canônica do Encontro terá uma seção `Agenda` com as mesmas
 fontes. `Editar calendário` modifica os objetos reais, de modo que página e
 Calendário refletem automaticamente a mesma informação.
 
-## Deltas técnicos para D.6E
+## Deltas técnicos entregues na D.6E
 
-A implementação de frontend está bloqueada até estes pontos serem fechados no
-backend:
+A D.6E fechou no backend os pontos que bloqueavam o frontend:
 
 - confirmar/adaptar o suporte de `DiaEncontro` ao rótulo público editável;
 - projetar `ReuniaoPreparatoriaEncontro` no Calendário;
 - criar/editar reuniões reais através da Agenda, inclusive na criação inicial;
-- suportar complemento público de reunião quando o model atual não bastar;
+- suportar complemento de agenda da reunião quando o model atual não bastar;
 - modelar expansivamente o item simples `Avaliação` vinculado ao Encontro;
 - criar query/DTO da Agenda agregada para Calendário e página do Encontro;
 - representar itens heterogêneos sem duplicar os domínios de origem;
@@ -759,12 +867,12 @@ material publicado; eventual retenção exigirá política explícita.
 - **D.6B:** concluída com a migration aditiva `0035`, que criou o índice
   B-tree em `DiaEncontro.data`.
 - **D.6C:** concluída sem mudança de schema.
-- **D.6E:** deve inspecionar primeiro os campos atuais e criar apenas as
-  migrations expansivas necessárias para rótulo público, complemento de
-  reunião, avaliação e visibilidade. Não antecipar fields sem essa auditoria.
+- **D.6E:** concluída com `0036_expand_agenda_encontro`, que adiciona rótulo de
+  dia, complemento de reunião, avaliação 1:1 e seu índice de data, sem
+  `RunPython` ou backfill.
 - **D.6G:** migration expansiva para `PublicacaoCalendarioInstitucional`,
   checks de tipo/período, índice histórico, FK protegida, snapshot e arquivo.
-- A migration atual mais recente é `0035_diaencontro_data_index`. As
+- A migration atual mais recente é `0036_expand_agenda_encontro`. As
   próximas devem confirmar novamente a folha da cadeia antes de receber número.
 - Não haverá `RunPython`, seed, backfill ou alteração destrutiva.
 
@@ -830,7 +938,8 @@ material publicado; eventual retenção exigirá política explícita.
 
 ### D.6H — PostgreSQL e regressão
 
-- cinco cenários concorrentes de comandos preparados na D.6C;
+- cinco cenários concorrentes de comandos preparados na D.6C e um cenário de
+  criação concorrente da avaliação preparado na D.6E;
 - publicações simultâneas não se sobrescrevem;
 - alteração/reprogramação durante captura não produz snapshot misto;
 - locks e constraints preservam versões temporais e publicações consistentes;
@@ -852,7 +961,7 @@ ambientes isolados normais.
 - A política de consulta/download histórico permanece conservadoramente
   restrita a Suporte/Diretoria/superuser até decisão explícita diferente.
 
-Nenhuma dessas pendências bloqueia o suporte backend da D.6E.
+Nenhuma dessas pendências bloqueia o frontend D.6F.
 
 ## Débitos
 
@@ -878,7 +987,10 @@ Nenhuma dessas pendências bloqueia o suporte backend da D.6E.
 - `docs/PROJECT_STATE.md`
 - `backend/core/models.py`
 - `backend/core/services/encontros.py`
+- `backend/core/services/avaliacoes_encontro.py`
 - `backend/core/services/calendario_institucional.py`
+- `backend/core/services/comandos_calendario.py`
+- `backend/core/services/reunioes_preparatorias.py`
 - `backend/core/serializers.py`
 - `backend/core/views.py`
 - `backend/core/urls.py`
@@ -887,8 +999,10 @@ Nenhuma dessas pendências bloqueia o suporte backend da D.6E.
 - `backend/core/migrations/0028_nucleo_encontros.py`
 - `backend/core/migrations/0034_expand_propostas_violeiros.py`
 - `backend/core/migrations/0035_diaencontro_data_index.py`
+- `backend/core/migrations/0036_expand_agenda_encontro.py`
 - `backend/core/tests/test_nucleo_encontros.py`
 - `backend/core/tests/test_calendario_institucional.py`
+- `backend/core/tests/test_calendario_institucional_agenda.py`
 - `backend/core/tests/test_authorization.py`
 - `backend/core/tests/test_authorization_paths.py`
 - `backend/setup/settings.py`
@@ -905,9 +1019,9 @@ Nenhuma dessas pendências bloqueia o suporte backend da D.6E.
 
 ## Próximo passo
 
-D.6E — implementar o suporte backend mínimo à Agenda aprovada: rótulos,
-reuniões reais, avaliação, agregação, visibilidade e contrato heterogêneo.
-Não iniciar frontend, renderer de PDF ou publicação neste bloco.
+D.6F — implementar o frontend personalizado aprovado na D.6D sobre os
+contratos canônicos entregues em D.6B–D.6E. Não iniciar renderer de PDF ou
+publicação neste bloco.
 
 ## Histórico de execução
 
@@ -928,3 +1042,7 @@ Não iniciar frontend, renderer de PDF ou publicação neste bloco.
   visões Mês/Ano, Agenda agregada, criação multiday, identidade visual, mobile,
   PDFs público/interno e dois protótipos anuais. D.6E foi inserida antes do
   frontend para implementar os deltas canônicos revelados pelo produto.
+- 2026-10-06 — D.6E concluída. Schema expansivo, Agenda heterogênea, reuniões
+  canônicas, avaliação 1:1, visibilidade, conflitos e criação completa foram
+  implementados; suíte backend com 539 testes aprovados e seis cenários de
+  concorrência reservados ao PostgreSQL na D.6H. Próximo bloco: D.6F.

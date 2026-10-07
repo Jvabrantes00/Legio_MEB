@@ -134,6 +134,20 @@ class EncounterPreparationTests(TestCase):
         self.assertEqual(editada.observacoes, '')
         self.assertEqual(primeira.ordem, 1)
 
+    def test_edicao_de_agenda_preserva_presenca_existente(self):
+        reuniao = self._criar_reuniao()
+        presenca = self._registrar(reuniao)
+
+        editar_reuniao_preparatoria(
+            reuniao,
+            complemento='Missa de Entrega',
+        )
+
+        presenca.refresh_from_db()
+        reuniao.refresh_from_db()
+        self.assertEqual(presenca.reuniao_id, reuniao.pk)
+        self.assertEqual(reuniao.complemento, 'Missa de Entrega')
+
     def test_mesma_ordem_em_encontros_diferentes_e_permitida(self):
         outro_encontro = make_encontro(tipo=Encontro.Tipo.AVC)
 

@@ -12,12 +12,13 @@ from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
 
 from .models import (
-    Alpinista, CalendarioEncontro, ConviteEncontro, Encontro, EntregaMaterial,
-    EquipeEncontro, Evento,
+    Alpinista, AvaliacaoEncontro, CalendarioEncontro, ConviteEncontro,
+    DiaEncontro, Encontro, EntregaMaterial, EquipeEncontro, Evento,
     FotoEncontro, FuncaoEncontro, Inscricao, Palestra,
     ParticipacaoEncontro as ResultadoParticipacaoEncontro,
     ParticipacaoEvento, LogSistema, Material, PalestranteSessao,
-    PerfilAlpinista, PresencaPreparatoria, SessaoFormativa, TrabalhoEncontro,
+    PerfilAlpinista, PresencaPreparatoria, ReuniaoPreparatoriaEncontro,
+    SessaoFormativa, TrabalhoEncontro,
     ItemPropostaVioleiros, PropostaVioleiros,
     VinculoEncontroLegado as ParticipacaoEncontro,
 )
@@ -46,10 +47,15 @@ from .serializers import (
     PalestranteSessaoSerializer,
     PeriodoCalendarioQuerySerializer,
     ConsultaCalendarioInstitucionalSerializer,
+    AgendaEncontroSerializer,
+    AvaliacaoAgendaCommandSerializer,
     CalendarioSemDadosCommandSerializer,
     CriacaoEncontroCalendarioCommandSerializer,
     DadosBasicosCalendarioCommandSerializer,
     PlanejamentoCalendarioCommandSerializer,
+    ReuniaoAgendaCriacaoCommandSerializer,
+    ReuniaoAgendaEdicaoCommandSerializer,
+    RotuloDiaCalendarioCommandSerializer,
     ResultadoComandoCalendarioSerializer,
     RealizacaoSessaoCommandSerializer,
     RemocaoPalestranteCommandSerializer,
@@ -70,6 +76,8 @@ from .permissions import (
     require_sia_roles,
 )
 from .services.reunioes_preparatorias import corrigir_presenca_preparatoria
+from .services import avaliacoes_encontro as avaliacao_services
+from .services import reunioes_preparatorias as reuniao_services
 from .services import trabalhos as trabalho_services
 from .services import formacoes as formacao_services
 from .services import propostas_violeiros as proposta_violeiros_services
@@ -167,6 +175,16 @@ def calendario_institucional(request):
     return Response(serializer.data)
 
 
+@api_view(['GET'])
+@permission_classes([
+    require_sia_roles(*INSTITUTIONAL_CALENDAR_READ_ROLES),
+])
+def agenda_encontro(request, encontro_id):
+    encontro = get_object_or_404(Encontro, pk=encontro_id)
+    resultado = calendario_services.consultar_agenda_encontro(encontro)
+    return Response(AgendaEncontroSerializer(resultado).data)
+
+
 class CalendarioEncontroCommandViewSet(viewsets.GenericViewSet):
     queryset = Encontro.objects.all()
     serializer_class = CriacaoEncontroCalendarioCommandSerializer
@@ -178,11 +196,15 @@ class CalendarioEncontroCommandViewSet(viewsets.GenericViewSet):
         'create': CriacaoEncontroCalendarioCommandSerializer,
         'dados_basicos': DadosBasicosCalendarioCommandSerializer,
         'planejamento': PlanejamentoCalendarioCommandSerializer,
+        'rotulo_dia': RotuloDiaCalendarioCommandSerializer,
         'oficializar': CalendarioSemDadosCommandSerializer,
         'reprogramar': PlanejamentoCalendarioCommandSerializer,
         'adiar': CalendarioSemDadosCommandSerializer,
         'iniciar_planejamento': PlanejamentoCalendarioCommandSerializer,
         'cancelar': CalendarioSemDadosCommandSerializer,
+        'reunioes': ReuniaoAgendaCriacaoCommandSerializer,
+        'reuniao': ReuniaoAgendaEdicaoCommandSerializer,
+        'avaliacao': AvaliacaoAgendaCommandSerializer,
     }
 
     def get_serializer_class(self):
@@ -213,9 +235,10 @@ class CalendarioEncontroCommandViewSet(viewsets.GenericViewSet):
         dias = []
         if calendario is not None:
             dias = list(calendario.dias.order_by('ordem', 'id'))
+        agenda = calendario_services.consultar_agenda_encontro(encontro)
         avisos = calendario_services.detectar_conflitos_para_encontro(
             encontro.pk,
-            [dia.data for dia in dias],
+            [item.data for item in agenda.itens],
         )
         dados = {
             'encontro_id': encontro.pk,
@@ -232,6 +255,7 @@ class CalendarioEncontroCommandViewSet(viewsets.GenericViewSet):
                 )
             ),
             'dias': dias,
+            'agenda': agenda.itens,
             'avisos_conflito': avisos,
         }
         return Response(
@@ -249,6 +273,8 @@ class CalendarioEncontroCommandViewSet(viewsets.GenericViewSet):
                     tipo=serializer.validated_data['tipo'],
                     local=serializer.validated_data['local'],
                     dias=serializer.validated_data['dias'],
+                    reunioes=serializer.validated_data.get('reunioes', ()),
+                    avaliacao=serializer.validated_data.get('avaliacao'),
                 )
                 self._auditar(
                     request,
@@ -289,6 +315,37 @@ class CalendarioEncontroCommandViewSet(viewsets.GenericViewSet):
                     dias=serializer.validated_data['dias'],
                 )
                 self._auditar(request, encontro, 'planejamento alterado')
+        except django_core_validation_error as error:
+            _erro_de_dominio(error)
+        return self._resposta(encontro)
+
+    @action(
+        detail=True,
+        methods=['patch'],
+        url_path=r'dias/(?P<dia_id>[^/.]+)/rotulo',
+    )
+    def rotulo_dia(self, request, pk=None, dia_id=None):
+        encontro = self.get_object()
+        dia = get_object_or_404(
+            DiaEncontro,
+            pk=dia_id,
+            calendario__encontro=encontro,
+            calendario__vigente=True,
+        )
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            with transaction.atomic():
+                dia = calendario_command_services.editar_rotulo_dia(
+                    encontro,
+                    dia_id=dia.pk,
+                    rotulo=serializer.validated_data['rotulo'],
+                )
+                self._auditar(
+                    request,
+                    encontro,
+                    f'rótulo do dia ID {dia.pk} alterado pela Agenda',
+                )
         except django_core_validation_error as error:
             _erro_de_dominio(error)
         return self._resposta(encontro)
@@ -355,6 +412,115 @@ class CalendarioEncontroCommandViewSet(viewsets.GenericViewSet):
             calendario_command_services.cancelar_encontro,
             'Encontro cancelado',
         )
+
+    @action(detail=True, methods=['post'], url_path='reunioes')
+    def reunioes(self, request, pk=None):
+        encontro = self.get_object()
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            with transaction.atomic():
+                reuniao = reuniao_services.criar_reuniao_preparatoria(
+                    encontro=encontro,
+                    **serializer.validated_data,
+                )
+                self._auditar(
+                    request,
+                    encontro,
+                    f'reunião preparatória ID {reuniao.pk} criada pela Agenda',
+                    acao='CREATE',
+                )
+        except django_core_validation_error as error:
+            _erro_de_dominio(error)
+        return self._resposta(encontro, http_status=status.HTTP_201_CREATED)
+
+    @action(
+        detail=True,
+        methods=['patch'],
+        url_path=r'reunioes/(?P<reuniao_id>[^/.]+)',
+    )
+    def reuniao(self, request, pk=None, reuniao_id=None):
+        encontro = self.get_object()
+        reuniao = get_object_or_404(
+            ReuniaoPreparatoriaEncontro,
+            pk=reuniao_id,
+            encontro=encontro,
+        )
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            with transaction.atomic():
+                reuniao_services.editar_reuniao_preparatoria(
+                    reuniao,
+                    **serializer.validated_data,
+                )
+                self._auditar(
+                    request,
+                    encontro,
+                    f'reunião preparatória ID {reuniao.pk} alterada pela Agenda',
+                )
+        except django_core_validation_error as error:
+            _erro_de_dominio(error)
+        return self._resposta(encontro)
+
+    @action(
+        detail=True,
+        methods=['post', 'patch', 'delete'],
+        url_path='avaliacao',
+    )
+    def avaliacao(self, request, pk=None):
+        encontro = self.get_object()
+        if request.method == 'POST':
+            serializer = self.get_serializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
+            try:
+                with transaction.atomic():
+                    avaliacao = avaliacao_services.criar_avaliacao_encontro(
+                        encontro=encontro,
+                        **serializer.validated_data,
+                    )
+                    self._auditar(
+                        request,
+                        encontro,
+                        f'avaliação ID {avaliacao.pk} criada pela Agenda',
+                        acao='CREATE',
+                    )
+            except django_core_validation_error as error:
+                _erro_de_dominio(error)
+            return self._resposta(
+                encontro,
+                http_status=status.HTTP_201_CREATED,
+            )
+
+        avaliacao = get_object_or_404(AvaliacaoEncontro, encontro=encontro)
+        if request.method == 'PATCH':
+            serializer = self.get_serializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
+            try:
+                with transaction.atomic():
+                    avaliacao_services.editar_avaliacao_encontro(
+                        avaliacao,
+                        **serializer.validated_data,
+                    )
+                    self._auditar(
+                        request,
+                        encontro,
+                        f'avaliação ID {avaliacao.pk} alterada pela Agenda',
+                    )
+            except django_core_validation_error as error:
+                _erro_de_dominio(error)
+            return self._resposta(encontro)
+
+        with transaction.atomic():
+            avaliacao_id = avaliacao.pk
+            avaliacao_services.remover_avaliacao_encontro(avaliacao)
+            self._auditar(
+                request,
+                encontro,
+                f'avaliação ID {avaliacao_id} removida pela Agenda',
+                acao='DELETE',
+            )
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
     def _executar_sem_dados(self, request, encontro, comando, operacao):
         serializer = self.get_serializer(data=request.data)

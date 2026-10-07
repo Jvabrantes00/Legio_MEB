@@ -225,7 +225,7 @@ class CalendarioInstitucionalProjectionTests(TestCase):
         criar_encontro_canonico('Beta', [date(2032, 2, 1)])
         criar_encontro_canonico('Alfa', [date(2032, 2, 1)])
 
-        with self.assertNumQueries(2):
+        with self.assertNumQueries(4):
             resultado = consultar_calendario_institucional(
                 date(2032, 1, 1),
                 date(2032, 12, 31),
@@ -291,12 +291,13 @@ class CalendarioInstitucionalApiTests(APITestCase):
             {
                 'categoria', 'encontro_id', 'titulo', 'tipo', 'status',
                 'calendario_id', 'calendario_versao', 'origem_agenda',
-                'confirmacao', 'dias', 'pode_editar_calendario',
+                'confirmacao', 'dias', 'agenda',
+                'pode_editar_calendario',
             },
         )
         self.assertEqual(
             set(item['dias'][0]),
-            {'id', 'data', 'ordem', 'conflito'},
+            {'id', 'data', 'ordem', 'rotulo', 'conflito'},
         )
         self.assertNotIn('status_encontro', item)
         for campo_sensivel in (

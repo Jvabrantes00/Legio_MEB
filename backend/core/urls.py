@@ -21,6 +21,7 @@ from .views import dashboard_stats
 from .views import current_user
 from .views import catalogo_formacao
 from .views import calendario_institucional
+from .views import agenda_encontro
 from .authentication import SiaTokenRefreshSerializer
 from .permissions import IsSiaSuperuser
 
@@ -98,6 +99,11 @@ router.register(r'entregas-materiais', EntregaMaterialViewSet)
 
 # Exporta as rotas 
 urlpatterns = [
+    path(
+        'calendario-institucional/encontros/<int:encontro_id>/agenda/',
+        agenda_encontro,
+        name='agenda-encontro',
+    ),
     path(
         'calendario-institucional/',
         calendario_institucional,

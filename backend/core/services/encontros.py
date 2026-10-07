@@ -52,8 +52,11 @@ def _normalizar_dias(dias):
 
         ordem = item.get('ordem')
         data_dia = item.get('data')
+        rotulo = item.get('rotulo') or ''
         descricao = item.get('descricao') or ''
 
+        if not isinstance(rotulo, str):
+            raise ValidationError('O rótulo de cada dia deve ser textual.')
         if not isinstance(descricao, str):
             raise ValidationError('A descrição de cada dia deve ser textual.')
         if not isinstance(ordem, int) or isinstance(ordem, bool) or ordem <= 0:
@@ -63,6 +66,10 @@ def _normalizar_dias(dias):
         if len(descricao) > 255:
             raise ValidationError(
                 'A descrição de um dia não pode exceder 255 caracteres.'
+            )
+        if len(rotulo) > 80:
+            raise ValidationError(
+                'O rótulo de um dia não pode exceder 80 caracteres.'
             )
         if ordem in ordens:
             raise ValidationError('A ordem dos dias não pode se repetir.')
@@ -76,6 +83,7 @@ def _normalizar_dias(dias):
         dias_normalizados.append({
             'ordem': ordem,
             'data': data_dia,
+            'rotulo': rotulo,
             'descricao': descricao,
         })
 
@@ -199,6 +207,39 @@ def editar_planejamento(encontro, *, dias):
     calendario.dias.all().delete()
     _criar_dias(calendario, dias_normalizados)
     return calendario
+
+
+@transaction.atomic
+def editar_rotulo_dia(encontro, *, dia_id, rotulo):
+    if not isinstance(rotulo, str):
+        raise ValidationError('O rótulo do dia deve ser textual.')
+    if len(rotulo) > 80:
+        raise ValidationError(
+            'O rótulo de um dia não pode exceder 80 caracteres.'
+        )
+    encontro_bloqueado = _bloquear_encontro(encontro)
+    if encontro_bloqueado.status != Encontro.Status.EM_AGENDAMENTO:
+        raise ValidationError(
+            'Somente Encontro em agendamento pode editar rótulos in-place.'
+        )
+    calendario = _obter_calendario_vigente(encontro_bloqueado)
+    if calendario.oficializado_em is not None:
+        raise ValidationError(
+            'Rótulo de agenda oficial exige reprogramação versionada.'
+        )
+    try:
+        dia = (
+            DiaEncontro.objects
+            .select_for_update()
+            .get(pk=dia_id, calendario=calendario)
+        )
+    except DiaEncontro.DoesNotExist as error:
+        raise ValidationError(
+            'O dia não pertence ao calendário vigente do Encontro.'
+        ) from error
+    dia.rotulo = rotulo
+    dia.save(update_fields=['rotulo'])
+    return dia
 
 
 @transaction.atomic

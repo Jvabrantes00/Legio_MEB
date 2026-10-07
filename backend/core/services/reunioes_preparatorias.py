@@ -74,6 +74,7 @@ def criar_reuniao_preparatoria(
     data,
     horario,
     local,
+    complemento='',
     observacoes='',
 ):
     encontro_bloqueado = _bloquear_encontro(encontro)
@@ -87,6 +88,7 @@ def criar_reuniao_preparatoria(
                 data=data,
                 horario=horario,
                 local=local,
+                complemento=complemento,
                 observacoes=observacoes,
             )
     except IntegrityError as error:
@@ -103,6 +105,7 @@ def editar_reuniao_preparatoria(
     data=NAO_INFORMADO,
     horario=NAO_INFORMADO,
     local=NAO_INFORMADO,
+    complemento=NAO_INFORMADO,
     observacoes=NAO_INFORMADO,
 ):
     encontro_bloqueado = _bloquear_encontro(reuniao.encontro)
@@ -115,6 +118,7 @@ def editar_reuniao_preparatoria(
         'data': data,
         'horario': horario,
         'local': local,
+        'complemento': complemento,
         'observacoes': observacoes,
     }
     if ordem is not NAO_INFORMADO:
