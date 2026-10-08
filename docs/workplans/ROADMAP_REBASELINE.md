@@ -4,9 +4,10 @@
 
 R.1 concluída e validada humanamente. R.2 concluída documentalmente em
 2026-10-07. R.3A concluiu a auditoria do gap entre o domínio atual de
-Encontros e o frontend operacional; R.3 permanece em andamento e aguarda
-checkpoint humano de produto. Este documento não altera, substitui ou
-renumera o roadmap.
+Encontros e o frontend operacional. R.3B consolidou a especificação funcional
+do novo Workspace de Encontros; R.3 permanece em andamento e aguarda o
+checkpoint de arquitetura e decomposição. Este documento não altera,
+substitui ou renumera o roadmap.
 
 ## Objetivo
 
@@ -685,3 +686,347 @@ layout, fluxos ou uma nova estrutura da página do Encontro.
 
 **Checkpoint humano de produto dos gaps da R.3A**, antes de qualquer
 implementação ou avanço para R.3B. R.3 permanece em andamento.
+
+## R.3B — Especificação funcional do Workspace de Encontros
+
+### Escopo e princípio
+
+Esta especificação traduz as decisões humanas tomadas após a R.3A. Ela define
+o comportamento funcional esperado, sem escolher layout definitivo,
+arquitetura da campanha, contratos técnicos, mecanismo de auditoria ou divisão
+dos blocos de implementação.
+
+A listagem de Encontros permanece como entrada principal do módulo. Cada item
+oferece uma ação equivalente a **Gerenciar Encontro**, que abre
+`/encontros/[id]`. A listagem não se transforma em workspace.
+
+O destino passa a ser o workspace operacional do Encontro, organizado
+funcionalmente em:
+
+- **Visão geral**;
+- **Encontristas**;
+- **Equipe de Trabalho**;
+- **Formação**, quando o tipo do Encontro e a permissão tornarem a área
+  aplicável.
+
+A Agenda permanece em destaque na Visão geral. Preparatórias não formam uma
+área operacional própria. MME e Formação recebem visões restritas do Encontro
+como contexto, sem acesso irrestrito ao workspace.
+
+### Visão geral e lifecycle
+
+A Visão geral apresenta somente a síntese necessária para orientar a operação:
+
+- nome e tipo do Encontro;
+- status canônico claramente visível;
+- datas e Agenda;
+- capacidade de encontristas;
+- resumo de inscrições e confirmações;
+- resumo da Equipe de Trabalho;
+- alertas relevantes;
+- transições de lifecycle permitidas no estado atual.
+
+Detalhes permanecem nas áreas específicas. O status não é um campo editável
+livremente: mudanças usam as transições do domínio:
+
+```text
+EM_AGENDAMENTO
+  -> AGENDADO
+  -> EM_PREPARACAO
+  -> EM_ANDAMENTO
+  -> FINALIZADO
+```
+
+`ADIADO` e `CANCELADO` continuam como estados laterais conforme a máquina
+canônica existente. Entre as ações contextuais necessárias estão **Iniciar
+preparação**, **Iniciar Encontro** e **Finalizar Encontro** nos respectivos
+estados; a especificação não cria transições novas.
+
+### Comportamento por lifecycle
+
+| Estado | Encontristas | Equipe | Agenda | Participação | Fotos/Palestrantes | Ações lifecycle |
+|---|---|---|---|---|---|---|
+| `EM_AGENDAMENTO` | Configuração de janela/capacidade e inscrições conforme a janela; campanha somente após marco explícito | Planejamento conforme regras e permissões canônicas | Planejamento provisório | Ainda não representa resultado efetivo | Gestão conforme tipo e autorização | Oficializar ou cancelar conforme domínio |
+| `AGENDADO` | Inscrições e campanha conforme janela, capacidade e marco | Montagem/alocação canônica | Agenda oficial e reprogramação permitida | Sem confundir confirmação com participação | Gestão conforme tipo e autorização | Iniciar preparação, adiar ou cancelar |
+| `EM_PREPARACAO` | Operação da campanha conforme regras vigentes | Montagem e ajustes operacionais autorizados | Agenda oficial | Resultado efetivo ainda separado da confirmação | Gestão conforme tipo e autorização | Iniciar Encontro, adiar ou cancelar |
+| `EM_ANDAMENTO` | Situações existentes permanecem visíveis; novas operações dependem da janela/campanha, sem regra adicional nesta etapa | Operação autorizada e registro posterior do resultado real | Agenda vigente | Registro do que efetivamente ocorreu quando pertinente | Gestão conforme tipo e autorização | Finalizar ou cancelar |
+| `FINALIZADO` | Histórico; sem novas inscrições, convites normais ou reabertura automática | Histórico com correções controladas e auditáveis | Histórico; sem edição normal de datas | Resultado real visível e corrigível de forma auditável | Fotos e correções de palestrantes permitidas aos papéis autorizados | Nenhum retorno arbitrário; somente correções históricas aprovadas |
+| `ADIADO` | Preserva histórico e retoma operação somente conforme janela/campanha vigente | Preserva composição e permite ajustes coerentes com o replanejamento | Novo planejamento e retorno pelo fluxo canônico | Sem produzir participação apenas pelo adiamento | Preserva dados existentes | Novo planejamento/reprogramação e transições já previstas pelo domínio |
+| `CANCELADO` | Histórico/read-only; sem inscrições ou convites normais | Histórico/read-only | Histórico/documentação pertinente | Sem nova operação normal | Apenas informação documental realmente necessária | Sem retomada silenciosa |
+
+As regras exatas de abertura/encerramento operacional em `EM_ANDAMENTO` que
+não estejam determinadas pela janela de inscrição ou pelo domínio atual devem
+ser validadas antes da implementação, sem inventar uma nova máquina de
+estados.
+
+### Encontristas
+
+A área substitui a representação baseada em `Alpinista.status`, fila legada,
+`VinculoEncontroLegado` e `efetivar-encontristas`. Ela apresenta, em linguagem
+de produto, os conceitos canônicos de inscrição, convite e resultado real da
+participação, sem exigir que o usuário conheça seus nomes técnicos.
+
+As situações visíveis devem ser deriváveis com segurança do domínio final e
+incluir, quando aplicável:
+
+- Inscrito;
+- Convite enviado / aguardando resposta;
+- Confirmado;
+- Não poderá participar;
+- Lista de espera;
+- Participou;
+- Não participou.
+
+A organização pode futuramente usar filtros, abas ou outros recursos, mas a
+R.3B não escolhe tabela, cards ou kanban.
+
+#### Janela e capacidade
+
+Escalada e ESPPA possuem abertura e encerramento de inscrições. Fora dessa
+janela não entram novas inscrições. Cada Encontro abrangido pelo fluxo possui
+capacidade máxima configurável de encontristas.
+
+A capacidade é consumida exclusivamente por **confirmados**. Inscrição,
+convite enviado ou ausência de resposta não reservam vaga.
+
+#### Marco e campanha de convites
+
+Fichas inicia manualmente a campanha por uma ação explícita equivalente a
+**Iniciar envio de convites**. O sistema registra quem iniciou e a data/hora.
+Depois desse marco, a ação inicial deixa de ser oferecida e a campanha segue a
+regra funcional v1:
+
+> Enquanto confirmados forem menores que a capacidade, o processo pode
+> continuar convidando inscrições elegíveis.
+
+Não é necessário aguardar recusa, ausência de resposta ou expiração
+individual para continuar o preenchimento enquanto houver vagas. Recusa
+registra “Não poderei participar”, mas não é o gatilho obrigatório para o
+próximo convite. Cadência, lote, execução assíncrona e entrega não são
+decididos nesta etapa.
+
+#### Confirmação por link
+
+Cada convite oferece um link individual que não exige conta ou login. A pessoa
+vê somente o convite correspondente e pode escolher:
+
+- **Confirmar participação**;
+- **Não poderei participar**.
+
+Depois da resposta, a própria pessoa não a altera diretamente. A interface
+orienta que mudanças sejam solicitadas à equipe de Fichas. Fichas pode corrigir
+a resposta ou confirmar manualmente em casos como telefone, atendimento
+presencial ou problema no link, sempre sob a mesma regra de capacidade.
+
+Token, expiração, revogação, reutilização e demais proteções pertencem ao
+checkpoint de arquitetura.
+
+#### Ocupação e lista de espera
+
+A vaga pertence à primeira confirmação válida, não à ordem de envio nem de
+abertura do link. A confirmação deve ser atômica: em 79/80, duas confirmações
+simultâneas não podem produzir 81/80. Não há overbooking implícito.
+
+Lista de espera passa a existir funcionalmente quando
+`confirmados == capacidade`. Antes disso, convite sem resposta não equivale a
+fila. Quando a capacidade é atingida:
+
+- novos envios param;
+- inscrições restantes compõem a lista de espera conforme a regra do
+  Encontro;
+- convites já enviados preservam seu histórico.
+
+Se uma confirmação for retirada/corrigida e surgir nova vaga, inicia-se nova
+rodada com pessoas da lista de espera. Ninguém é promovido sem confirmar. O
+convite de reposição deve informar que a vaga será ocupada pela primeira
+confirmação válida; resposta tardia não ultrapassa o limite, e a pessoa
+permanece elegível para convite futuro.
+
+A compatibilidade entre essas situações de produto e os estados atuais de
+`Inscricao`/`ConviteEncontro` deve ser verificada no checkpoint técnico. A
+especificação não redefine models por antecipação.
+
+#### Participação efetiva
+
+Confirmação prévia não é resultado real. Depois da realização, Fichas registra
+ou corrige quem participou, não participou e, quando aplicável ao tipo, quem
+concluiu. `ParticipacaoEncontro` sustenta o histórico exibido em
+`FINALIZADO`.
+
+Correções posteriores continuam permitidas, pois afetam o histórico pessoal,
+mas precisam registrar no mínimo quem alterou e quando. A obrigatoriedade de
+justificativa será decidida no checkpoint técnico/UX.
+
+### Equipe de Trabalho
+
+A área usa `EquipeEncontro`, `TrabalhoEncontro` e a avaliação canônica de
+elegibilidade/disponibilidade. `FuncaoEncontro` legado deixa de ser fonte
+principal. A interface deve permitir:
+
+- visualizar equipes, funções/vagas e ocupação;
+- selecionar uma vaga e procurar candidatos;
+- distinguir candidatos elegíveis dos indisponíveis;
+- explicar indisponibilidade de forma compreensível e segura;
+- alterar o trabalhador quando o domínio permitir.
+
+Motivos podem indicar, por exemplo, vínculo com outra equipe, indisponibilidade,
+falha de elegibilidade ou reserva/aproveitamento por fluxo específico, sem
+expor dado sensível. O frontend não recalcula elegibilidade.
+
+O histórico resumido pode apoiar a escolha, mas não vira relatório de carreira.
+Somente `TRABALHOU` conta como experiência; `FALTOU` é resultado operacional,
+não experiência histórica.
+
+Após `FINALIZADO`, a equipe assume modo histórico. Papéis autorizados podem
+corrigir composição e resultado real, com registro de quem alterou e quando;
+não se trata de edição livre sem trilha.
+
+### Conteúdo posterior à finalização
+
+`FINALIZADO` significa **histórico com correções controladas**, não
+imutabilidade absoluta.
+
+Ficam bloqueados novos fluxos normais de inscrição/convite, reabertura
+automática de campanha, edição normal de datas, retorno arbitrário de status e
+operações próprias de Encontro futuro. Continuam possíveis, nos limites da
+autorização:
+
+- upload e gestão de fotos;
+- cadastro/correção de palestrantes;
+- correção de Equipe de Trabalho;
+- correção da participação efetiva;
+- futuras correções históricas explicitamente aprovadas.
+
+Participação e trabalho alteram histórico pessoal e exigem auditoria. Fotos e
+palestrantes atendem ao processo real de complementação documental posterior.
+A implementação deve auditar novamente as invariantes atuais de Formação antes
+de liberar correções, sem redesenhar Palestra nesta etapa.
+
+### Visões específicas de MME e Formação
+
+MME recebe uma visão própria e restrita que usa o Encontro somente como
+contexto. Ela preserva D.5: propostas, cinco posições, disponibilidade,
+sugestão de coordenador, integrações e revisão/encerramento. Não expõe
+Encontristas nem concede CRUD geral de Encontro, equipe ou trabalho.
+
+MME, Diretoria e Suporte gerenciam propostas. Fichas recebe a leitura
+necessária e faz a seleção oficial. A seleção cria `ConviteEncontro` quando
+essa for a regra canônica; não transforma proposta diretamente em
+`TrabalhoEncontro`.
+
+Formação também recebe visão específica, limitada ao domínio D.4. Formação,
+Diretoria e Suporte gerenciam sessões e palestrantes; Fichas mantém leitura,
+sem gestão. O frontend D.4 requer especificação funcional própria antes da
+implementação, e esta R.3B não define todos os detalhes da tela.
+
+### Preparatórias e Agenda
+
+Não haverá módulo operacional de Preparatórias no novo workspace. Elas
+permanecem como datas/compromissos da Agenda. Não entra no recorte de produto
+frontend para presença ou gestão operacional específica de Preparatória.
+
+O backend existente de presença é preservado sem remoção oportunista e não
+determina uma nova interface. A decisão pode ser reavaliada futuramente.
+
+A Agenda continua usando D.6, em ordem cronológica, exibindo dias do Encontro,
+Preparatórias e Avaliação. Ela não substitui Encontristas, participação,
+equipes, Formação ou MME.
+
+### Terminologia do Calendário e PDFs
+
+A decisão atual substitui a preferência registrada na R.3A para o nome formal
+visível:
+
+- interface: **Calendário**;
+- título dos PDFs: **CALENDÁRIO**.
+
+Não devem permanecer como nome visível “Calendário Institucional” ou
+“CALENDÁRIO INSTITUCIONAL”. Nomes técnicos internos, como
+`CalendarioInstitucional` e `PublicacaoCalendarioInstitucional`, são
+preservados; não há refatoração técnica por terminologia.
+
+Nos PDFs, muda apenas o título visível. Renderer, layouts Público/Interno,
+publicação, histórico, snapshot, SHA-256 e mídia privada permanecem iguais.
+
+### Permissões funcionais por papel
+
+Esta tabela interpreta somente a matriz atual. “Restrita” significa uma visão
+própria do contexto, não acesso ao workspace amplo.
+
+| Área | Diretoria | Suporte | Fichas | MME | Formação | Outros |
+|---|---|---|---|---|---|---|
+| Visão geral | Acesso amplo | Acesso amplo | Acesso operacional | Restrita ao contexto da proposta | Restrita ao contexto formativo | Comunicação: summary; demais sem workspace |
+| Encontristas | Gerir | Gerir | Gerir | Sem acesso | Sem acesso | Sem acesso |
+| Equipe de Trabalho | Gerir | Gerir | Gerir | Sem gestão geral | Sem gestão geral | Sem acesso |
+| Formação | Gerir | Gerir | Leitura | Sem acesso | Gerir | Sem acesso |
+| MME/Violeiros | Gerir | Gerir | Ler e selecionar oficialmente | Gerir | Sem acesso | Sem acesso |
+| Agenda | Gerir pelo Calendário | Gerir pelo Calendário | Leitura | Leitura | Leitura | Papéis reconhecidos: leitura |
+| Correções pós-finalização | Participação, equipe e escopos que já administra | Participação, equipe e escopos que já administra | Participação/equipe e seleção pertinente | Somente proposta, conforme D.5; demais sem acesso | Palestrantes/sessões conforme D.4 | Sem ampliação; escopos documentais próprios permanecem |
+| Fotos | Gerir | Gerir | Sem acesso atual | Sem acesso | Sem acesso | Comunicação: gerir; demais sem acesso |
+| Palestrantes | Gerir | Gerir | Leitura | Sem acesso | Gerir | Sem acesso |
+
+Fichas mantém as áreas operacionais previstas, mas não recebe gestão de
+palestrantes nem fotos. Comunicação, Secretaria, Liturgia, Ação Social,
+Eventos e outros papéis não recebem o workspace completo apenas porque leem o
+Calendário. Qualquer ampliação futura exige decisão humana e atualização da
+matriz.
+
+### Legado a substituir futuramente
+
+O cutover do novo frontend deve retirar da operação visível:
+
+- fila baseada em `Alpinista.status`;
+- `VinculoEncontroLegado` como representação de encontrista ou trabalhador;
+- action `efetivar-encontristas`;
+- `FuncaoEncontro` como fonte principal da montagem;
+- montagem antiga de equipes pelo CRUD de participações legadas.
+
+Nada disso é removido do backend nesta especificação. Compatibilidade,
+cutover e remoção física serão planejados em etapa de implementação.
+
+Os recursos D.2–D.5 necessários ao novo frontend devem entrar na allowlist do
+BFF de forma mínima e explícita, somente quando usados. Não será liberado
+genericamente `/api/*`.
+
+### Auditoria funcional
+
+Correções de `ParticipacaoEncontro` e `TrabalhoEncontro` após finalização
+devem registrar:
+
+- identidade de quem alterou;
+- data e hora da alteração.
+
+Justificativa é desejável, mas sua obrigatoriedade permanece pendente. A R.3B
+não decide entre `LogSistema` e uma estrutura dedicada nem cria tabela nova.
+
+### Decisões de arquitetura pendentes
+
+| Tema | Decisões reservadas ao próximo checkpoint |
+|---|---|
+| Campanha de convites | mecanismo assíncrono, lote, intervalo/cadência, retries, provider e rastreamento de entrega |
+| Link público | token, expiração, reutilização, revogação e exposição mínima |
+| Concorrência | serialização da última vaga, confirmação manual concorrente e resposta tardia |
+| Auditoria | reutilização de `LogSistema` ou estrutura dedicada; obrigatoriedade de justificativa |
+| Encontristas | adequação dos models/status atuais à janela, capacidade, campanha e lista de espera |
+| Equipe | endpoints de busca, elegibilidade, motivos seguros e correção histórica |
+| APIs | comandos e consultas faltantes para lifecycle e workspace |
+| BFF | allowlist mínima por recurso efetivamente consumido |
+| Frontend | decomposição em blocos, desenho visual e especificação detalhada de Formação |
+
+Nenhum desses pontos é decidido implicitamente por esta especificação.
+
+### Validação operacional
+
+O fluxo de convites é uma **REGRA FUNCIONAL V1**, sujeita a validação com
+usuários reais do Movimento. Fichas e Diretoria podem identificar ajustes de
+produto após uso controlado; a regra não é tratada como requisito imutável.
+Qualquer mudança posterior deve ser registrada antes de alterar implementação
+ou contratos.
+
+### Próximo checkpoint
+
+**Arquitetura e decomposição da implementação**, antes de qualquer mudança de
+backend ou frontend. O checkpoint deverá decidir campanha, link público,
+concorrência, APIs/BFF, auditoria e divisão do frontend em blocos pequenos.
+R.3 continua aberta; esta etapa não inicia implementação nem R.3C
+automaticamente.
