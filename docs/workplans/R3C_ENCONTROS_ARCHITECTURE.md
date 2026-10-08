@@ -10,6 +10,12 @@ Este documento descreve arquitetura funcional, fronteiras e responsabilidades.
 Ele não define schema final, contratos definitivos, migrations ou decomposição
 de implementação. R.3 permanece aberta.
 
+A especificação funcional dos campos, condicionais, validações e revisão da
+ficha está em
+[[R3C_PUBLIC_REGISTRATION_SPEC|R.3C — Ficha pública de Escalada e ESPPA]].
+Este documento arquitetural continua responsável pelas fronteiras, fluxos e
+entidades conceituais; a especificação da ficha não congela schema técnico.
+
 ## Decisões aprovadas
 
 ### Configuração de encontristas
@@ -376,8 +382,7 @@ de auditoria ainda não foi decidido.
 
 Permanecem **PENDENTES**:
 
-- campos definitivos da ficha pública e obrigatoriedade de cada campo;
-- campos exatos e UX da seção de cuidado;
+- formulação final de UX, consentimentos e avisos da seção de cuidado;
 - schema final do snapshot e de `InscricaoEncontro`;
 - models e status finais de campanha, rodada, oportunidade e entrega;
 - mecanismo público seguro para editar/cancelar inscrição enviada;
