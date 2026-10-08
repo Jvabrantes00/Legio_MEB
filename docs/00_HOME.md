@@ -26,11 +26,11 @@ substitui os documentos de referência nem os `AGENTS.md` aplicáveis.
 - 1B.3D.6 — Calendário Institucional concluída, incluindo frontend, Agenda,
   PDFs, publicação privada, regressão final e checkpoint de concorrência em
   PostgreSQL 16 com 6/6 cenários aprovados.
-- Roadmap Re-baseline em andamento. R.1 foi concluída e validada humanamente.
-- Checkpoint atual: R.2 — Planejado × implementado × faltante, documentada e
-  aguardando aprovação humana.
-- Após a aprovação da R.2: R.3 — Revisão de maturidade. O re-baseline não
-  antecipa uma nova fase de implementação.
+- Roadmap Re-baseline em andamento. R.1 e R.2 foram concluídas.
+- Checkpoint atual: R.3A — auditoria do frontend operacional de Encontros.
+- Próximo checkpoint: revisão humana de produto dos gaps encontrados, antes de
+  qualquer implementação. O re-baseline não antecipa uma nova fase de
+  implementação.
 
 O estado vivo e o roadmap estão em [[PROJECT_STATE]].
 

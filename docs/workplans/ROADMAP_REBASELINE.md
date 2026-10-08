@@ -3,8 +3,10 @@
 ## Status
 
 R.1 concluída e validada humanamente. R.2 concluída documentalmente em
-2026-10-07 e aguardando aprovação humana. Este documento não altera,
-substitui ou renumera o roadmap.
+2026-10-07. R.3A concluiu a auditoria do gap entre o domínio atual de
+Encontros e o frontend operacional; R.3 permanece em andamento e aguarda
+checkpoint humano de produto. Este documento não altera, substitui ou
+renumera o roadmap.
 
 ## Objetivo
 
@@ -462,3 +464,224 @@ observação de fluxos e uso. Esta lista não avalia nem prescreve correções:
 Após aprovação humana da R.2: **R.3 — Revisão de maturidade**. A R.2 não
 inicia testes manuais de produto, não prioriza implementações e não propõe o
 Roadmap v2.
+
+## R.3A — Gap frontend do domínio de Encontros
+
+### Escopo e método
+
+Auditoria estática, sem alteração ou teste empírico de dados, comparando a
+documentação canônica de D.1–D.6 com models, services, serializers, views,
+rotas, autorização, páginas, capabilities, navegação, proxy BFF, contratos e
+testes frontend diretamente relacionados. Os achados descrevem o produto
+observável; não classificam a maturidade da R.3 nem desenham a solução.
+
+O diagnóstico central é uma divisão de gerações: Agenda e Calendário já usam
+os comandos e a projeção canônicos de D.6, enquanto as abas Encontristas e
+Equipes de Trabalho da página do Encontro continuam integralmente apoiadas em
+`Alpinista`, `FuncaoEncontro` e `VinculoEncontroLegado`. As APIs canônicas de
+D.2–D.5 existem no Django, porém não possuem interface e seus recursos raiz
+nem sequer constam da allowlist atual do proxy BFF.
+
+### Matriz principal
+
+| Capacidade | Backend canônico | API/command | Frontend atual | Contrato frontend | Estado | Gap observado |
+|---|---|---|---|---|---|---|
+| Lifecycle do Encontro | `Encontro.status` e services de transição | Calendário expõe oficializar, reprogramar, adiar, novo planejamento e cancelar; iniciar preparação, iniciar Encontro e finalizar não estão expostos | Lista mostra status; página não oferece o fluxo completo nem muda para modo histórico | `/encontros/` legado e comandos `/calendario-institucional/` | PARCIAL | Faltam comandos operacionais para três transições e adaptação integral da página por estado. |
+| Agenda canônica | `CalendarioEncontro`, `DiaEncontro`, Preparatórias e Avaliação | `GET /calendario-institucional/encontros/{id}/agenda/` | Seção Agenda na página e drawer do Calendário | Contrato agregado D.6 | ATUAL | A projeção canônica é consumida; não equivale aos demais fluxos do Encontro. |
+| Inscrição | `Inscricao` | `POST /inscricoes-encontros/` | “Fila de Espera” lista `Alpinista.status=pendente` | `/alpinistas/?status=pendente` | LEGADO | Não representa inscrição por Pessoa/tipo, seu estado nem seu vínculo com convite. |
+| Convite e resposta | `ConviteEncontro` | criação e `POST /convites-encontros/{id}/responder/` | “Confirmar selecionados” cria vínculo legado diretamente | `/encontros/{id}/efetivar-encontristas/` | LEGADO | Confirmação de convite não está representada; a mesma palavra descreve outra operação. |
+| Resultado de participação | `ParticipacaoEncontro` por Pessoa/Encontro | `POST /resultados-participacoes-encontros/` | Nenhum fluxo localizado | — | AUSENTE | Não há registro ou histórico visual de `CONCLUIU`, `FALTOU` ou `DESISTIU`. |
+| Participação antiga | `VinculoEncontroLegado`, mantido apenas por compatibilidade | CRUD `/participacoes-encontros/` e ações legadas no Encontro | “Confirmados”, remoção, coordenação e cards de equipe | Contrato legado de Alpinista/função | LEGADO | A página trata vínculo anterior como inscrição, aceite, participação e trabalho. |
+| Templates e snapshots de equipe | `TemplateEquipeEncontro`, `TemplateRoleEquipe`, `EquipeEncontro`, `RoleEquipeEncontro` | preparar equipes e consulta de `/equipes-encontros/?encontro=` | Nenhuma representação canônica | Tela consulta `/funcoes/` | LEGADO | A mensagem “nenhuma função” mede `FuncaoEncontro`, não templates/snapshots. |
+| Trabalho e alocação | `TrabalhoEncontro` | `/trabalhos-encontros/` e actions de alocar, realocar, desalocar, retirar, substituir e resultado | Cards e busca criam/deletam `VinculoEncontroLegado` | `/participacoes-encontros/` + `/alpinistas/?status=ativo` | LEGADO | Os trabalhos reais, estados, disponibilidade e elegibilidade não aparecem. |
+| Histórico de trabalho | `TrabalhoEncontro` com experiência somente em `TRABALHOU` | consulta canônica de trabalho | Nenhuma tela localizada no Encontro | — | AUSENTE | Não há visão histórica; `FALTOU` operacional também não é apresentado. |
+| Preparatórias na Agenda | `ReuniaoPreparatoriaEncontro` | comandos e projeção D.6 | Exibição e edição no Calendário | `/calendario-institucional/...` | ATUAL | O compromisso temporal está coberto. |
+| Presença preparatória | `PresencaPreparatoria` e autorização contextual | `/presencas-preparatorias/` e `corrigir` | Nenhuma operação localizada | — | AUSENTE | Exibir Preparatória na Agenda não cobre presença nem revisão de permanência. |
+| Formação | `SessaoFormativa` e `PalestranteSessao` | catálogo, sessões e actions canônicas | Nenhuma rota ou componente localizado | — | AUSENTE | Backend D.4 existe, mas não aparece dentro ou fora do Encontro. |
+| Proposta de Violeiros | `PropostaVioleiros` e `ItemPropostaVioleiros` | `/propostas-violeiros/`, actions e seleção oficial | Nenhuma rota ou componente localizado | — | AUSENTE | MME, Diretoria, Suporte e Fichas não têm interface para suas operações específicas. |
+| Avaliação simples | `AvaliacaoEncontro` 1:1 | comandos D.6 de criar, editar e remover | Item na Agenda e edição no drawer para gestores do Calendário | `/calendario-institucional/.../avaliacao/` | PARCIAL | Existe operação, mas sem integração com a finalização; permanece editável em estados terminais. |
+| Publicação/PDF do Calendário | versões imutáveis, snapshot e arquivo privado | preview, publicação, histórico e download | Fluxo de exportação/publicação implementado | Contrato D.6 | ATUAL | Sem gap funcional identificado nesta auditoria; há apenas refinamento terminológico. |
+| Transporte browser das APIs D.2–D.5 | Django possui as rotas canônicas | Recursos raiz canônicos registrados no DRF | Não consumíveis pelo `siaFetch` atual | Allowlist BFF contém apenas recursos antigos e Calendário | ACESSO BLOQUEADO | `inscricoes-encontros`, `convites-encontros`, `resultados-participacoes-encontros`, `equipes-encontros`, `trabalhos-encontros`, `presencas-preparatorias`, `sessoes-formativas`, `catalogo-formacao` e `propostas-violeiros` não estão liberados no proxy. |
+
+### Lifecycle observado na interface
+
+A seção Agenda respeita a projeção canônica. A página operacional de
+`/encontros/{id}` não condiciona as abas Encontristas ou Equipes ao status do
+Encontro. No drawer do Calendário, os botões de lifecycle variam por estado,
+mas dados básicos, Preparatórias e Avaliação continuam renderizados para todo
+estado quando o usuário pode editar.
+
+| Estado | Página do Encontro | Ações do Calendário | Aceitação observável no backend | Adaptação |
+|---|---|---|---|---|
+| `EM_AGENDAMENTO` | Agenda + abas legadas completas | editar planejamento, oficializar e cancelar | comandos canônicos válidos; mutações legadas também não verificam lifecycle | PARCIAL |
+| `AGENDADO` | Mesmas abas e ações legadas | reprogramar, adiar e cancelar | comandos canônicos válidos; mutações legadas continuam aceitas | PARCIAL |
+| `EM_PREPARACAO` | Mesmas abas e ações legadas | adiar e cancelar; sem comando para iniciar o Encontro | transição canônica existe apenas em service; mutações legadas continuam aceitas | PARCIAL |
+| `EM_ANDAMENTO` | Mesmas abas e ações legadas | cancelar; sem comando para finalizar | finalização canônica existe apenas em service; mutações legadas continuam aceitas | PARCIAL |
+| `FINALIZADO` | Continua com fila, confirmação, remoção e montagem de equipe | oculta botões de lifecycle, mas ainda oferece dados básicos, Preparatórias e Avaliação | ações legadas não possuem guarda por status; services de dados básicos, reunião e avaliação também não rejeitam estado terminal | LEGADO |
+| `ADIADO` | Mesmas abas e ações legadas | editor envia reprogramação; não usa explicitamente o command de novo planejamento | reprogramação canônica aceita `ADIADO`; mutações legadas continuam aceitas | PARCIAL |
+| `CANCELADO` | Mesmas abas e ações legadas | oculta botões de lifecycle, mas ainda oferece dados básicos, Preparatórias e Avaliação | ações legadas e esses comandos auxiliares não possuem guarda terminal | LEGADO |
+
+`FINALIZADO` e `CANCELADO` são terminais apenas na máquina de transições. A
+página não possui modo histórico/read-only. Há, portanto, dois gaps distintos:
+
+- **visual:** abas, textos e controles antigos permanecem iguais aos de um
+  Encontro em preparação;
+- **operacional:** efetivar/remover encontristas, CRUD de vínculo legado e
+  alterações de dados básicos, Preparatórias e Avaliação não são recusados
+  por uma regra terminal específica. Uma exclusão genérica pode falhar por
+  integridade referencial, mas isso não equivale a uma política de lifecycle.
+
+Não foi localizada tela de histórico de `ParticipacaoEncontro` nem de
+`TrabalhoEncontro`.
+
+### Encontristas — chamadas atuais
+
+| Ação visual | Chamada | Objeto realmente manipulado |
+|---|---|---|
+| Fila de Espera | `GET /alpinistas/?status=pendente` | estado global do `Alpinista` legado |
+| Confirmados | `GET /participacoes-encontros/?encontro={id}` | `VinculoEncontroLegado` com função `encontrista` |
+| Confirmar selecionados | `POST /encontros/{id}/efetivar-encontristas/` | cria função/vínculo legado; não responde `ConviteEncontro` |
+| Remover selecionados | `POST /encontros/{id}/remover-encontristas/` | exclui vínculo legado |
+
+“Fila de Espera”, “Confirmados” e “Inscrições Pendentes” não correspondem de
+forma confiável aos três conceitos canônicos de D.2. A confirmação apresentada
+é uma efetivação legada, não `ConviteEncontro.status=CONFIRMADO`; a participação
+efetiva e sua conclusão não possuem frontend.
+
+### Equipes, trabalho e dataset
+
+A aba de equipes consulta `GET /funcoes/`, carrega
+`GET /participacoes-encontros/?encontro={id}`, pesquisa
+`GET /alpinistas/?status=ativo` e cria/remove vínculos pelo CRUD de
+`/participacoes-encontros/`. Não consulta templates, snapshots,
+`EquipeEncontro`, roles ou `TrabalhoEncontro`.
+
+O DEV-SEED.1 criou os dados no domínio canônico: 9 `EquipeEncontro` e 13
+`TrabalhoEncontro`, além de templates, roles, Pessoas/Perfis e proposta MME.
+Não fez dual-write para `FuncaoEncontro` ou `VinculoEncontroLegado`, em linha
+com os workplans. Por isso:
+
+- “nenhuma função de trabalho cadastrada” resulta da consulta à coleção
+  legada `/funcoes/`, não da ausência de templates no seed;
+- os 9 times e 13 trabalhos são invisíveis porque a tela consulta outra
+  estrutura;
+- o modal de candidatos depende primeiro de um card de `FuncaoEncontro` e,
+  quando aberto, pesquisa Alpinistas legados ativos, não a avaliação canônica
+  de elegibilidade/disponibilidade.
+
+O seed tornou o gap observável; não há evidência de que esses três sintomas
+sejam defeito do dataset.
+
+### Formação e MME
+
+O backend de Formação possui catálogo, sessões, palestrantes, realização e
+histórico autorizado. Nenhum consumo desses endpoints foi localizado no
+frontend, dentro do Encontro ou em rota própria.
+
+O backend de MME possui proposta, cinco posições, disponibilidade derivada,
+encerramento e aproveitamento oficial. Não existe tela, navegação ou consumo
+frontend. MME não recebe, por decisão documentada, leitura geral do Encontro;
+isso não é erro de autorização. O gap é a ausência de uma entrada específica
+para a capacidade que o backend lhe concede. Fichas, Diretoria e Suporte
+também não possuem UI para suas ações sobre propostas.
+
+### Preparatórias e Avaliação
+
+- **Agenda:** Preparatórias reais e Avaliação são projetadas e exibidas; os
+  gestores do Calendário podem criar/editar Preparatórias e
+  criar/editar/remover Avaliação pelo drawer.
+- **Operação:** não há frontend para registrar/corrigir
+  `PresencaPreparatoria`, aplicar a autorização contextual ou acompanhar a
+  flag de revisão. A Agenda não substitui esse produto de D.3.
+- **Lifecycle:** não foi localizado vínculo automático entre Avaliação e a
+  transição para `FINALIZADO`; sua edição continua disponível inclusive após
+  finalização ou cancelamento.
+
+### Permissões, capabilities e navegação
+
+| Papel | Backend permite | Navegação oferece | Página permite | Gap |
+|---|---|---|---|---|
+| Suporte | Encontro completo; Calendário e D.2–D.5 conforme matriz | Dashboard, Alpinistas, Encontros, Calendário | Agenda e operações legadas de Encontristas/Equipe | APIs canônicas D.2–D.5 sem UI/BFF. |
+| Diretoria | Mesmo escopo operacional relevante de Suporte | Dashboard, Alpinistas, Encontros, Calendário | Agenda e operações legadas de Encontristas/Equipe | APIs canônicas D.2–D.5 sem UI/BFF. |
+| Fichas | Encontro completo; D.2/D.3; leitura de D.4/D.5 e seleção oficial MME; Calendário read-only | Dashboard, Alpinistas, Encontros, Calendário | Agenda e operações legadas de Encontristas/Equipe | Não há UI canônica nem seleção MME. |
+| Comunicação | Encontro summary, Agenda, Calendário e galeria autorizada | Alpinistas, Encontros, Calendário | Resumo do Encontro e Agenda; sem abas de gestão | Coerente para a página auditada; galeria não foi objeto desta R.3A. |
+| MME | Propostas MME e Calendário; sem leitura geral de Encontro/equipe/trabalho | Alpinistas e Calendário | Não acessa `/encontros`; não há página de proposta | Ausência de frontend específico, não erro da proteção backend. |
+| Formação | Formação em Encontros e Calendário; sem leitura geral de Encontro | Alpinistas e Calendário | Não acessa `/encontros`; não há página de Formação | Ausência de frontend específico, não erro da proteção backend. |
+| Secretaria | Calendário read-only; sem Encontro | Alpinistas e Calendário | Não acessa `/encontros` | Coerente com a matriz para Encontros. |
+| Ação Social, Liturgia e Eventos | Calendário read-only; sem Encontro | Alpinistas e Calendário | Não acessam `/encontros` | Coerente com a matriz para Encontros. |
+| Sem papel | Default deny | Nenhuma entrada funcional | URL direta negada | Sem gap; observação manual confirmada. |
+
+As capabilities do frontend espelham o acesso geral: Encontros para Suporte,
+Diretoria, Fichas e Comunicação; gestão para os três primeiros; Calendário
+para todo papel reconhecido e gestão apenas para Suporte/Diretoria. Elas não
+modelam capacidades específicas de D.2–D.5. Os testes frontend relacionados
+cobrem contratos antigos de formulário, Calendário, capabilities e navegação;
+não há testes de fluxos canônicos ausentes.
+
+### Achados do teste manual e causa
+
+| Observação | Categoria | Causa identificada | Evidência |
+|---|---|---|---|
+| Conflito avisou e não bloqueou oficialização | — | comportamento advisory aprovado | Drawer usa command canônico e preserva `avisos_conflito`. |
+| MME vê apenas Alpinistas e Calendário | NAVEGAÇÃO/CAPABILITY | capability geral de Encontro exclui MME conforme matriz | `ENCOUNTER_READ_ROLES` versus autorização específica de propostas. |
+| MME não opera proposta | FRONTEND AUSENTE | D.5 não possui rota/componente e o BFF bloqueia o recurso raiz | ausência de referência frontend a `/propostas-violeiros/`. |
+| Pouca variedade em Encontristas | FRONTEND LEGADO; SEED | tela lê `Alpinista.status`, não `Inscricao`, `ConviteEncontro` e `ParticipacaoEncontro` do seed | chamadas da página e ausência deliberada de dual-write. |
+| Fila move pessoa para “Confirmados” | FRONTEND LEGADO | action cria `VinculoEncontroLegado`, não confirma convite | implementação de `efetivar-encontristas`. |
+| “Nenhuma função” | FRONTEND LEGADO | `/funcoes/` lê `FuncaoEncontro`; seed criou templates/roles canônicos | contrato da aba versus modelos populados. |
+| 9 equipes/13 trabalhos não aparecem | FRONTEND LEGADO | tela não consulta `EquipeEncontro`/`TrabalhoEncontro` | seed e chamadas frontend usam universos distintos. |
+| Candidatos não aparecem | FRONTEND LEGADO; FRONTEND PARCIAL | sem função legada não há card/modal; busca eventual usa Alpinistas ativos e não elegibilidade canônica | fluxo condicional da aba. |
+| Confirmação existe, conclusão não | FRONTEND LEGADO; FRONTEND AUSENTE | confirmação visual é efetivação antiga; API de resultado não é consumida | endpoints D.2 versus chamadas atuais. |
+| `demo.sem_papel` é negado | — | default deny funciona | capabilities e proteção backend, confirmadas manualmente. |
+| `FINALIZADO` mantém fila e equipes | LIFECYCLE; FRONTEND LEGADO | componentes não condicionam abas pelo status; mutações legadas não guardam estado terminal | renderização e actions do backend. |
+| Preferência por “Calendário” | UX/TERMINOLOGIA | navegação e título já usam forma curta; ainda há texto longo em negação e diálogo/identificação de exportação | página do Calendário, header e `CalendarExportDialog`. |
+
+### Síntese por bloco D.1–D.6
+
+| Bloco | Backend | Frontend | Principal gap |
+|---|---|---|---|
+| D.1 — lifecycle | SIM | PARCIAL | status é exibido, mas três transições não têm API/UI e a página não se adapta ao modo terminal. |
+| D.2 — inscrição/convite/participação | SIM | NÃO | a interface continua integralmente no fluxo e nos objetos legados. |
+| D.3 — equipes/trabalho/preparatórias | SIM | PARCIAL | Preparatórias aparecem na Agenda; equipes, trabalho, elegibilidade e presença não têm UI canônica. |
+| D.4 — formação | SIM | NÃO | API/autorização existem, sem frontend correspondente. |
+| D.5 — MME | SIM | NÃO | API/autorização existem, sem navegação/UI específica e bloqueadas pelo BFF atual. |
+| D.6 — Agenda/Calendário | SIM | SIM | fluxo principal atual; restam gaps de lifecycle em edições auxiliares e refinamento terminológico. |
+
+### Terminologia do Calendário
+
+A preferência humana fica registrada, sem mudança de código:
+
+- interface do SIA: **Calendário**;
+- PDF, publicação e documentação formal: **CALENDÁRIO INSTITUCIONAL**.
+
+A navegação já mostra “Calendário” e o cabeçalho usa “Calendário do Movimento”.
+“Calendário Institucional” permanece na mensagem de acesso negado da página e
+no diálogo/identificação da exportação; o segundo uso pertence ao contexto
+formal permitido. A adequação exata da mensagem de interface requer decisão
+posterior, sem afetar contratos.
+
+### Decisões humanas necessárias
+
+Antes de qualquer implementação, o checkpoint de produto precisa definir:
+
+1. quais capacidades canônicas de D.1–D.5 entram no próximo recorte de
+   frontend e em qual ordem;
+2. qual deve ser a fronteira de operação e histórico em `FINALIZADO` e
+   `CANCELADO`, inclusive para dados básicos, Preparatórias e Avaliação;
+3. como aposentar semanticamente “fila”, “confirmados” e montagem por função
+   legada sem confundi-los com Inscrição, Convite, Participação e Trabalho;
+4. como disponibilizar as capacidades específicas de MME e Formação sem lhes
+   conceder leitura geral do Encontro além da matriz vigente;
+5. se e quando a allowlist BFF será ampliada para cada API canônica, junto do
+   frontend correspondente;
+6. qual escopo operacional de Preparatórias/presença e histórico de
+   participação/trabalho será priorizado;
+7. onde a forma curta “Calendário” deve substituir texto de interface,
+   preservando o nome formal em PDFs/publicações.
+
+Estas são decisões de produto; esta auditoria não escolhe abas, navegação,
+layout, fluxos ou uma nova estrutura da página do Encontro.
+
+### Próximo checkpoint
+
+**Checkpoint humano de produto dos gaps da R.3A**, antes de qualquer
+implementação ou avanço para R.3B. R.3 permanece em andamento.
