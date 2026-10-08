@@ -5,9 +5,10 @@
 R.1 concluída e validada humanamente. R.2 concluída documentalmente em
 2026-10-07. R.3A concluiu a auditoria do gap entre o domínio atual de
 Encontros e o frontend operacional. R.3B consolidou a especificação funcional
-do novo Workspace de Encontros; R.3 permanece em andamento e aguarda o
-checkpoint de arquitetura e decomposição. Este documento não altera,
-substitui ou renumera o roadmap.
+do novo Workspace de Encontros. R.3C está em andamento: suas auditorias e a
+consolidação arquitetural foram concluídas, mas ainda há pendências a fechar
+antes da decomposição. Este documento não altera, substitui ou renumera o
+roadmap.
 
 ## Objetivo
 
@@ -1030,3 +1031,28 @@ backend ou frontend. O checkpoint deverá decidir campanha, link público,
 concorrência, APIs/BFF, auditoria e divisão do frontend em blocos pequenos.
 R.3 continua aberta; esta etapa não inicia implementação nem R.3C
 automaticamente.
+
+## R.3C — Arquitetura do Workspace/Encontristas
+
+R.3C transforma a especificação funcional em fronteiras arquiteturais sem
+iniciar implementação:
+
+- **R.3C.1** auditou a campanha e a modelagem atual de convites;
+- **R.3C.2** auditou a ficha pública, os dados cadastrais, a resolução de
+  Pessoa e as fronteiras de privacidade;
+- **R.3C.3** consolidou as decisões humanas para inscrição por Encontro,
+  configuração de encontristas, elegibilidade, snapshot, resolução cadastral,
+  campanha, rodadas, oportunidades, entregas, capacidade, lista de espera,
+  Pré-Encontro, dados de cuidado, concorrência, processamento assíncrono e
+  auditoria.
+
+O documento principal é
+[[R3C_ENCONTROS_ARCHITECTURE|R.3C — Arquitetura do Workspace/Encontristas]].
+Ele registra entidades somente em nível conceitual e mantém explícitos os
+schemas, contratos e mecanismos ainda pendentes. A nova `InscricaoEncontro`
+será expansiva e específica de um Encontro; a `Inscricao` atual permanece
+durante o cutover.
+
+R.3 continua aberta. O próximo checkpoint é fechar as pendências necessárias
+antes da decomposição da implementação; não há autorização para iniciar
+backend, frontend, migrations ou infraestrutura assíncrona.

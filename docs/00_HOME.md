@@ -27,10 +27,11 @@ substitui os documentos de referência nem os `AGENTS.md` aplicáveis.
   PDFs, publicação privada, regressão final e checkpoint de concorrência em
   PostgreSQL 16 com 6/6 cenários aprovados.
 - Roadmap Re-baseline em andamento. R.1 e R.2 foram concluídas.
-- Checkpoint atual: R.3B — especificação funcional do Workspace de Encontros.
-- Próximo checkpoint: arquitetura e decomposição da implementação, antes de
-  qualquer mudança de produto. O re-baseline não antecipa uma nova fase de
-  implementação.
+- Checkpoint atual: R.3C — arquitetura do Workspace/Encontristas em andamento.
+- Documento principal:
+  [[workplans/R3C_ENCONTROS_ARCHITECTURE|R.3C — Arquitetura do Workspace/Encontristas]].
+- Próximo checkpoint: fechar as pendências necessárias antes da decomposição
+  da implementação. O re-baseline não antecipa uma nova fase de implementação.
 
 O estado vivo e o roadmap estão em [[PROJECT_STATE]].
 
