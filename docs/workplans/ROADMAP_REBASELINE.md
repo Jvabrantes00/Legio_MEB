@@ -1053,7 +1053,9 @@ iniciar implementação:
   entregas, capacidade, concorrência, auditoria e cutover;
 - **R.3C.6** concluiu a revisão humana da modelagem técnica, fechando as regras
   de produto sobre Pré-Encontro, disputa de capacidade, Coordenação Geral,
-  PDFs sob demanda, foto sem Pessoa resolvida e duplicidade pré-resolução.
+  PDFs sob demanda, foto sem Pessoa resolvida e duplicidade pré-resolução;
+- **R.3C.7** concluiu a decomposição incremental da implementação, incluindo
+  dependências, blocos, validações manuais, checkpoints, MVP e cutover.
 
 O documento principal é
 [[R3C_ENCONTROS_ARCHITECTURE|R.3C — Arquitetura do Workspace/Encontristas]].
@@ -1061,12 +1063,15 @@ O detalhamento da ficha está em
 [[R3C_PUBLIC_REGISTRATION_SPEC|R.3C — Ficha pública de Escalada e ESPPA]].
 O modelo técnico proposto está em
 [[R3C_ENCONTRISTAS_TECHNICAL_MODEL|R.3C.5 — Modelagem técnica de Encontristas]].
+O plano de execução está em
+[[R3C_IMPLEMENTATION_PLAN|R.3C.7 — Plano de implementação]].
 Ele registra entidades somente em nível conceitual e mantém explícitos os
 schemas, contratos e mecanismos ainda pendentes. A nova `InscricaoEncontro`
 será expansiva e específica de um Encontro; a `Inscricao` atual permanece
 durante o cutover.
 
-As regras de produto relevantes estão fechadas e a modelagem conceitual foi
-aprovada, sem qualquer implementação. R.3 continua aberta. O próximo checkpoint
-é R.3C.7 — decomposição da implementação em blocos; não há autorização para
-iniciar backend, frontend, migrations ou infraestrutura assíncrona.
+As regras de produto relevantes estão fechadas, a modelagem conceitual foi
+aprovada e a implementação foi decomposta, sem qualquer código iniciado. R.3C
+encerra seu checkpoint documental; R.3 continua aberta. O próximo checkpoint é
+R.3I.1 — fundação de auditoria estruturada, sujeito a solicitação explícita de
+implementação.
