@@ -758,7 +758,12 @@ class ResponsavelDeclaradoInscricao(models.Model):
         related_name='responsavel_declarado',
     )
     nome_completo = models.CharField(max_length=255)
-    cpf = models.CharField(max_length=14, validators=[validate_cpf])
+    cpf = models.CharField(
+        max_length=14,
+        null=True,
+        blank=True,
+        validators=[validate_cpf],
+    )
     parentesco = models.CharField(max_length=100)
     telefone_whatsapp = models.CharField(max_length=20)
     email = models.EmailField(blank=True, default='')
