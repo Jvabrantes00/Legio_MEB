@@ -1,4 +1,5 @@
 from datetime import date, datetime, timedelta
+from hashlib import sha256
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
@@ -81,7 +82,7 @@ class CampanhaConvitesServiceTests(TestCase):
         )
         return pessoa, inscricao, convite
 
-    def iniciar(self):
+    def emitir_inicial(self):
         return services.iniciar_campanha(
             usuario=self.usuario,
             encontro=self.encontro,
@@ -89,8 +90,12 @@ class CampanhaConvitesServiceTests(TestCase):
             momento=self.momento,
         )
 
+    def iniciar(self):
+        return self.emitir_inicial().campanha
+
     def test_inicio_manual_cria_uma_campanha_rodada_inicial_e_oportunidade(self):
-        campanha = self.iniciar()
+        resultado = self.emitir_inicial()
+        campanha = resultado.campanha
 
         rodada = campanha.rodadas.get()
         oportunidade = rodada.oportunidades.get()
@@ -99,6 +104,21 @@ class CampanhaConvitesServiceTests(TestCase):
         self.assertEqual(rodada.sequencia, 1)
         self.assertEqual(oportunidade.convite, self.convite)
         self.assertEqual(oportunidade.expira_em, self.prazo)
+        self.assertEqual(len(resultado.emissoes), 1)
+        emissao = resultado.emissoes[0]
+        self.assertEqual(emissao.oportunidade, oportunidade)
+        self.assertEqual(
+            oportunidade.token_digest,
+            sha256(emissao.token.encode()).hexdigest(),
+        )
+        self.assertNotEqual(oportunidade.token_digest, emissao.token)
+        persistida = OportunidadeConviteEncontro.objects.values().get(
+            pk=oportunidade.pk,
+        )
+        self.assertNotIn(emissao.token, repr(persistida))
+        self.assertFalse(hasattr(oportunidade, 'token'))
+        self.assertNotIn(emissao.token, repr(emissao))
+        self.assertNotIn(emissao.token, repr(resultado))
         self.assertFalse(EntregaConviteEncontro.objects.exists())
 
     def test_segundo_inicio_e_negado_sem_duplicar(self):
@@ -190,12 +210,13 @@ class CampanhaConvitesServiceTests(TestCase):
         )
         novo_prazo = self.prazo + timedelta(days=5)
 
-        campanha = services.prorrogar_campanha(
+        resultado = services.prorrogar_campanha(
             usuario=self.usuario,
             campanha=campanha,
             novo_prazo=novo_prazo,
             momento=self.prazo + timedelta(minutes=1),
         )
+        campanha = resultado.campanha
 
         antiga.refresh_from_db()
         nova = OportunidadeConviteEncontro.objects.exclude(pk=antiga.pk).get()
@@ -205,6 +226,12 @@ class CampanhaConvitesServiceTests(TestCase):
         self.assertEqual(rodada.sequencia, 2)
         self.assertEqual(antiga.status, OportunidadeConviteEncontro.Status.EXPIRADA)
         self.assertNotEqual(nova.token_digest, digest_antigo)
+        self.assertEqual(len(resultado.emissoes), 1)
+        self.assertEqual(resultado.emissoes[0].oportunidade, nova)
+        self.assertEqual(
+            nova.token_digest,
+            sha256(resultado.emissoes[0].token.encode()).hexdigest(),
+        )
 
     def test_recusa_nao_reenvia_nem_reaparece_na_selecao_automatica(self):
         campanha = self.iniciar()
@@ -264,6 +291,8 @@ class CampanhaConvitesServiceTests(TestCase):
         nova = next(item for item in abertura.oportunidades if item.convite_id == self.convite.pk)
         self.assertEqual(abertura.rodada.tipo, RodadaConvitesEncontro.Tipo.REPOSICAO)
         self.assertEqual(len(abertura.oportunidades), 1)
+        self.assertEqual(len(abertura.emissoes), 1)
+        self.assertEqual(abertura.emissoes[0].oportunidade, nova)
         self.assertNotEqual(nova.token_digest, antiga.token_digest)
         oportunidade_alheia.refresh_from_db()
         self.assertEqual(
@@ -340,7 +369,9 @@ class CampanhaConvitesServiceTests(TestCase):
 
         self.assertEqual(abertura.rodada.tipo, RodadaConvitesEncontro.Tipo.REPOSICAO)
         self.assertEqual(len(abertura.oportunidades), 2)
+        self.assertEqual(len(abertura.emissoes), 2)
         self.assertFalse(repetida.criada)
+        self.assertEqual(repetida.emissoes, ())
         self.assertEqual(RodadaConvitesEncontro.objects.count(), 2)
 
     def test_sem_canal_permanece_elegivel_visivel_e_sem_entrega(self):
@@ -386,7 +417,8 @@ class CampanhaConvitesServiceTests(TestCase):
         self.assertFalse(OportunidadeConviteEncontro.objects.exists())
 
     def test_auditoria_nao_contem_pii_token_ou_digest(self):
-        campanha = self.iniciar()
+        resultado = self.emitir_inicial()
+        campanha = resultado.campanha
         evento = EventoAuditoriaEncontro.objects.get(
             fato='campanha_convites.iniciada',
         )
@@ -398,6 +430,7 @@ class CampanhaConvitesServiceTests(TestCase):
         self.assertNotIn('cpf', conteudo)
         self.assertNotIn('token', conteudo)
         self.assertNotIn(oportunidade.token_digest, conteudo)
+        self.assertNotIn(resultado.emissoes[0].token, conteudo)
 
     def test_usuario_sem_papel_nao_opera_campanha(self):
         sem_papel = get_user_model().objects.create_user(username='sem-papel')
@@ -442,11 +475,11 @@ class CampanhaConvitesServiceTests(TestCase):
             password='senha-exclusiva-de-teste',
         )
 
-        campanha = services.iniciar_campanha(
+        resultado = services.iniciar_campanha(
             usuario=superuser,
             encontro=self.encontro,
             prazo_confirmacao=self.prazo,
             momento=self.momento,
         )
 
-        self.assertEqual(campanha.iniciada_por, superuser)
+        self.assertEqual(resultado.campanha.iniciada_por, superuser)

@@ -1629,14 +1629,17 @@ class CampanhaConvitesEncontroViewSet(viewsets.GenericViewSet):
         encontro = self.get_object()
         dados = self._dados_comando(request)
         try:
-            campanha = campanha_convites_services.iniciar_campanha(
+            resultado = campanha_convites_services.iniciar_campanha(
                 usuario=request.user,
                 encontro=encontro,
                 **dados,
             )
         except django_core_validation_error as error:
             _erro_de_dominio(error)
-        return self._resposta(campanha, codigo=status.HTTP_201_CREATED)
+        return self._resposta(
+            resultado.campanha,
+            codigo=status.HTTP_201_CREATED,
+        )
 
     @action(detail=True, methods=['post'], url_path='processar-prazo')
     def processar_prazo(self, request, pk=None):
@@ -1656,14 +1659,14 @@ class CampanhaConvitesEncontroViewSet(viewsets.GenericViewSet):
         encontro = self.get_object()
         dados = self._dados_comando(request)
         try:
-            campanha = campanha_convites_services.prorrogar_campanha(
+            resultado = campanha_convites_services.prorrogar_campanha(
                 usuario=request.user,
                 campanha=self._campanha(encontro),
                 **dados,
             )
         except django_core_validation_error as error:
             _erro_de_dominio(error)
-        return self._resposta(campanha)
+        return self._resposta(resultado.campanha)
 
     @action(detail=True, methods=['post'])
     def encerrar(self, request, pk=None):

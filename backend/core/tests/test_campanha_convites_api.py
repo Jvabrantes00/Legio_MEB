@@ -1,4 +1,5 @@
 from datetime import date, timedelta
+from hashlib import sha256
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
@@ -90,7 +91,7 @@ class CampanhaConvitesApiTests(AuthenticatedAPITestCase):
             encontro=self.encontro,
             prazo_confirmacao=self.agora + timedelta(days=10),
             momento=self.agora,
-        )
+        ).campanha
 
     def test_autenticacao_e_default_deny(self):
         self.client.force_authenticate(user=None)
@@ -209,12 +210,18 @@ class CampanhaConvitesApiTests(AuthenticatedAPITestCase):
 
     def test_inicia_uma_vez_e_resposta_nao_expoe_segredo(self):
         prazo = timezone.now() + timedelta(days=3)
+        token = 'segredo-one-shot-controlado-pelo-teste'
+        digest = sha256(token.encode()).hexdigest()
 
-        resposta = self.client.post(
-            self.iniciar_url,
-            {'prazo_confirmacao': prazo.isoformat()},
-            format='json',
-        )
+        with patch(
+            'core.services.campanhas_convites._novo_token_e_digest',
+            return_value=(token, digest),
+        ):
+            resposta = self.client.post(
+                self.iniciar_url,
+                {'prazo_confirmacao': prazo.isoformat()},
+                format='json',
+            )
         duplicada = self.client.post(
             self.iniciar_url,
             {'prazo_confirmacao': prazo.isoformat()},
@@ -226,6 +233,8 @@ class CampanhaConvitesApiTests(AuthenticatedAPITestCase):
         conteudo = str(resposta.json()).lower()
         self.assertNotIn('token', conteudo)
         self.assertNotIn('digest', conteudo)
+        self.assertNotIn(token, conteudo)
+        self.assertNotIn(digest, conteudo)
         self.assertNotIn(self.pessoa.email, conteudo)
 
     def test_processa_prazo_prorroga_e_consulta_nova_rodada(self):

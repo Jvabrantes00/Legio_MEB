@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from hashlib import sha256
 from secrets import token_urlsafe
@@ -78,10 +78,27 @@ class ProjecaoCandidatosCampanha:
 
 
 @dataclass(frozen=True)
+class EmissaoOportunidadeConvite:
+    oportunidade: OportunidadeConviteEncontro
+    token: str = field(repr=False)
+
+
+@dataclass(frozen=True)
 class ResultadoAberturaRodada:
     rodada: RodadaConvitesEncontro
     oportunidades: tuple[OportunidadeConviteEncontro, ...]
+    emissoes: tuple[EmissaoOportunidadeConvite, ...] = ()
     criada: bool = True
+
+
+@dataclass(frozen=True)
+class ResultadoOperacaoCampanha:
+    campanha: CampanhaConvitesEncontro
+    abertura: ResultadoAberturaRodada
+
+    @property
+    def emissoes(self):
+        return self.abertura.emissoes
 
 
 _RESULTADOS_ELEGIVEIS = frozenset({
@@ -287,9 +304,9 @@ def _auditar(
     )
 
 
-def _digest_novo():
-    segredo = token_urlsafe(32)
-    return sha256(segredo.encode()).hexdigest()
+def _novo_token_e_digest():
+    token = token_urlsafe(32)
+    return token, sha256(token.encode()).hexdigest()
 
 
 def _encerrar_rodadas_abertas(
@@ -375,20 +392,28 @@ def _abrir_rodada(
                 if candidato.convite.pk in convites_restritos
             )
     oportunidades = []
+    emissoes = []
     for candidato in candidatos:
         convite = candidato.convite
         if convite.status != ConviteEncontro.Status.CONVIDADO:
             convite.status = ConviteEncontro.Status.CONVIDADO
             convite.save(update_fields=['status', 'atualizado_em'])
-        oportunidades.append(OportunidadeConviteEncontro.objects.create(
+        token, token_digest = _novo_token_e_digest()
+        oportunidade = OportunidadeConviteEncontro.objects.create(
             rodada=rodada,
             convite=convite,
-            token_digest=_digest_novo(),
+            token_digest=token_digest,
             expira_em=campanha.prazo_confirmacao,
+        )
+        oportunidades.append(oportunidade)
+        emissoes.append(EmissaoOportunidadeConvite(
+            oportunidade=oportunidade,
+            token=token,
         ))
     return ResultadoAberturaRodada(
         rodada=rodada,
         oportunidades=tuple(oportunidades),
+        emissoes=tuple(emissoes),
     )
 
 
@@ -481,7 +506,10 @@ def iniciar_campanha(
         },
         justificativa=justificativa,
     )
-    return campanha
+    return ResultadoOperacaoCampanha(
+        campanha=campanha,
+        abertura=abertura,
+    )
 
 
 @transaction.atomic
@@ -612,7 +640,10 @@ def prorrogar_campanha(
         },
         justificativa=justificativa,
     )
-    return campanha
+    return ResultadoOperacaoCampanha(
+        campanha=campanha,
+        abertura=abertura,
+    )
 
 
 @transaction.atomic
@@ -787,6 +818,7 @@ def abrir_reposicao_nova_vaga(
         return ResultadoAberturaRodada(
             rodada=rodada_existente,
             oportunidades=tuple(rodada_existente.oportunidades.all()),
+            emissoes=(),
             criada=False,
         )
 

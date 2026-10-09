@@ -537,6 +537,19 @@ autorização, atomicidade, idempotência, auditoria minimizada e projeções. S
 execução permanece manual conforme a política do projeto; não houve alteração
 de schema nem migration nesta etapa.
 
+**Correção one-shot:** cada oportunidade nova persiste somente o digest
+SHA-256 e retorna o token bruto uma única vez em
+`EmissaoOportunidadeConvite`, estrutura transitória tipada cujo campo sensível
+é omitido de `repr`. Início, prorrogação, reabertura manual e reposição expõem
+ao caller autorizado somente as emissões realmente novas; uma operação
+idempotente sobre oportunidades existentes retorna zero emissões. Models ORM,
+auditoria e respostas da API interna nunca fornecem token ou digest.
+
+Um adapter futuro deverá consumir esse material ainda no boundary de emissão.
+Se o transporte assíncrono exigir durabilidade depois desse boundary, o bloco
+de transporte precisará aprovar explicitamente outra arquitetura segura; esta
+correção não cria armazenamento reversível, outbox ou envio.
+
 ### R.3I.13 — Link público e resposta ao convite
 
 **Prioridade:** NECESSÁRIO PARA MVP; SEGURANÇA OBRIGATÓRIA.
