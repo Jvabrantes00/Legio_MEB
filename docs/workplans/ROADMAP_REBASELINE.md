@@ -1050,7 +1050,10 @@ iniciar implementação:
   limites da resolução cadastral;
 - **R.3C.5** propôs para revisão humana a modelagem técnica de configuração,
   inscrição, dados declarados, Pré-Encontro, campanha, rodadas, oportunidades,
-  entregas, capacidade, concorrência, auditoria e cutover.
+  entregas, capacidade, concorrência, auditoria e cutover;
+- **R.3C.6** concluiu a revisão humana da modelagem técnica, fechando as regras
+  de produto sobre Pré-Encontro, disputa de capacidade, Coordenação Geral,
+  PDFs sob demanda, foto sem Pessoa resolvida e duplicidade pré-resolução.
 
 O documento principal é
 [[R3C_ENCONTROS_ARCHITECTURE|R.3C — Arquitetura do Workspace/Encontristas]].
@@ -1063,7 +1066,7 @@ schemas, contratos e mecanismos ainda pendentes. A nova `InscricaoEncontro`
 será expansiva e específica de um Encontro; a `Inscricao` atual permanece
 durante o cutover.
 
-R.3 continua aberta. O próximo checkpoint é a revisão humana da modelagem e o
-fechamento das últimas decisões antes da decomposição da implementação; não há
-autorização para iniciar backend, frontend, migrations ou infraestrutura
-assíncrona.
+As regras de produto relevantes estão fechadas e a modelagem conceitual foi
+aprovada, sem qualquer implementação. R.3 continua aberta. O próximo checkpoint
+é R.3C.7 — decomposição da implementação em blocos; não há autorização para
+iniciar backend, frontend, migrations ou infraestrutura assíncrona.

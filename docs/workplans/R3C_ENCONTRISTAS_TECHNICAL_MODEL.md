@@ -2,10 +2,11 @@
 
 ## Status e alcance
 
-Esta proposta traduz a arquitetura funcional e a ficha pública aprovadas em
-modelagem técnica para revisão humana. Ela orienta migrations, services, APIs
-e frontend futuros, mas não cria schema Django nem congela nomes de campos,
-URLs ou contratos.
+Esta modelagem traduz a arquitetura funcional e a ficha pública aprovadas. A
+revisão humana R.3C.6 aprovou seu desenho conceitual e fechou as decisões de
+produto destacadas neste documento. Ela orienta migrations, services, APIs e
+frontend futuros, mas não representa implementação nem congela o schema
+Django, nomes finais, URLs ou contratos.
 
 R.3 permanece aberta. Nenhuma estrutura legada é removida nesta etapa.
 
@@ -33,7 +34,7 @@ R.3 permanece aberta. Nenhuma estrutura legada é removida nesta etapa.
 | `DadosCuidadoInscricao` | Conteúdo restrito de cuidado e acolhimento | Zero ou um por inscrição | Sem estado | uma linha por inscrição; validações condicionais no service | Especialmente sensível | Público declara; Fichas/Diretoria/Suporte e coordenação contextual consultam; Fichas confere |
 | `DadosEsppaInscricao` | Estado civil, cônjuge ou referência declarados | Zero ou um; permitido somente para ESPPA | Sem estado | coerência cônjuge/referência por service | Sim | Público/Fichas; nunca cria Pessoa ou vínculo canônico |
 | `CorrespondenciaCadastralInscricao` | Sugestão e decisão sobre possível Pessoa | Muitas por inscrição; cada uma aponta a uma Pessoa candidata | `SUGERIDA`, `REJEITADA`, `ACEITA` | no máximo uma aceita por inscrição; candidato único por inscrição | Sim | Sistema sugere; Fichas decide; decisão auditável |
-| `PreEncontro` | Marco operacional obrigatório anterior ao Encontro | Pertence a um Encontro; cardinalidade final pendente | Sem estado mínimo aprovado | data/hora/local coerentes; relação única ou múltipla depende de decisão humana | Não | Fichas/Diretoria/Suporte gerem; integra a Agenda sem ser Preparatória |
+| `PreEncontro` | Marco operacional obrigatório anterior ao Encontro | Zero ou um por Encontro na v1 | Sem estado próprio | unicidade por Encontro; data/hora/local coerentes | Não | Fichas/Diretoria/Suporte gerem; integra a Agenda sem ser Preparatória |
 | `AtendimentoPreEncontro` | Check-in, presença, vaga, cuidado, pagamento, foto e regularização | Pertence ao Pré; inscrição e Pessoa opcionais | Sem máquina geral; fatos operacionais independentes | ao menos inscrição, Pessoa ou nome informado; unicidades condicionais; índices por Pré, inscrição, Pessoa e regularização | Sim | Fichas/equipe autorizada; nunca apagado ao regularizar |
 | `FotoTemporariaPreEncontro` | Foto protegida antes da resolução da Pessoa | Zero ou uma por atendimento | Pendente de vinculação ou vinculada, se necessário | uma foto ativa por atendimento; storage privado | Sim | Fichas/equipe autorizada; vinculada por service após resolução |
 | `CampanhaConvitesEncontro` | Coordena início, prazo, prorrogação e encerramento | Uma por Encontro/finalidade participar | `ATIVA`, `AGUARDANDO_DECISAO`, `ENCERRADA` | uma campanha lógica por Encontro; prazo posterior ao início; timestamps coerentes | Não | Fichas inicia/prorroga/encerra; sistema muda para aguardando decisão no prazo |
@@ -42,9 +43,9 @@ R.3 permanece aberta. Nenhuma estrutura legada é removida nesta etapa.
 | `EntregaConviteEncontro` | Tentativa de transporte por canal | Muitas por oportunidade, agrupadas por canal/idempotência | `PENDENTE`, `ENVIANDO`, `ENTREGUE`, `FALHOU` | chave idempotente única; tentativas monotônicas; índice para retry | Sim | Worker atualiza; reenvio manual agenda nova tentativa, não novo convite |
 | `EventoAuditoriaEncontro` | Trilha estruturada de fatos sensíveis | Muitas por Encontro; ator e objeto afetado | Imutável | índices por Encontro, entidade, objeto e instante; sem update/delete comum | Pode conter diferença sensível | Services gravam atomicamente; leitura restrita |
 
-Os estados propostos são os mínimos necessários para distinguir transições de
-negócio ou transporte. Não representam implementação aprovada antes da revisão
-humana.
+Os estados conceituais são os mínimos aprovados para distinguir transições de
+negócio ou transporte. Seus nomes e campos concretos ainda serão revisados no
+schema Django; nada nesta tabela está implementado.
 
 ## Relações
 
@@ -92,6 +93,14 @@ O service de resolução deve bloquear a inscrição e a Pessoa candidata, busca
 outra inscrição já vinculada ao mesmo par e impedir a associação conflitante.
 Ele não faz merge automático: Fichas precisa resolver o conflito, mantendo os
 registros declarados e a auditoria.
+
+Antes da resolução, coincidência de CPF declarado não bloqueia nova inscrição:
+o valor pode estar incorreto e o formulário público não tem autoridade para
+afirmar identidade. O sistema apenas sinaliza possíveis duplicidades a Fichas,
+sem auto-merge ou autoassociação. CPF de responsável permanece fora dessa
+comparação. Depois da resolução, a unicidade Pessoa × Encontro impede vincular
+silenciosamente duas fichas incompatíveis à mesma Pessoa; Fichas precisa tomar
+uma decisão explícita preservando ambas as evidências declaradas.
 
 ### Elegibilidade
 
@@ -188,15 +197,17 @@ elegibilidade automática e podem ser conferidos operacionalmente no Pré.
 
 ### Autorização contextual
 
-O domínio atual já oferece `VinculoUsuarioPessoa` e uma cadeia verificável por
-`TrabalhoEncontro` alocado e role snapshot. Essa é a base estrutural mais
-compatível para provar contexto sem conceder papel global.
+O coordenador contextual aprovado é qualquer membro da `EquipeEncontro`
+canônica **Coordenação Geral** daquele Encontro. O domínio atual sustenta a
+cadeia `VinculoUsuarioPessoa` → `Pessoa` → `TrabalhoEncontro` →
+`RoleEquipeEncontro` → `EquipeEncontro`; o código canônico da equipe snapshot,
+e não seu nome de apresentação, deve identificar Coordenação Geral com
+segurança.
 
-A flag atual `concede_registro_presenca` autoriza outra finalidade e não deve
-ser reutilizada silenciosamente para saúde. A recomendação é uma capability
-explícita de acesso a cuidado na role snapshot, combinada com a mesma cadeia
-de identidade, alocação e Encontro. A inclusão dessa capability e quais roles
-a recebem permanecem pendentes de aprovação humana.
+Não será criado cadastro paralelo de coordenador temporário. A flag atual
+`concede_registro_presenca` autoriza outra finalidade e não será usada como
+atalho para cuidado; a policy deriva diretamente do vínculo de trabalho
+vigente na Coordenação Geral.
 
 O acesso termina em `FINALIZADO` e `CANCELADO`, permanece em `ADIADO` e nunca
 se estende a outro Encontro. Fichas, Diretoria e Suporte usam suas capacidades
@@ -208,10 +219,9 @@ globais específicas; os demais ficam negados.
 `ReuniaoPreparatoriaEncontro`. Ele pertence a um Encontro e contém data,
 horário, local e integração projetável na Agenda.
 
-A v1 aparenta exigir um único Pré-Encontro por Encontro, mas essa cardinalidade
-não foi aprovada explicitamente. Recomenda-se zero-ou-um na primeira
-implementação; a constraint final deve aguardar confirmação humana, sem
-inventar múltiplos eventos.
+A cardinalidade aprovada para a v1 é zero-ou-um por Encontro: o Encontro pode
+ainda não ter Pré configurado, mas nunca terá múltiplos Pré-Encontros nesta
+versão. A futura migration deverá materializar essa unicidade.
 
 ## Atendimento/check-in
 
@@ -227,7 +237,7 @@ operacionais. Deve comportar:
 - foto realizada/adicionada;
 - indicação de regularização pendente;
 - observações operacionais;
-- atribuição atômica de vaga, quando disponível.
+- resolução de vaga ou pendência de decisão da Diretoria.
 
 O registro pode começar com inscrição confirmada, inscrição sem confirmação
 ou sem ficha/Pessoa. Uma check constraint local deve exigir ao menos inscrição,
@@ -256,17 +266,23 @@ A futura tela precisa consultar e comandar, sem CRUD genérico:
 Aptidão não deve ser um status livremente editável. Ela é derivada de:
 
 - presença no Pré-Encontro;
-- vaga atribuída dentro da capacidade vigente.
+- vaga resolvida dentro da capacidade vigente.
 
-Pagamento, foto e confirmação prévia não bloqueiam aptidão. Quem chega sem
-confirmação ou ficha pode ser regularizado e receber vaga. Se não houver
-capacidade, a presença é preservada, mas nenhuma vaga é atribuída; o caso fica
-visível para resolução. Um aumento posterior permite nova tentativa atômica.
+Convite confirmado, pagamento, foto e cuidado conferido não são requisitos
+absolutos de aptidão. Quem chega sem confirmação ou ficha pode ser regularizado.
 
-A atribuição de vaga precisa ser um fato persistido no atendimento — por
-exemplo, instante e ator — porque ela resolve concorrência e explica por que
-uma pessoa está apta. A aptidão continua derivada desse fato, não duplicada em
-um segundo campo booleano.
+Quando o número de presentes elegíveis exceder as vagas disponíveis, todas as
+presenças são registradas, mas o sistema não escolhe por ordem de chegada nem
+atribui automaticamente a última vaga. Os casos concorrentes ficam na situação
+derivada **AGUARDANDO_DECISAO_DIRETORIA**. Diretoria decide quem segue; Suporte
+mantém a autoridade já aprovada para alterar capacidade. Um aumento válido
+também pode resolver o conflito.
+
+A decisão de vaga precisa ser um fato persistido no atendimento — com ator e
+instante — porque explica a aptidão e protege o limite. A aptidão continua
+derivada desse fato, sem booleano redundante. O estado de espera pode ser
+derivado com segurança da presença, da capacidade e da ausência de decisão;
+não precisa obrigatoriamente virar enum.
 
 ## Pagamento
 
@@ -277,18 +293,19 @@ Pagamento é controle operacional e não requisito de aptidão. Estados mínimos
 
 Quando pago, a forma é `PIX`, `DINHEIRO`, `CARTAO` ou `OUTRO`. O atendimento
 registra quem marcou e quando. Não se modelam valor, transação, comprovante,
-conciliação ou gateway.
+conciliação ou gateway. `NAO_PAGO` não impede participação.
 
 ## Foto
 
-Foto não pertence à ficha pública. Para Pessoa resolvida, o fluxo pode usar a
-infraestrutura protegida de foto existente por comando explícito. Para pessoa
-ainda não resolvida, recomenda-se uma referência temporária privada ligada ao
-atendimento, posteriormente associada pela regularização.
+Foto não pertence à ficha pública e é tirada no Pré-Encontro. Para Pessoa
+resolvida, o fluxo pode usar a infraestrutura protegida existente por comando
+explícito. Sem Pessoa resolvida, a foto permanece privada e arquivada junto à
+ficha/atendimento correspondente pelo tempo necessário, sem ser descartada, e
+deve poder ser associada ao cadastro canônico após a resolução.
 
-O arquivo nunca deve ser servido por `/media`, e a transferência não pode
-apagar o vínculo histórico com o atendimento. Storage, retenção e descarte da
-foto temporária permanecem para o desenho de implementação.
+O arquivo nunca deve ser servido por `/media`, e a associação posterior não
+pode apagar seu vínculo histórico com o atendimento. O storage/path final
+permanece pendente.
 
 ## PDFs do Pré-Encontro
 
@@ -305,9 +322,11 @@ O segundo PDF segue a mesma autorização dos dados de cuidado. Após operação
 em papel, Fichas transcreve/confere manualmente no SIA. Não haverá OCR, leitura
 de marcações ou importação de escaneado.
 
-Não há decisão nesta etapa sobre persistência ou publicação dos PDFs. A
-recomendação inicial é geração autenticada sob demanda, sem histórico público,
-até que retenção e necessidade de snapshot sejam aprovadas.
+Os dois PDFs serão gerados sob demanda e não serão persistidos como publicação
+ou arquivo histórico. O restrito exige autorização no momento da geração e do
+download. O fluxo não reutiliza automaticamente
+`PublicacaoCalendarioInstitucional`; renderer e contrato concretos permanecem
+para implementação.
 
 Crachás, número de grupo da Pré e cores do Encontro ficam no backlog e não são
 modelados na primeira implementação.
@@ -437,10 +456,11 @@ Confirmação futura:
 6. invalidação das oportunidades concorrentes quando a vaga final for tomada;
 7. `IntegrityError` traduzido em erro de domínio.
 
-Check-in/atribuição de vaga usa o mesmo lock da configuração e bloqueia o
-atendimento. Redução de capacidade também usa essa linha. Assim, em 79/80,
-duas confirmações concorrentes produzem uma confirmação e uma resposta sem
-vaga, nunca 81/80.
+Resolução de vaga no Pré usa o mesmo lock da configuração e bloqueia os
+atendimentos envolvidos. O check-in isolado registra presença, mas não decide
+uma disputa. Diretoria resolve os concorrentes dentro da transação, e redução
+de capacidade usa a mesma linha. Assim, não há escolha por ordem de chegada
+nem estado acima do limite.
 
 Constraints complementam os locks: unicidades de inscrição resolvida,
 convite existente, oportunidade/rodada, chaves idempotentes e atribuição de
@@ -579,10 +599,18 @@ erDiagram
 - abordagem híbrida de dados estruturados e snapshot atual;
 - responsável obrigatório para menor, com CPF distinto do participante;
 - dados de cuidado separados e não excludentes;
-- Pré-Encontro obrigatório e distinto de Preparatória/participação;
+- Pré-Encontro obrigatório, distinto de Preparatória/participação e com
+  cardinalidade zero-ou-um por Encontro na v1;
 - presença sem ficha é válida para posterior regularização;
 - pagamento, foto e confirmação prévia não bloqueiam aptidão;
 - capacidade é limite real;
+- disputa excepcional de vaga não usa ordem de chegada e é decidida pela
+  Diretoria;
+- coordenação contextual deriva do trabalho na Equipe Coordenação Geral, sem
+  cadastro paralelo;
+- PDFs do Pré são gerados sob demanda e não persistidos como publicação;
+- foto sem Pessoa resolvida permanece privada junto à ficha até associação;
+- CPF coincidente antes da resolução apenas sinaliza possível duplicidade;
 - campanha manual, rodadas, oportunidades e entregas separadas;
 - `ConviteEncontro` preserva sua semântica;
 - PostgreSQL/Redis/Celery/Beat como direção arquitetural;
@@ -600,31 +628,29 @@ erDiagram
 - vaga atribuída como fato persistido e aptidão derivada;
 - lista de espera como projeção, com rodadas/oportunidades persistidas;
 - estados mínimos justificados para campanha, rodada, oportunidade e entrega;
-- cadeia atual de identidade/trabalho/role como base do contexto, com
-  capability de cuidado própria;
+- cadeia atual de identidade/trabalho/equipe como base do contexto de cuidado;
 - auditoria dedicada combinada com log operacional resumido;
-- geração autenticada sob demanda para PDFs até decisão de retenção.
+- geração autenticada sob demanda para os PDFs.
 
-### C. Pendências para aprovação humana
+### C. Pendências técnicas antes da implementação
 
-- cardinalidade final de `PreEncontro` por Encontro;
-- inclusão e distribuição da capability contextual de cuidado;
 - nomenclatura final das entidades e estados propostos;
 - comportamento exato da pendência de revisão por reprogramação;
-- prioridade entre confirmados e presentes sem confirmação quando a capacidade
-  estiver disputada no Pré;
-- necessidade de persistir PDFs e política de retenção;
-- storage/retenção da foto temporária;
+- schema Django definitivo;
+- storage/path final da foto;
+- renderer dos PDFs;
 - desenho final do mecanismo de token e rate limit;
 - mecanismo de publicação confiável de tasks;
-- campos finais e constraints após revisão do schema real;
+- detalhes finais de auditoria, locks e constraints;
+- contratos finais das APIs;
+- provider real de WhatsApp e SMTP institucional definitivo;
+- detalhes operacionais de Celery/Redis;
 - divisão dos blocos de implementação.
 
 ## Pendências
 
-Além das decisões humanas acima, continuam pendentes as questões já registradas
-na arquitetura e na ficha: URL pública, antiabuso, máscaras/CEP, consentimentos,
-provider de WhatsApp, SMTP institucional, deploy de Redis/Celery, model final
-da presença e dados operacionais, e contratos concretos de API/BFF.
+Continuam pendentes somente as definições técnicas listadas acima e as já
+registradas na ficha para implementação: URL pública, antiabuso,
+máscaras/CEP, consentimentos, schema concreto e contratos de API/BFF.
 
 Nenhuma pendência autoriza implementação antecipada.

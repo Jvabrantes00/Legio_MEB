@@ -16,9 +16,10 @@ ficha está em
 Este documento arquitetural continua responsável pelas fronteiras, fluxos e
 entidades conceituais; a especificação da ficha não congela schema técnico.
 
-A proposta de entidades, relações, constraints, locks, APIs e cutover está em
+A modelagem aprovada de entidades, relações, constraints, locks, APIs e cutover
+está em
 [[R3C_ENCONTRISTAS_TECHNICAL_MODEL|R.3C.5 — Modelagem técnica de Encontristas]].
-Ela permanece sujeita a revisão humana e não representa schema implementado.
+Ela foi revisada humanamente na R.3C.6 e não representa schema implementado.
 
 ## Decisões aprovadas
 
@@ -169,6 +170,10 @@ representando o resultado do Encontro principal. A estrutura futura deve
 registrar comparecimento, ator, momento, Encontro e relação com inscrição ou
 Pessoa quando disponível.
 
+Na v1 existe no máximo um Pré-Encontro por Encontro. Havendo mais presentes
+elegíveis que vagas, o sistema preserva as presenças e aguarda decisão da
+Diretoria, sem prioridade por check-in e sem overbooking.
+
 Fichas pode regularizar situações excepcionais:
 
 - inscrito sem confirmação que compareça ao Pré-Encontro pode ter presença
@@ -310,9 +315,10 @@ sucesso e falha. Nenhum provedor real foi escolhido.
 - Diretoria e Suporte podem alterar capacidade; Fichas não pode.
 - Dados de cuidado são acessíveis a Fichas, Diretoria, Suporte e coordenadores
   contextualmente autorizados no Encontro correspondente.
-- O acesso contextual de coordenador não cria capability global, termina em
-  `FINALIZADO` ou `CANCELADO` e não termina apenas por `ADIADO`.
-- A forma técnica de detectar o coordenador temporário permanece pendente.
+- O coordenador contextual é membro da EquipeEncontro **Coordenação Geral** e
+  seu acesso deriva da cadeia canônica de identidade e `TrabalhoEncontro`, sem
+  cadastro paralelo. A capability não é global, termina em `FINALIZADO` ou
+  `CANCELADO` e não termina apenas por `ADIADO`.
 - Ausência de permissão explícita continua negada por default.
 
 Essa especificação registra autorização futura e não declara essas
@@ -394,7 +400,6 @@ Permanecem **PENDENTES**:
 - captcha, throttling e controles contra abuso;
 - provedor real de WhatsApp;
 - SMTP institucional definitivo;
-- vínculo técnico dos coordenadores temporários;
 - model final de presença no Pré-Encontro;
 - model final de auditoria;
 - detalhes operacionais do deploy Redis/Celery;

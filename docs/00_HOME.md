@@ -27,14 +27,13 @@ substitui os documentos de referência nem os `AGENTS.md` aplicáveis.
   PDFs, publicação privada, regressão final e checkpoint de concorrência em
   PostgreSQL 16 com 6/6 cenários aprovados.
 - Roadmap Re-baseline em andamento. R.1 e R.2 foram concluídas.
-- Checkpoint atual: R.3C.5 — modelagem técnica dos Encontristas.
+- Checkpoint atual: R.3C.6 — modelagem revisada e aprovada.
 - Referências principais:
   [[workplans/R3C_ENCONTROS_ARCHITECTURE|R.3C — Arquitetura do Workspace/Encontristas]].
   [[workplans/R3C_PUBLIC_REGISTRATION_SPEC|R.3C — Ficha pública de Escalada e ESPPA]].
   [[workplans/R3C_ENCONTRISTAS_TECHNICAL_MODEL|R.3C.5 — Modelagem técnica de Encontristas]].
-- Próximo checkpoint: revisão humana da modelagem e fechamento das últimas
-  decisões antes da decomposição. O re-baseline não antecipa uma nova fase de
-  implementação.
+- Próximo checkpoint: R.3C.7 — decomposição da implementação em blocos. O
+  re-baseline não antecipa uma nova fase de implementação.
 
 O estado vivo e o roadmap estão em [[PROJECT_STATE]].
 
