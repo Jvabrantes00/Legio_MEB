@@ -4,9 +4,11 @@ from django.utils import timezone
 from rest_framework import serializers
 from rest_framework.reverse import reverse
 from .models import (
-    Alpinista, ConviteEncontro, Encontro, EntregaMaterial, Evento,
+    Alpinista, ConviteEncontro, CorrespondenciaCadastralInscricao,
+    Encontro, EntregaMaterial, Evento,
     EquipeEncontro,
-    FotoEncontro, FuncaoEncontro, Inscricao, LogSistema, Material, Palestra,
+    FotoEncontro, FuncaoEncontro, Inscricao, InscricaoEncontro, LogSistema,
+    Material, Palestra,
     ParticipacaoEncontro as ResultadoParticipacaoEncontro, ParticipacaoEvento,
     PalestranteSessao, PerfilAlpinista, Pessoa, PresencaPreparatoria,
     PublicacaoCalendarioInstitucional,
@@ -20,6 +22,7 @@ from .services import reunioes_preparatorias as reuniao_services
 from .services import trabalhos as trabalho_services
 from .services import formacoes as formacao_services
 from .services import propostas_violeiros as proposta_violeiros_services
+from .services import resolucao_cadastral as resolucao_cadastral_services
 from .services.calendario_institucional import MAXIMO_DIAS_INTERVALO
 from .services.elegibilidade_trabalho import (
     avaliar_capacidade_equipe,
@@ -43,6 +46,90 @@ class StrictCommandSerializer(serializers.Serializer):
                 ]
             })
         return super().to_internal_value(data)
+
+
+class CorrespondenciaCadastralInternaSerializer(serializers.ModelSerializer):
+    pessoa_candidata = serializers.SerializerMethodField()
+    decidida_por_id = serializers.IntegerField(read_only=True, allow_null=True)
+
+    class Meta:
+        model = CorrespondenciaCadastralInscricao
+        fields = (
+            'id',
+            'status',
+            'origem_sinal',
+            'pessoa_candidata',
+            'decidida_por_id',
+            'decidida_em',
+            'criada_em',
+        )
+        read_only_fields = fields
+
+    def get_pessoa_candidata(self, correspondencia):
+        pessoa = correspondencia.pessoa_candidata
+        return {
+            'id': pessoa.pk,
+            'nome': pessoa.nome,
+            'data_nascimento': pessoa.data_nascimento,
+            'email': pessoa.email,
+            'telefones': [
+                {
+                    'numero': telefone.numero,
+                    'whatsapp': telefone.whatsapp,
+                }
+                for telefone in pessoa.telefones.all()
+            ],
+            'cpf_coincidente': correspondencia.origem_sinal == 'cpf_exato',
+        }
+
+
+class ResolucaoCadastralInscricaoSerializer(serializers.ModelSerializer):
+    pessoa_id = serializers.IntegerField(read_only=True, allow_null=True)
+    dados_declarados = serializers.SerializerMethodField()
+    correspondencias = serializers.SerializerMethodField()
+
+    class Meta:
+        model = InscricaoEncontro
+        fields = (
+            'id',
+            'identificador',
+            'encontro_id',
+            'pessoa_id',
+            'status',
+            'dados_declarados',
+            'correspondencias',
+        )
+        read_only_fields = fields
+
+    def get_dados_declarados(self, inscricao):
+        dados = inscricao.dados_declarados
+        return {
+            'nome_completo': dados.nome_completo,
+            'apelido': dados.apelido,
+            'data_nascimento': dados.data_nascimento,
+            'cpf_informado': bool(dados.cpf),
+            'email': dados.email,
+            'telefone_whatsapp': dados.telefone_whatsapp,
+        }
+
+    def get_correspondencias(self, inscricao):
+        return CorrespondenciaCadastralInternaSerializer(
+            inscricao.correspondencias_cadastrais.all(),
+            many=True,
+        ).data
+
+
+class ComandoSemPayloadSerializer(StrictCommandSerializer):
+    pass
+
+
+class SelecaoCamposResolucaoSerializer(StrictCommandSerializer):
+    campos = serializers.ListField(
+        child=serializers.ChoiceField(
+            choices=sorted(resolucao_cadastral_services.CAMPOS_APLICAVEIS),
+        ),
+        allow_empty=False,
+    )
 
 
 def calculate_age(birth_date):

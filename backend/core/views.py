@@ -14,8 +14,9 @@ from django.shortcuts import get_object_or_404
 
 from .models import (
     Alpinista, AvaliacaoEncontro, CalendarioEncontro, ConviteEncontro,
+    CorrespondenciaCadastralInscricao,
     DiaEncontro, Encontro, EntregaMaterial, EquipeEncontro, Evento,
-    FotoEncontro, FuncaoEncontro, Inscricao, Palestra,
+    FotoEncontro, FuncaoEncontro, Inscricao, InscricaoEncontro, Palestra,
     ParticipacaoEncontro as ResultadoParticipacaoEncontro,
     ParticipacaoEvento, LogSistema, Material, PalestranteSessao,
     PerfilAlpinista, PresencaPreparatoria, ReuniaoPreparatoriaEncontro,
@@ -71,6 +72,9 @@ from .serializers import (
     ItemPropostaVioleirosCommandSerializer,
     PreenchimentoPropostaVioleirosCommandSerializer,
     PropostaVioleirosSerializer,
+    ComandoSemPayloadSerializer,
+    ResolucaoCadastralInscricaoSerializer,
+    SelecaoCamposResolucaoSerializer,
     SubstituicaoPropostaVioleirosCommandSerializer,
     )
 from .permissions import (
@@ -85,6 +89,7 @@ from .services import reunioes_preparatorias as reuniao_services
 from .services import trabalhos as trabalho_services
 from .services import formacoes as formacao_services
 from .services import propostas_violeiros as proposta_violeiros_services
+from .services import resolucao_cadastral as resolucao_cadastral_services
 from .services import calendario_institucional as calendario_services
 from .services import comandos_calendario as calendario_command_services
 from .services import exportacao_calendario as exportacao_calendario_services
@@ -1315,6 +1320,154 @@ class InscricaoEncontroCommandViewSet(
                 modulo='Inscricao',
                 descricao=f'Inscrição ID {inscricao.pk} criada.',
             )
+
+
+class InscricaoResolucaoCadastralViewSet(
+    mixins.RetrieveModelMixin,
+    viewsets.GenericViewSet,
+):
+    serializer_class = ResolucaoCadastralInscricaoSerializer
+    permission_classes = [require_sia_roles(*FICHAS_MANAGEMENT_ROLES)]
+
+    def get_queryset(self):
+        return (
+            InscricaoEncontro.objects
+            .select_related('encontro', 'pessoa', 'dados_declarados')
+            .prefetch_related(
+                'correspondencias_cadastrais__pessoa_candidata__telefones',
+                'correspondencias_cadastrais__decidida_por',
+            )
+            .order_by('id')
+        )
+
+    def get_serializer_class(self):
+        if self.action in {
+            'gerar_sugestoes',
+            'aceitar_correspondencia',
+            'rejeitar_correspondencia',
+        }:
+            return ComandoSemPayloadSerializer
+        if self.action in {'criar_pessoa', 'aplicar_campos'}:
+            return SelecaoCamposResolucaoSerializer
+        return ResolucaoCadastralInscricaoSerializer
+
+    def _resposta(self, inscricao, *, codigo=status.HTTP_200_OK):
+        inscricao = self.get_queryset().get(pk=inscricao.pk)
+        return Response(
+            ResolucaoCadastralInscricaoSerializer(inscricao).data,
+            status=codigo,
+        )
+
+    def _validar_comando(self, request):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        return serializer.validated_data
+
+    def _correspondencia(self, inscricao, correspondencia_id):
+        return get_object_or_404(
+            CorrespondenciaCadastralInscricao,
+            pk=correspondencia_id,
+            inscricao=inscricao,
+        )
+
+    @action(detail=True, methods=['post'], url_path='gerar-sugestoes')
+    def gerar_sugestoes(self, request, pk=None):
+        inscricao = self.get_object()
+        self._validar_comando(request)
+        try:
+            resolucao_cadastral_services.gerar_sugestoes_cadastrais(
+                usuario=request.user,
+                inscricao=inscricao,
+            )
+        except django_core_validation_error as error:
+            _erro_de_dominio(error)
+        return self._resposta(inscricao)
+
+    @action(
+        detail=True,
+        methods=['post'],
+        url_path=(
+            r'correspondencias/(?P<correspondencia_id>\d+)/aceitar'
+        ),
+    )
+    def aceitar_correspondencia(
+        self,
+        request,
+        pk=None,
+        correspondencia_id=None,
+    ):
+        inscricao = self.get_object()
+        self._validar_comando(request)
+        correspondencia = self._correspondencia(
+            inscricao,
+            correspondencia_id,
+        )
+        try:
+            resolucao_cadastral_services.aceitar_correspondencia_cadastral(
+                usuario=request.user,
+                inscricao=inscricao,
+                correspondencia=correspondencia,
+            )
+        except django_core_validation_error as error:
+            _erro_de_dominio(error)
+        return self._resposta(inscricao)
+
+    @action(
+        detail=True,
+        methods=['post'],
+        url_path=(
+            r'correspondencias/(?P<correspondencia_id>\d+)/rejeitar'
+        ),
+    )
+    def rejeitar_correspondencia(
+        self,
+        request,
+        pk=None,
+        correspondencia_id=None,
+    ):
+        inscricao = self.get_object()
+        self._validar_comando(request)
+        correspondencia = self._correspondencia(
+            inscricao,
+            correspondencia_id,
+        )
+        try:
+            resolucao_cadastral_services.rejeitar_correspondencia_cadastral(
+                usuario=request.user,
+                inscricao=inscricao,
+                correspondencia=correspondencia,
+            )
+        except django_core_validation_error as error:
+            _erro_de_dominio(error)
+        return self._resposta(inscricao)
+
+    @action(detail=True, methods=['post'], url_path='criar-pessoa')
+    def criar_pessoa(self, request, pk=None):
+        inscricao = self.get_object()
+        dados = self._validar_comando(request)
+        try:
+            resolucao_cadastral_services.criar_pessoa_da_inscricao(
+                usuario=request.user,
+                inscricao=inscricao,
+                campos=dados['campos'],
+            )
+        except django_core_validation_error as error:
+            _erro_de_dominio(error)
+        return self._resposta(inscricao, codigo=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=['post'], url_path='aplicar-campos')
+    def aplicar_campos(self, request, pk=None):
+        inscricao = self.get_object()
+        dados = self._validar_comando(request)
+        try:
+            resolucao_cadastral_services.aplicar_dados_declarados(
+                usuario=request.user,
+                inscricao=inscricao,
+                campos=dados['campos'],
+            )
+        except django_core_validation_error as error:
+            _erro_de_dominio(error)
+        return self._resposta(inscricao)
 
 
 class ConviteEncontroCommandViewSet(
