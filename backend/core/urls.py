@@ -12,6 +12,7 @@ from .views import (
     InscricaoEncontroCommandViewSet, ConviteEncontroCommandViewSet,
     InscricaoEncontroPublicaAPIView,
     InscricaoResolucaoCadastralViewSet,
+    CampanhaConvitesEncontroViewSet,
     ResultadoParticipacaoCommandViewSet,
     EquipeEncontroViewSet, TrabalhoEncontroCommandViewSet,
     PresencaPreparatoriaCommandViewSet,
@@ -61,6 +62,11 @@ router.register(
     r'resolucoes-inscricoes',
     InscricaoResolucaoCadastralViewSet,
     basename='resolucao-inscricao',
+)
+router.register(
+    r'campanhas-convites-encontros',
+    CampanhaConvitesEncontroViewSet,
+    basename='campanha-convites-encontro',
 )
 router.register(
     r'convites-encontros',

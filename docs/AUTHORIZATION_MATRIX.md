@@ -62,6 +62,19 @@ comandos explícitos sobre o domínio canônico de Encontros.
 - Fichas não recebe acesso à galeria no contrato atual.
 - Foto associada a outro Encontro retorna `404`, não acesso cruzado.
 
+### Campanha de convites de Encontro
+
+- Suporte, Diretoria e Fichas podem consultar a campanha e suas projeções.
+- Somente Fichas executa os comandos de negócio de início, processamento de
+  prazo, prorrogação, encerramento, recusa, reabertura manual e reposição.
+- Suporte mantém apenas a consulta e seus acessos técnicos/auditoria já
+  previstos; Diretoria permanece somente leitura neste domínio. O superuser
+  permanece como bypass técnico separado.
+- Os demais papéis permanecem negados por default. A gestão da campanha não
+  concede acesso a endpoint público nem amplia permissões sobre cadastros.
+- As respostas internas são minimizadas: não expõem token, digest, e-mail,
+  telefone ou outros dados pessoais do candidato.
+
 ### Presença preparatória contextual
 
 - Suporte, Diretoria e Fichas podem registrar e corrigir presença preparatória

@@ -478,6 +478,8 @@ registrados na entrega da etapa.
 
 ### R.3I.12 — Services de campanha e lista de espera
 
+**Estado:** concluída em 9 de outubro de 2026.
+
 **Prioridade:** NECESSÁRIO PARA MVP.
 
 **Objetivo:** implementar início manual, prazo, rodadas, prorrogação, recusa,
@@ -509,6 +511,31 @@ resolvidas e convites existentes, sem enviar mensagens.
 **Commit sugerido:** `feat: add invitation campaign lifecycle`
 
 **Riscos:** lista de espera persistida como prioridade ou reenvio de recusados.
+
+**Implementação:** `core.services.campanhas_convites` concentra seleção,
+projeção e comandos transacionais sobre inscrições resolvidas e
+`ConviteEncontro` existentes. O início manual cria uma única campanha e uma
+rodada `INICIAL`; o vencimento leva de forma idempotente a
+`AGUARDANDO_DECISAO`, quando Fichas decide entre encerrar ou prorrogar. A
+prorrogação cria outra rodada e outros digests, sem ressuscitar oportunidades
+anteriores. Recusa explícita não causa reenvio automático; eventual reabertura
+é manual, justificada, auditada e cria somente para o convite escolhido uma
+nova oportunidade em rodada `REPOSICAO`.
+
+A espera é uma projeção sem posição ou prioridade persistida. Quando uma vaga
+surge, a reposição oferece novas oportunidades a todos os elegíveis aplicáveis,
+sem eleger um primeiro colocado. Ausência de e-mail e WhatsApp permanece
+visível como `sem_canal`, sem tornar a Pessoa inelegível nem criar uma entrega
+fictícia. Fichas conduz os comandos internos; Diretoria e Suporte possuem
+somente consulta da campanha e das projeções, e o superuser permanece como
+bypass técnico. Os contratos mínimos não expõem token, digest ou PII de
+contato. Esta etapa não implementa transporte, resposta pública ou
+concorrência da última vaga.
+
+**Validação:** foram escritos testes focados de services e API para lifecycle,
+autorização, atomicidade, idempotência, auditoria minimizada e projeções. Sua
+execução permanece manual conforme a política do projeto; não houve alteração
+de schema nem migration nesta etapa.
 
 ### R.3I.13 — Link público e resposta ao convite
 

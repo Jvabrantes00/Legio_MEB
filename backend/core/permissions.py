@@ -65,6 +65,30 @@ def pode_resolver_cadastro_inscricao(user):
     )
 
 
+def pode_gerir_campanha_convites(user):
+    if not (
+        getattr(user, 'is_authenticated', False)
+        and getattr(user, 'is_active', False)
+    ):
+        return False
+    return bool(
+        user.is_superuser
+        or user_has_any_role(user, SiaRole.FICHAS)
+    )
+
+
+def pode_consultar_campanha_convites(user):
+    if not (
+        getattr(user, 'is_authenticated', False)
+        and getattr(user, 'is_active', False)
+    ):
+        return False
+    return bool(
+        user.is_superuser
+        or user_has_any_role(user, *FICHAS_MANAGEMENT_ROLES)
+    )
+
+
 def pode_registrar_presenca_preparatoria(user, encontro):
     if not (
         getattr(user, 'is_authenticated', False)

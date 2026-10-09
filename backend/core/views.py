@@ -21,14 +21,16 @@ from rest_framework.views import APIView
 from django.shortcuts import get_object_or_404
 
 from .models import (
-    Alpinista, AvaliacaoEncontro, CalendarioEncontro, ConviteEncontro,
+    Alpinista, AvaliacaoEncontro, CalendarioEncontro,
+    CampanhaConvitesEncontro, ConviteEncontro,
     ConfiguracaoEncontristasEncontro,
     CorrespondenciaCadastralInscricao,
     DiaEncontro, Encontro, EntregaMaterial, EquipeEncontro, Evento,
     FotoEncontro, FuncaoEncontro, Inscricao, InscricaoEncontro, Palestra,
     ParticipacaoEncontro as ResultadoParticipacaoEncontro,
     ParticipacaoEvento, LogSistema, Material, PalestranteSessao,
-    PerfilAlpinista, PresencaPreparatoria, ReuniaoPreparatoriaEncontro,
+    OportunidadeConviteEncontro, PerfilAlpinista, PresencaPreparatoria,
+    ReuniaoPreparatoriaEncontro,
     PublicacaoCalendarioInstitucional, SessaoFormativa, TrabalhoEncontro,
     ItemPropostaVioleiros, PropostaVioleiros,
     VinculoEncontroLegado as ParticipacaoEncontro,
@@ -84,6 +86,12 @@ from .serializers import (
     ComandoSemPayloadSerializer,
     EncontroInscricaoPublicaSerializer,
     ResolucaoCadastralInscricaoSerializer,
+    CampanhaConvitesInternaSerializer,
+    IniciarCampanhaConvitesSerializer,
+    JustificativaCampanhaConvitesSerializer,
+    ProrrogarCampanhaConvitesSerializer,
+    ProjecaoCampanhaConvitesSerializer,
+    ReabrirRecusaCampanhaSerializer,
     SelecaoCamposResolucaoSerializer,
     SubmissaoInscricaoPublicaSerializer,
     SubstituicaoPropostaVioleirosCommandSerializer,
@@ -102,6 +110,7 @@ from .services import formacoes as formacao_services
 from .services import propostas_violeiros as proposta_violeiros_services
 from .services import inscricoes_encontro as inscricao_encontro_services
 from .services import resolucao_cadastral as resolucao_cadastral_services
+from .services import campanhas_convites as campanha_convites_services
 from .services import calendario_institucional as calendario_services
 from .services import comandos_calendario as calendario_command_services
 from .services import exportacao_calendario as exportacao_calendario_services
@@ -127,6 +136,7 @@ from .roles import (
     MME_PROPOSAL_READ_ROLES,
     MATERIAL_MANAGEMENT_ROLES,
     PROFILE_PHOTO_MANAGEMENT_ROLES,
+    SiaRole,
     user_has_any_role,
 )
 
@@ -1471,6 +1481,7 @@ class InscricaoResolucaoCadastralViewSet(
             _erro_de_dominio(error)
         return self._resposta(inscricao)
 
+
     @action(
         detail=True,
         methods=['post'],
@@ -1556,6 +1567,185 @@ class InscricaoResolucaoCadastralViewSet(
         except django_core_validation_error as error:
             _erro_de_dominio(error)
         return self._resposta(inscricao)
+
+
+class CampanhaConvitesEncontroViewSet(viewsets.GenericViewSet):
+    queryset = Encontro.objects.order_by('id')
+    serializer_class = CampanhaConvitesInternaSerializer
+    permission_classes = [HasAnySiaRole]
+    read_roles = FICHAS_MANAGEMENT_ROLES
+    write_roles = (SiaRole.FICHAS,)
+
+    def get_serializer_class(self):
+        if self.action == 'iniciar':
+            return IniciarCampanhaConvitesSerializer
+        if self.action == 'prorrogar':
+            return ProrrogarCampanhaConvitesSerializer
+        if self.action in {'encerrar', 'recusar', 'nova_vaga'}:
+            return JustificativaCampanhaConvitesSerializer
+        if self.action == 'reabrir_recusa':
+            return ReabrirRecusaCampanhaSerializer
+        if self.action == 'projecao':
+            return ProjecaoCampanhaConvitesSerializer
+        if self.action == 'processar_prazo':
+            return ComandoSemPayloadSerializer
+        return CampanhaConvitesInternaSerializer
+
+    def _dados_comando(self, request):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        return serializer.validated_data
+
+    def _campanha(self, encontro):
+        return get_object_or_404(
+            CampanhaConvitesEncontro.objects.select_related('encontro'),
+            encontro=encontro,
+        )
+
+    def _resposta(self, campanha, *, codigo=status.HTTP_200_OK):
+        campanha = (
+            CampanhaConvitesEncontro.objects
+            .select_related('encontro', 'iniciada_por')
+            .prefetch_related('rodadas__oportunidades')
+            .get(pk=campanha.pk)
+        )
+        return Response(
+            CampanhaConvitesInternaSerializer(campanha).data,
+            status=codigo,
+        )
+
+    def retrieve(self, request, pk=None):
+        encontro = self.get_object()
+        campanha = campanha_convites_services.consultar_campanha(
+            usuario=request.user,
+            encontro=encontro,
+        )
+        if campanha is None:
+            raise NotFound('Campanha de convites não encontrada.')
+        return self._resposta(campanha)
+
+    @action(detail=True, methods=['post'])
+    def iniciar(self, request, pk=None):
+        encontro = self.get_object()
+        dados = self._dados_comando(request)
+        try:
+            campanha = campanha_convites_services.iniciar_campanha(
+                usuario=request.user,
+                encontro=encontro,
+                **dados,
+            )
+        except django_core_validation_error as error:
+            _erro_de_dominio(error)
+        return self._resposta(campanha, codigo=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=['post'], url_path='processar-prazo')
+    def processar_prazo(self, request, pk=None):
+        encontro = self.get_object()
+        self._dados_comando(request)
+        try:
+            campanha = campanha_convites_services.processar_prazo(
+                usuario=request.user,
+                campanha=self._campanha(encontro),
+            )
+        except django_core_validation_error as error:
+            _erro_de_dominio(error)
+        return self._resposta(campanha)
+
+    @action(detail=True, methods=['post'])
+    def prorrogar(self, request, pk=None):
+        encontro = self.get_object()
+        dados = self._dados_comando(request)
+        try:
+            campanha = campanha_convites_services.prorrogar_campanha(
+                usuario=request.user,
+                campanha=self._campanha(encontro),
+                **dados,
+            )
+        except django_core_validation_error as error:
+            _erro_de_dominio(error)
+        return self._resposta(campanha)
+
+    @action(detail=True, methods=['post'])
+    def encerrar(self, request, pk=None):
+        encontro = self.get_object()
+        dados = self._dados_comando(request)
+        try:
+            campanha = campanha_convites_services.encerrar_campanha(
+                usuario=request.user,
+                campanha=self._campanha(encontro),
+                **dados,
+            )
+        except django_core_validation_error as error:
+            _erro_de_dominio(error)
+        return self._resposta(campanha)
+
+    @action(
+        detail=True,
+        methods=['post'],
+        url_path=r'oportunidades/(?P<oportunidade_id>\d+)/recusar',
+    )
+    def recusar(self, request, pk=None, oportunidade_id=None):
+        encontro = self.get_object()
+        dados = self._dados_comando(request)
+        oportunidade = get_object_or_404(
+            OportunidadeConviteEncontro,
+            pk=oportunidade_id,
+            rodada__campanha__encontro=encontro,
+        )
+        try:
+            campanha_convites_services.registrar_recusa(
+                usuario=request.user,
+                oportunidade=oportunidade,
+                **dados,
+            )
+        except django_core_validation_error as error:
+            _erro_de_dominio(error)
+        return self._resposta(self._campanha(encontro))
+
+    @action(detail=True, methods=['post'], url_path='reabrir-recusa')
+    def reabrir_recusa(self, request, pk=None):
+        encontro = self.get_object()
+        dados = self._dados_comando(request)
+        convite = get_object_or_404(
+            ConviteEncontro,
+            pk=dados.pop('convite_id'),
+            encontro=encontro,
+            finalidade=ConviteEncontro.Finalidade.PARTICIPAR,
+        )
+        try:
+            campanha_convites_services.reabrir_recusa(
+                usuario=request.user,
+                campanha=self._campanha(encontro),
+                convite=convite,
+                **dados,
+            )
+        except django_core_validation_error as error:
+            _erro_de_dominio(error)
+        return self._resposta(self._campanha(encontro))
+
+    @action(detail=True, methods=['post'], url_path='nova-vaga')
+    def nova_vaga(self, request, pk=None):
+        encontro = self.get_object()
+        dados = self._dados_comando(request)
+        try:
+            campanha_convites_services.abrir_reposicao_nova_vaga(
+                usuario=request.user,
+                campanha=self._campanha(encontro),
+                **dados,
+            )
+        except django_core_validation_error as error:
+            _erro_de_dominio(error)
+        return self._resposta(self._campanha(encontro))
+
+    @action(detail=True, methods=['get'])
+    def projecao(self, request, pk=None):
+        projecao = campanha_convites_services.projetar_lista_espera(
+            usuario=request.user,
+            encontro=self.get_object(),
+        )
+        return Response(ProjecaoCampanhaConvitesSerializer(
+            projecao.as_dict(),
+        ).data)
 
 
 class ConviteEncontroCommandViewSet(

@@ -4,7 +4,8 @@ from django.utils import timezone
 from rest_framework import serializers
 from rest_framework.reverse import reverse
 from .models import (
-    Alpinista, ConviteEncontro, CorrespondenciaCadastralInscricao,
+    Alpinista, CampanhaConvitesEncontro, ConviteEncontro,
+    CorrespondenciaCadastralInscricao,
     DadosCuidadoInscricao, DadosDeclaradosInscricao, DadosEsppaInscricao,
     Encontro, EntregaMaterial, Evento,
     EquipeEncontro,
@@ -14,7 +15,8 @@ from .models import (
     PalestranteSessao, PerfilAlpinista, Pessoa, PresencaPreparatoria,
     PublicacaoCalendarioInstitucional,
     ItemPropostaVioleiros, PropostaVioleiros,
-    ReuniaoPreparatoriaEncontro, RoleEquipeEncontro, SessaoFormativa,
+    OportunidadeConviteEncontro, ReuniaoPreparatoriaEncontro,
+    RodadaConvitesEncontro, RoleEquipeEncontro, SessaoFormativa,
     TrabalhoEncontro,
     VinculoEncontroLegado as ParticipacaoEncontro,
 )
@@ -316,6 +318,113 @@ class SelecaoCamposResolucaoSerializer(StrictCommandSerializer):
         ),
         allow_empty=False,
     )
+
+
+class OportunidadeConviteInternaSerializer(serializers.ModelSerializer):
+    convite_id = serializers.IntegerField(read_only=True)
+
+    class Meta:
+        model = OportunidadeConviteEncontro
+        fields = (
+            'id',
+            'convite_id',
+            'status',
+            'expira_em',
+            'consumida_em',
+        )
+        read_only_fields = fields
+
+
+class RodadaConvitesInternaSerializer(serializers.ModelSerializer):
+    oportunidades = OportunidadeConviteInternaSerializer(
+        many=True,
+        read_only=True,
+    )
+
+    class Meta:
+        model = RodadaConvitesEncontro
+        fields = (
+            'id',
+            'sequencia',
+            'tipo',
+            'status',
+            'aberta_em',
+            'encerrada_em',
+            'oportunidades',
+        )
+        read_only_fields = fields
+
+
+class CampanhaConvitesInternaSerializer(serializers.ModelSerializer):
+    encontro_id = serializers.IntegerField(read_only=True)
+    iniciada_por_id = serializers.IntegerField(read_only=True)
+    rodadas = RodadaConvitesInternaSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = CampanhaConvitesEncontro
+        fields = (
+            'id',
+            'encontro_id',
+            'status',
+            'iniciada_por_id',
+            'iniciada_em',
+            'prazo_confirmacao',
+            'encerrada_em',
+            'rodadas',
+        )
+        read_only_fields = fields
+
+
+class IniciarCampanhaConvitesSerializer(StrictCommandSerializer):
+    prazo_confirmacao = serializers.DateTimeField()
+    justificativa = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        default='',
+    )
+
+
+class ProrrogarCampanhaConvitesSerializer(StrictCommandSerializer):
+    novo_prazo = serializers.DateTimeField()
+    justificativa = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        default='',
+    )
+
+
+class JustificativaCampanhaConvitesSerializer(StrictCommandSerializer):
+    justificativa = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        default='',
+    )
+
+
+class ReabrirRecusaCampanhaSerializer(StrictCommandSerializer):
+    convite_id = serializers.IntegerField(min_value=1)
+    justificativa = serializers.CharField(allow_blank=False)
+
+
+class CandidatoCampanhaSerializer(serializers.Serializer):
+    inscricao_id = serializers.IntegerField(read_only=True)
+    pessoa_id = serializers.IntegerField(read_only=True)
+    convite_id = serializers.IntegerField(read_only=True)
+    elegibilidade = serializers.CharField(read_only=True)
+    canais_disponiveis = serializers.ListField(
+        child=serializers.ChoiceField(choices=('EMAIL', 'WHATSAPP')),
+        read_only=True,
+    )
+    sem_canal = serializers.BooleanField(read_only=True)
+
+
+class ProjecaoCampanhaConvitesSerializer(serializers.Serializer):
+    capacidade = serializers.IntegerField(read_only=True)
+    confirmados = serializers.IntegerField(read_only=True)
+    lista_espera_ativa = serializers.BooleanField(read_only=True)
+    sem_prioridade = serializers.BooleanField(read_only=True)
+    ordenacao_representa_prioridade = serializers.BooleanField(read_only=True)
+    candidatos = CandidatoCampanhaSerializer(many=True, read_only=True)
 
 
 def calculate_age(birth_date):
