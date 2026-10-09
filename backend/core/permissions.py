@@ -29,6 +29,30 @@ def pode_consultar_auditoria_encontro(user):
     )
 
 
+def pode_gerir_configuracao_encontristas(user):
+    if not (
+        getattr(user, 'is_authenticated', False)
+        and getattr(user, 'is_active', False)
+    ):
+        return False
+    return bool(
+        user.is_superuser
+        or user_has_any_role(user, *FULL_ADMIN_ROLES)
+    )
+
+
+def pode_consultar_configuracao_encontristas(user):
+    if not (
+        getattr(user, 'is_authenticated', False)
+        and getattr(user, 'is_active', False)
+    ):
+        return False
+    return bool(
+        user.is_superuser
+        or user_has_any_role(user, *FICHAS_MANAGEMENT_ROLES)
+    )
+
+
 def pode_registrar_presenca_preparatoria(user, encontro):
     if not (
         getattr(user, 'is_authenticated', False)
