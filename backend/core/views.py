@@ -130,7 +130,7 @@ from .roles import (
     user_has_any_role,
 )
 
-from django.db.models import Count
+from django.db.models import Count, Min, Q
 from django.db import IntegrityError, transaction
 from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
@@ -1354,35 +1354,45 @@ class InscricaoEncontroPublicaAPIView(APIView):
         )
         return [throttle_class()]
 
-    def _encontro(self, public_id):
+    def _configuracao(self, public_id):
         configuracao = (
             ConfiguracaoEncontristasEncontro.objects
             .select_related('encontro')
+            .annotate(
+                primeiro_dia_oficial=Min(
+                    'encontro__calendarios__dias__data',
+                    filter=Q(
+                        encontro__calendarios__vigente=True,
+                        encontro__calendarios__oficializado_em__isnull=False,
+                    ),
+                ),
+            )
             .filter(
                 public_id=public_id,
                 encontro__tipo__in=(
                     Encontro.Tipo.ESCALADA,
                     Encontro.Tipo.ESPPA,
                 ),
+                primeiro_dia_oficial__isnull=False,
             )
             .first()
         )
         if configuracao is None:
             raise NotFound(PUBLIC_REGISTRATION_NOT_FOUND)
-        return configuracao.encontro
+        return configuracao
 
     def get(self, request, public_id):
-        encontro = self._encontro(public_id)
-        serializer = EncontroInscricaoPublicaSerializer(encontro)
+        configuracao = self._configuracao(public_id)
+        serializer = EncontroInscricaoPublicaSerializer(configuracao)
         return Response(serializer.data)
 
     def post(self, request, public_id):
-        encontro = self._encontro(public_id)
+        configuracao = self._configuracao(public_id)
         serializer = SubmissaoInscricaoPublicaSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         try:
             inscricao_encontro_services.submeter_inscricao_encontro(
-                encontro=encontro,
+                encontro=configuracao.encontro,
                 origem=InscricaoEncontro.Origem.PUBLICA,
                 **serializer.validated_data,
             )

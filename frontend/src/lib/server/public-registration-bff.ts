@@ -185,6 +185,7 @@ function minimalEncounter(body: unknown): JsonObject | null {
     inscricoes_abrem_em: opensAt,
     inscricoes_encerram_em: closesAt,
     inscricoes_abertas: isOpen,
+    primeiro_dia_oficial: firstOfficialDay,
   } = body;
   if (
     typeof titulo !== "string"
@@ -192,6 +193,8 @@ function minimalEncounter(body: unknown): JsonObject | null {
     || typeof opensAt !== "string"
     || typeof closesAt !== "string"
     || typeof isOpen !== "boolean"
+    || typeof firstOfficialDay !== "string"
+    || !/^\d{4}-\d{2}-\d{2}$/.test(firstOfficialDay)
   ) {
     return null;
   }
@@ -201,6 +204,7 @@ function minimalEncounter(body: unknown): JsonObject | null {
     inscricoes_abrem_em: opensAt,
     inscricoes_encerram_em: closesAt,
     inscricoes_abertas: isOpen,
+    primeiro_dia_oficial: firstOfficialDay,
   };
 }
 

@@ -75,6 +75,7 @@ describe("BFF público de inscrição", () => {
         inscricoes_abrem_em: "2030-01-01T08:00:00-03:00",
         inscricoes_encerram_em: "2030-02-01T08:00:00-03:00",
         inscricoes_abertas: true,
+        primeiro_dia_oficial: "2030-06-01",
         encontro_id: 17,
         pessoa: { cpf: "52998224725" },
       }),
@@ -103,6 +104,7 @@ describe("BFF público de inscrição", () => {
       inscricoes_abrem_em: "2030-01-01T08:00:00-03:00",
       inscricoes_encerram_em: "2030-02-01T08:00:00-03:00",
       inscricoes_abertas: true,
+      primeiro_dia_oficial: "2030-06-01",
     });
   });
 
@@ -175,6 +177,7 @@ describe("BFF público de inscrição", () => {
         inscricoes_abrem_em: "2030-01-01T08:00:00-03:00",
         inscricoes_encerram_em: "2030-02-01T08:00:00-03:00",
         inscricoes_abertas: false,
+        primeiro_dia_oficial: "2030-06-01",
       }),
     );
 

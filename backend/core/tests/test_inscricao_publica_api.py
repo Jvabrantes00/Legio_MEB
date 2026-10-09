@@ -31,13 +31,19 @@ class InscricaoEncontroPublicaAPITests(TestCase):
         cache.clear()
         self.client = APIClient()
         self.agora = timezone.now()
+        self.primeiro_dia_oficial = (
+            self.agora + timedelta(days=180)
+        ).date()
         self.encontro = make_encontro(
             encontro='Escalada pública',
             tipo=Encontro.Tipo.ESCALADA,
-            data_referencia=(self.agora + timedelta(days=180)).date(),
+            data_referencia=self.primeiro_dia_oficial,
         )
         self.configuracao = self._configurar(self.encontro)
-        self._oficializar_calendario(self.encontro)
+        self.calendario = self._criar_calendario(
+            self.encontro,
+            dias=(self.primeiro_dia_oficial,),
+        )
         self.url = reverse(
             'inscricao-encontro-publica',
             kwargs={'public_id': self.configuracao.public_id},
@@ -58,18 +64,28 @@ class InscricaoEncontroPublicaAPITests(TestCase):
         valores.update(overrides)
         return ConfiguracaoEncontristasEncontro.objects.create(**valores)
 
-    def _oficializar_calendario(self, encontro):
+    def _criar_calendario(
+        self,
+        encontro,
+        *,
+        versao=1,
+        vigente=True,
+        oficializado=True,
+        dias=(),
+    ):
         calendario = CalendarioEncontro.objects.create(
             encontro=encontro,
-            versao=1,
-            vigente=True,
-            oficializado_em=self.agora,
+            versao=versao,
+            vigente=vigente,
+            oficializado_em=self.agora if oficializado else None,
         )
-        DiaEncontro.objects.create(
-            calendario=calendario,
-            ordem=1,
-            data=(self.agora + timedelta(days=180)).date(),
-        )
+        for ordem, dia in enumerate(dias, start=1):
+            DiaEncontro.objects.create(
+                calendario=calendario,
+                ordem=ordem,
+                data=dia,
+            )
+        return calendario
 
     def _payload(self, **dados_overrides):
         dados = {
@@ -124,7 +140,7 @@ class InscricaoEncontroPublicaAPITests(TestCase):
             },
         }
 
-    def test_leitura_publica_retorna_somente_tipo_titulo_e_janela(self):
+    def test_leitura_publica_retorna_contrato_minimo_com_primeiro_dia(self):
         resposta = self.client.get(self.url)
 
         self.assertEqual(resposta.status_code, status.HTTP_200_OK)
@@ -136,14 +152,78 @@ class InscricaoEncontroPublicaAPITests(TestCase):
                 'inscricoes_abrem_em',
                 'inscricoes_encerram_em',
                 'inscricoes_abertas',
+                'primeiro_dia_oficial',
             },
         )
         self.assertEqual(resposta.json()['titulo'], 'Escalada pública')
         self.assertEqual(resposta.json()['tipo'], Encontro.Tipo.ESCALADA)
         self.assertTrue(resposta.json()['inscricoes_abertas'])
+        self.assertEqual(
+            resposta.json()['primeiro_dia_oficial'],
+            self.primeiro_dia_oficial.isoformat(),
+        )
         self.assertNotIn('id', resposta.json())
+        self.assertNotIn('calendario_id', resposta.json())
+        self.assertNotIn('dia_encontro_id', resposta.json())
         self.assertNotIn('capacidade', resposta.json())
         self.assertNotIn('local', resposta.json())
+
+    def test_primeiro_dia_ignora_calendario_antigo_e_provisorio(self):
+        DiaEncontro.objects.create(
+            calendario=self.calendario,
+            ordem=2,
+            data=self.primeiro_dia_oficial + timedelta(days=2),
+        )
+        self._criar_calendario(
+            self.encontro,
+            versao=2,
+            vigente=False,
+            dias=(self.primeiro_dia_oficial - timedelta(days=100),),
+        )
+        self._criar_calendario(
+            self.encontro,
+            versao=3,
+            vigente=False,
+            oficializado=False,
+            dias=(self.primeiro_dia_oficial - timedelta(days=200),),
+        )
+
+        resposta = self.client.get(self.url)
+
+        self.assertEqual(resposta.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            resposta.json()['primeiro_dia_oficial'],
+            self.primeiro_dia_oficial.isoformat(),
+        )
+
+    def test_ausencia_de_calendario_oficial_com_dias_retorna_404_uniforme(self):
+        sem_calendario = self._configurar(make_encontro())
+        provisorio = self._configurar(make_encontro())
+        self._criar_calendario(
+            provisorio.encontro,
+            oficializado=False,
+            dias=(self.primeiro_dia_oficial,),
+        )
+        oficial_sem_dias = self._configurar(make_encontro())
+        self._criar_calendario(oficial_sem_dias.encontro)
+        resposta_esperada = {'detail': 'Recurso público não encontrado.'}
+
+        for causa, configuracao in {
+            'sem_calendario': sem_calendario,
+            'provisorio': provisorio,
+            'oficial_sem_dias': oficial_sem_dias,
+        }.items():
+            with self.subTest(causa=causa):
+                url = reverse(
+                    'inscricao-encontro-publica',
+                    kwargs={'public_id': configuracao.public_id},
+                )
+                resposta = self.client.get(url)
+                self.assertEqual(
+                    resposta.status_code,
+                    status.HTTP_404_NOT_FOUND,
+                )
+                self.assertEqual(resposta.json(), resposta_esperada)
 
     def test_janela_fechada_e_informada_e_impede_submissao(self):
         self.configuracao.inscricoes_abrem_em = self.agora - timedelta(days=2)

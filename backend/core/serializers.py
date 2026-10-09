@@ -50,24 +50,23 @@ class StrictCommandSerializer(serializers.Serializer):
 
 
 class EncontroInscricaoPublicaSerializer(serializers.Serializer):
-    titulo = serializers.CharField(source='encontro', read_only=True)
+    titulo = serializers.CharField(source='encontro.encontro', read_only=True)
     tipo = serializers.ChoiceField(
         choices=(Encontro.Tipo.ESCALADA, Encontro.Tipo.ESPPA),
+        source='encontro.tipo',
         read_only=True,
     )
     inscricoes_abrem_em = serializers.DateTimeField(
-        source='configuracao_encontristas.inscricoes_abrem_em',
         read_only=True,
     )
     inscricoes_encerram_em = serializers.DateTimeField(
-        source='configuracao_encontristas.inscricoes_encerram_em',
         read_only=True,
     )
     inscricoes_abertas = serializers.SerializerMethodField()
+    primeiro_dia_oficial = serializers.DateField(read_only=True)
 
-    def get_inscricoes_abertas(self, encontro):
+    def get_inscricoes_abertas(self, configuracao):
         momento = self.context.get('momento') or timezone.now()
-        configuracao = encontro.configuracao_encontristas
         return (
             configuracao.inscricoes_abrem_em
             <= momento
