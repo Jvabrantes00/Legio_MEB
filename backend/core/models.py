@@ -539,6 +539,487 @@ class ConfiguracaoEncontristasEncontro(models.Model):
         return f'Configuração de encontristas — {self.encontro}'
 
 
+class InscricaoEncontro(models.Model):
+    class Status(models.TextChoices):
+        ENVIADA = 'enviada', 'Enviada'
+        CANCELADA = 'cancelada', 'Cancelada'
+
+    class Origem(models.TextChoices):
+        PUBLICA = 'publica', 'Pública'
+        ADMINISTRATIVA = 'administrativa', 'Administrativa'
+
+    identificador = models.UUIDField(
+        default=uuid4,
+        unique=True,
+        editable=False,
+    )
+    encontro = models.ForeignKey(
+        Encontro,
+        on_delete=models.PROTECT,
+        related_name='inscricoes_encontristas',
+    )
+    pessoa = models.ForeignKey(
+        Pessoa,
+        on_delete=models.PROTECT,
+        related_name='inscricoes_por_encontro',
+        null=True,
+        blank=True,
+    )
+    origem = models.CharField(max_length=20, choices=Origem.choices)
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.ENVIADA,
+    )
+    enviada_em = models.DateTimeField(auto_now_add=True)
+    atualizada_em = models.DateTimeField(auto_now=True)
+    cancelada_em = models.DateTimeField(null=True, blank=True)
+    reativada_em = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        indexes = [
+            models.Index(
+                fields=['encontro', 'status', 'origem'],
+                name='insc_enc_status_origem_idx',
+            ),
+            models.Index(
+                fields=['pessoa', 'encontro'],
+                name='insc_pessoa_encontro_idx',
+            ),
+            models.Index(
+                fields=['enviada_em'],
+                name='insc_enviada_em_idx',
+            ),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=['encontro', 'pessoa'],
+                condition=models.Q(pessoa__isnull=False),
+                name='insc_encontro_pessoa_unica',
+            ),
+            models.CheckConstraint(
+                condition=models.Q(status__in=('enviada', 'cancelada')),
+                name='insc_encontro_status_valido',
+            ),
+            models.CheckConstraint(
+                condition=models.Q(origem__in=('publica', 'administrativa')),
+                name='insc_encontro_origem_valida',
+            ),
+            models.CheckConstraint(
+                condition=(
+                    ~models.Q(status='cancelada')
+                    | models.Q(cancelada_em__isnull=False)
+                ),
+                name='insc_cancelamento_coerente',
+            ),
+        ]
+
+    def __str__(self):
+        return f'Inscrição {self.identificador} — Encontro {self.encontro_id}'
+
+
+class DadosDeclaradosInscricao(models.Model):
+    class Sacramento(models.TextChoices):
+        SIM = 'sim', 'Sim'
+        NAO = 'nao', 'Não'
+        NAO_SEI = 'nao_sei', 'Não sei'
+        NAO_INFORMADO = 'nao_informado', 'Não informado'
+
+    class ComoConheceu(models.TextChoices):
+        INDICACAO = 'indicacao', 'Indicação de amigo ou familiar'
+        PAROQUIA = 'paroquia', 'Paróquia'
+        REDES_SOCIAIS = 'redes_sociais', 'Redes sociais'
+        JA_CONHECIA = 'ja_conhecia', 'Já conhecia o Movimento Escalada'
+        OUTRO = 'outro', 'Outro'
+
+    inscricao = models.OneToOneField(
+        InscricaoEncontro,
+        on_delete=models.CASCADE,
+        related_name='dados_declarados',
+    )
+    nome_completo = models.CharField(max_length=255)
+    apelido = models.CharField(max_length=255, blank=True, default='')
+    data_nascimento = models.DateField()
+    cpf = models.CharField(
+        max_length=14,
+        null=True,
+        blank=True,
+        validators=[validate_cpf],
+    )
+    email = models.EmailField(blank=True, default='')
+    telefone_whatsapp = models.CharField(
+        max_length=20,
+        blank=True,
+        default='',
+    )
+    cep = models.CharField(max_length=9)
+    logradouro = models.CharField(max_length=255)
+    numero = models.CharField(max_length=20)
+    complemento = models.CharField(max_length=255, blank=True, default='')
+    bairro = models.CharField(max_length=100)
+    cidade = models.CharField(max_length=100)
+    uf = models.CharField(max_length=2)
+    como_conheceu = models.CharField(
+        max_length=30,
+        choices=ComoConheceu.choices,
+    )
+    como_conheceu_outro = models.CharField(
+        max_length=255,
+        blank=True,
+        default='',
+    )
+    batismo = models.CharField(
+        max_length=20,
+        choices=Sacramento.choices,
+        default=Sacramento.NAO_INFORMADO,
+    )
+    primeira_comunhao = models.CharField(
+        max_length=20,
+        choices=Sacramento.choices,
+        default=Sacramento.NAO_INFORMADO,
+    )
+    crisma = models.CharField(
+        max_length=20,
+        choices=Sacramento.choices,
+        default=Sacramento.NAO_INFORMADO,
+    )
+    snapshot_schema_version = models.PositiveSmallIntegerField(default=1)
+    snapshot_atual = models.JSONField(default=dict)
+    criado_em = models.DateTimeField(auto_now_add=True)
+    atualizado_em = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['cpf'], name='dados_insc_cpf_idx'),
+        ]
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    ~models.Q(email='')
+                    | ~models.Q(telefone_whatsapp='')
+                ),
+                name='dados_insc_contato_presente',
+            ),
+            models.CheckConstraint(
+                condition=models.Q(snapshot_schema_version__gt=0),
+                name='dados_insc_schema_positivo',
+            ),
+            models.CheckConstraint(
+                condition=models.Q(
+                    como_conheceu__in=(
+                        'indicacao',
+                        'paroquia',
+                        'redes_sociais',
+                        'ja_conhecia',
+                        'outro',
+                    )
+                ),
+                name='dados_insc_origem_valida',
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(
+                        batismo__in=(
+                            'sim',
+                            'nao',
+                            'nao_sei',
+                            'nao_informado',
+                        )
+                    )
+                    & models.Q(
+                        primeira_comunhao__in=(
+                            'sim',
+                            'nao',
+                            'nao_sei',
+                            'nao_informado',
+                        )
+                    )
+                    & models.Q(
+                        crisma__in=(
+                            'sim',
+                            'nao',
+                            'nao_sei',
+                            'nao_informado',
+                        )
+                    )
+                ),
+                name='dados_insc_sacramentos_validos',
+            ),
+        ]
+
+    def __str__(self):
+        return f'Dados declarados da inscrição {self.inscricao_id}'
+
+
+class ResponsavelDeclaradoInscricao(models.Model):
+    inscricao = models.OneToOneField(
+        InscricaoEncontro,
+        on_delete=models.CASCADE,
+        related_name='responsavel_declarado',
+    )
+    nome_completo = models.CharField(max_length=255)
+    cpf = models.CharField(max_length=14, validators=[validate_cpf])
+    parentesco = models.CharField(max_length=100)
+    telefone_whatsapp = models.CharField(max_length=20)
+    email = models.EmailField(blank=True, default='')
+    criado_em = models.DateTimeField(auto_now_add=True)
+    atualizado_em = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f'Responsável declarado da inscrição {self.inscricao_id}'
+
+
+class DadosCuidadoInscricao(models.Model):
+    class RespostaBinaria(models.TextChoices):
+        NAO = 'nao', 'Não'
+        SIM = 'sim', 'Sim'
+
+    class RespostaApoio(models.TextChoices):
+        NAO = 'nao', 'Não'
+        SIM = 'sim', 'Sim'
+        PREFERE_NAO_INFORMAR = (
+            'prefere_nao_informar',
+            'Prefere não informar',
+        )
+
+    inscricao = models.OneToOneField(
+        InscricaoEncontro,
+        on_delete=models.CASCADE,
+        related_name='dados_cuidado',
+    )
+    possui_alergias = models.CharField(
+        max_length=3,
+        choices=RespostaBinaria.choices,
+        null=True,
+        blank=True,
+    )
+    alergias = models.TextField(blank=True, default='')
+    possui_restricoes_intolerancias = models.CharField(
+        max_length=3,
+        choices=RespostaBinaria.choices,
+        null=True,
+        blank=True,
+    )
+    restricoes_intolerancias = models.TextField(blank=True, default='')
+    usa_medicamentos = models.CharField(
+        max_length=3,
+        choices=RespostaBinaria.choices,
+        null=True,
+        blank=True,
+    )
+    medicamentos = models.TextField(blank=True, default='')
+    horarios_medicamentos = models.TextField(blank=True, default='')
+    observacoes_medicamentos = models.TextField(blank=True, default='')
+    neurodivergencia_apoio = models.CharField(
+        max_length=25,
+        choices=RespostaApoio.choices,
+        null=True,
+        blank=True,
+    )
+    neurodivergencia_condicao = models.TextField(blank=True, default='')
+    necessidades_apoio = models.TextField(blank=True, default='')
+    sensibilidades_desconfortos = models.TextField(blank=True, default='')
+    o_que_ajuda = models.TextField(blank=True, default='')
+    outras_informacoes = models.TextField(blank=True, default='')
+    observacoes = models.TextField(blank=True, default='')
+    criado_em = models.DateTimeField(auto_now_add=True)
+    atualizado_em = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    (
+                        models.Q(possui_alergias__isnull=True)
+                        | models.Q(
+                            possui_alergias__in=('nao', 'sim')
+                        )
+                    )
+                    & (
+                        models.Q(
+                            possui_restricoes_intolerancias__isnull=True
+                        )
+                        | models.Q(
+                            possui_restricoes_intolerancias__in=('nao', 'sim')
+                        )
+                    )
+                    & (
+                        models.Q(usa_medicamentos__isnull=True)
+                        | models.Q(
+                            usa_medicamentos__in=('nao', 'sim')
+                        )
+                    )
+                    & (
+                        models.Q(neurodivergencia_apoio__isnull=True)
+                        | models.Q(
+                            neurodivergencia_apoio__in=(
+                                'nao',
+                                'sim',
+                                'prefere_nao_informar',
+                            )
+                        )
+                    )
+                ),
+                name='dados_cuidado_respostas_validas',
+            ),
+        ]
+
+    def __str__(self):
+        return f'Dados de cuidado da inscrição {self.inscricao_id}'
+
+
+class DadosEsppaInscricao(models.Model):
+    class EstadoCivil(models.TextChoices):
+        SOLTEIRO = 'solteiro', 'Solteiro'
+        CASADO = 'casado', 'Casado'
+        VIUVO = 'viuvo', 'Viúvo'
+        DIVORCIADO = 'divorciado', 'Divorciado'
+
+    class RelacaoReferencia(models.TextChoices):
+        PAI_MAE = 'pai_mae', 'Pai ou mãe'
+        IRMAO_IRMA = 'irmao_irma', 'Irmão ou irmã'
+        OUTRO_FAMILIAR = 'outro_familiar', 'Outro familiar'
+        AMIGO = 'amigo', 'Amigo(a)'
+        OUTRO = 'outro', 'Outro'
+
+    inscricao = models.OneToOneField(
+        InscricaoEncontro,
+        on_delete=models.CASCADE,
+        related_name='dados_esppa',
+    )
+    estado_civil = models.CharField(
+        max_length=20,
+        choices=EstadoCivil.choices,
+    )
+    nome_conjuge = models.CharField(max_length=255, blank=True, default='')
+    telefone_conjuge = models.CharField(max_length=20, blank=True, default='')
+    nome_referencia = models.CharField(max_length=255, blank=True, default='')
+    relacao_referencia = models.CharField(
+        max_length=30,
+        choices=RelacaoReferencia.choices,
+        blank=True,
+        default='',
+    )
+    telefone_referencia = models.CharField(
+        max_length=20,
+        blank=True,
+        default='',
+    )
+    criado_em = models.DateTimeField(auto_now_add=True)
+    atualizado_em = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(
+                    estado_civil__in=(
+                        'solteiro',
+                        'casado',
+                        'viuvo',
+                        'divorciado',
+                    )
+                ),
+                name='dados_esppa_estado_civil_valido',
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(relacao_referencia='')
+                    | models.Q(
+                        relacao_referencia__in=(
+                            'pai_mae',
+                            'irmao_irma',
+                            'outro_familiar',
+                            'amigo',
+                            'outro',
+                        )
+                    )
+                ),
+                name='dados_esppa_relacao_valida',
+            ),
+        ]
+
+    def __str__(self):
+        return f'Dados ESPPA da inscrição {self.inscricao_id}'
+
+
+class CorrespondenciaCadastralInscricao(models.Model):
+    class Status(models.TextChoices):
+        SUGERIDA = 'sugerida', 'Sugerida'
+        REJEITADA = 'rejeitada', 'Rejeitada'
+        ACEITA = 'aceita', 'Aceita'
+
+    inscricao = models.ForeignKey(
+        InscricaoEncontro,
+        on_delete=models.CASCADE,
+        related_name='correspondencias_cadastrais',
+    )
+    pessoa_candidata = models.ForeignKey(
+        Pessoa,
+        on_delete=models.PROTECT,
+        related_name='correspondencias_inscricao',
+    )
+    origem_sinal = models.CharField(max_length=50)
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.SUGERIDA,
+    )
+    decidida_por = models.ForeignKey(
+        User,
+        on_delete=models.PROTECT,
+        related_name='correspondencias_cadastrais_decididas',
+        null=True,
+        blank=True,
+    )
+    decidida_em = models.DateTimeField(null=True, blank=True)
+    criada_em = models.DateTimeField(auto_now_add=True)
+    atualizada_em = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=['inscricao', 'pessoa_candidata'],
+                name='corresp_insc_pessoa_unica',
+            ),
+            models.UniqueConstraint(
+                fields=['inscricao'],
+                condition=models.Q(status='aceita'),
+                name='corresp_insc_aceita_unica',
+            ),
+            models.CheckConstraint(
+                condition=models.Q(
+                    status__in=('sugerida', 'rejeitada', 'aceita')
+                ),
+                name='corresp_insc_status_valido',
+            ),
+            models.CheckConstraint(
+                condition=~models.Q(origem_sinal=''),
+                name='corresp_insc_origem_nao_vazia',
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(
+                        status='sugerida',
+                        decidida_por__isnull=True,
+                        decidida_em__isnull=True,
+                    )
+                    | models.Q(
+                        status__in=('rejeitada', 'aceita'),
+                        decidida_por__isnull=False,
+                        decidida_em__isnull=False,
+                    )
+                ),
+                name='corresp_insc_decisao_coerente',
+            ),
+        ]
+
+    def __str__(self):
+        return (
+            f'Correspondência {self.pk or "nova"} — '
+            f'inscrição {self.inscricao_id}'
+        )
+
+
 class CalendarioEncontro(models.Model):
     encontro = models.ForeignKey(
         Encontro,

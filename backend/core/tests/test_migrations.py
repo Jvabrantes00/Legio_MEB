@@ -222,3 +222,53 @@ class AddMusicaFieldsMigrationTests(TransactionTestCase):
         executor = MigrationExecutor(connection)
         executor.migrate(executor.loader.graph.leaf_nodes())
         super().tearDown()
+
+
+class ExpandInscricaoEncontroMigrationTests(TransactionTestCase):
+    migrate_from = ('core', '0040_configuracaoencontristasencontro')
+    migrate_to = (
+        'core',
+        '0041_inscricaoencontro_dadosesppainscricao_and_more',
+    )
+
+    def setUp(self):
+        super().setUp()
+        executor = MigrationExecutor(connection)
+        executor.migrate([self.migrate_from])
+        old_apps = executor.loader.project_state([self.migrate_from]).apps
+        Pessoa = old_apps.get_model('core', 'Pessoa')
+        Inscricao = old_apps.get_model('core', 'Inscricao')
+        pessoa = Pessoa.objects.create(nome='Pessoa legada preservada')
+        self.inscricao_legada_id = Inscricao.objects.create(
+            pessoa=pessoa,
+            tipo='Escalada',
+            status='pendente',
+        ).pk
+
+        executor = MigrationExecutor(connection)
+        executor.migrate([self.migrate_to])
+        self.apps = executor.loader.project_state([self.migrate_to]).apps
+
+    def test_migration_preserva_legado_e_cria_estruturas_vazias(self):
+        Inscricao = self.apps.get_model('core', 'Inscricao')
+        novos_models = (
+            'InscricaoEncontro',
+            'DadosDeclaradosInscricao',
+            'ResponsavelDeclaradoInscricao',
+            'DadosCuidadoInscricao',
+            'DadosEsppaInscricao',
+            'CorrespondenciaCadastralInscricao',
+        )
+
+        self.assertTrue(
+            Inscricao.objects.filter(pk=self.inscricao_legada_id).exists()
+        )
+        for nome_model in novos_models:
+            with self.subTest(model=nome_model):
+                model = self.apps.get_model('core', nome_model)
+                self.assertEqual(model.objects.count(), 0)
+
+    def tearDown(self):
+        executor = MigrationExecutor(connection)
+        executor.migrate(executor.loader.graph.leaf_nodes())
+        super().tearDown()
