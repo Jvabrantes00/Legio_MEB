@@ -1,6 +1,7 @@
 from uuid import uuid4
 
 from django.core.exceptions import ValidationError
+from django.core.validators import RegexValidator
 from django.db import models
 from django.contrib.auth.models import User
 from django.utils import timezone
@@ -1709,6 +1710,390 @@ class ConviteEncontro(models.Model):
                 name='convite_role_apenas_trabalho',
             ),
         ]
+
+
+class CampanhaConvitesEncontro(models.Model):
+    class Status(models.TextChoices):
+        ATIVA = 'ativa', 'Ativa'
+        AGUARDANDO_DECISAO = 'aguardando_decisao', 'Aguardando decisão'
+        ENCERRADA = 'encerrada', 'Encerrada'
+
+    encontro = models.OneToOneField(
+        Encontro,
+        on_delete=models.PROTECT,
+        related_name='campanha_convites',
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.ATIVA,
+    )
+    iniciada_por = models.ForeignKey(
+        User,
+        on_delete=models.PROTECT,
+        related_name='campanhas_convites_iniciadas',
+    )
+    iniciada_em = models.DateTimeField(default=timezone.now)
+    prazo_confirmacao = models.DateTimeField()
+    encerrada_em = models.DateTimeField(null=True, blank=True)
+    criada_em = models.DateTimeField(auto_now_add=True)
+    atualizada_em = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        indexes = [
+            models.Index(
+                fields=['status', 'prazo_confirmacao'],
+                name='camp_conv_status_prazo_idx',
+            ),
+        ]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(
+                    status__in=('ativa', 'aguardando_decisao', 'encerrada')
+                ),
+                name='camp_conv_status_valido',
+            ),
+            models.CheckConstraint(
+                condition=models.Q(
+                    prazo_confirmacao__gt=models.F('iniciada_em')
+                ),
+                name='camp_conv_prazo_coerente',
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(status='encerrada', encerrada_em__isnull=False)
+                    | (
+                        ~models.Q(status='encerrada')
+                        & models.Q(encerrada_em__isnull=True)
+                    )
+                ),
+                name='camp_conv_encerramento_coerente',
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(encerrada_em__isnull=True)
+                    | models.Q(encerrada_em__gte=models.F('iniciada_em'))
+                ),
+                name='camp_conv_datas_coerentes',
+            ),
+        ]
+
+    def __str__(self):
+        return f'Campanha de convites — {self.encontro}'
+
+
+class RodadaConvitesEncontro(models.Model):
+    class Tipo(models.TextChoices):
+        INICIAL = 'inicial', 'Inicial'
+        REPOSICAO = 'reposicao', 'Reposição'
+        PRORROGACAO = 'prorrogacao', 'Prorrogação'
+
+    class Status(models.TextChoices):
+        ABERTA = 'aberta', 'Aberta'
+        ENCERRADA = 'encerrada', 'Encerrada'
+
+    campanha = models.ForeignKey(
+        CampanhaConvitesEncontro,
+        on_delete=models.PROTECT,
+        related_name='rodadas',
+    )
+    sequencia = models.PositiveIntegerField()
+    tipo = models.CharField(max_length=20, choices=Tipo.choices)
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.ABERTA,
+    )
+    aberta_em = models.DateTimeField(default=timezone.now)
+    encerrada_em = models.DateTimeField(null=True, blank=True)
+    criada_em = models.DateTimeField(auto_now_add=True)
+    atualizada_em = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['campanha_id', 'sequencia']
+        indexes = [
+            models.Index(
+                fields=['campanha', 'status', 'aberta_em'],
+                name='rod_conv_camp_status_idx',
+            ),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=['campanha', 'sequencia'],
+                name='rod_conv_camp_sequencia_unica',
+            ),
+            models.CheckConstraint(
+                condition=models.Q(sequencia__gt=0),
+                name='rod_conv_sequencia_positiva',
+            ),
+            models.CheckConstraint(
+                condition=models.Q(
+                    tipo__in=('inicial', 'reposicao', 'prorrogacao')
+                ),
+                name='rod_conv_tipo_valido',
+            ),
+            models.CheckConstraint(
+                condition=models.Q(status__in=('aberta', 'encerrada')),
+                name='rod_conv_status_valido',
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(status='encerrada', encerrada_em__isnull=False)
+                    | (
+                        models.Q(status='aberta')
+                        & models.Q(encerrada_em__isnull=True)
+                    )
+                ),
+                name='rod_conv_encerramento_coerente',
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(encerrada_em__isnull=True)
+                    | models.Q(encerrada_em__gte=models.F('aberta_em'))
+                ),
+                name='rod_conv_datas_coerentes',
+            ),
+        ]
+
+    def __str__(self):
+        return f'Rodada {self.sequencia} — Campanha {self.campanha_id}'
+
+
+class OportunidadeConviteEncontro(models.Model):
+    class Status(models.TextChoices):
+        PENDENTE = 'pendente', 'Pendente'
+        CONSUMIDA = 'consumida', 'Consumida'
+        INVALIDADA = 'invalidada', 'Invalidada'
+        EXPIRADA = 'expirada', 'Expirada'
+        SUSPENSA = 'suspensa', 'Suspensa'
+
+    rodada = models.ForeignKey(
+        RodadaConvitesEncontro,
+        on_delete=models.PROTECT,
+        related_name='oportunidades',
+    )
+    convite = models.ForeignKey(
+        ConviteEncontro,
+        on_delete=models.PROTECT,
+        related_name='oportunidades',
+    )
+    token_digest = models.CharField(
+        max_length=64,
+        unique=True,
+        editable=False,
+        validators=[
+            RegexValidator(
+                regex=r'^[0-9a-f]{64}$',
+                message='Use um digest SHA-256 hexadecimal em minúsculas.',
+            ),
+        ],
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.PENDENTE,
+    )
+    expira_em = models.DateTimeField()
+    consumida_em = models.DateTimeField(null=True, blank=True)
+    criada_em = models.DateTimeField(auto_now_add=True)
+    atualizada_em = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        indexes = [
+            models.Index(
+                fields=['rodada', 'status'],
+                name='op_conv_rod_status_idx',
+            ),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=['rodada', 'convite'],
+                name='op_conv_rod_convite_unica',
+            ),
+            models.CheckConstraint(
+                condition=models.Q(
+                    status__in=(
+                        'pendente',
+                        'consumida',
+                        'invalidada',
+                        'expirada',
+                        'suspensa',
+                    )
+                ),
+                name='op_conv_status_valido',
+            ),
+            models.CheckConstraint(
+                condition=models.Q(token_digest__regex=r'^[0-9a-f]{64}$'),
+                name='op_conv_digest_sha256',
+            ),
+            models.CheckConstraint(
+                condition=models.Q(expira_em__gt=models.F('criada_em')),
+                name='op_conv_expiracao_coerente',
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(status='consumida', consumida_em__isnull=False)
+                    | (
+                        ~models.Q(status='consumida')
+                        & models.Q(consumida_em__isnull=True)
+                    )
+                ),
+                name='op_conv_consumo_coerente',
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(consumida_em__isnull=True)
+                    | models.Q(
+                        consumida_em__gte=models.F('criada_em'),
+                        consumida_em__lte=models.F('expira_em'),
+                    )
+                ),
+                name='op_conv_consumo_no_prazo',
+            ),
+        ]
+
+    def __str__(self):
+        return f'Oportunidade {self.pk} — Convite {self.convite_id}'
+
+
+class EntregaConviteEncontro(models.Model):
+    class Canal(models.TextChoices):
+        EMAIL = 'email', 'E-mail'
+        WHATSAPP = 'whatsapp', 'WhatsApp'
+
+    class Status(models.TextChoices):
+        PENDENTE = 'pendente', 'Pendente'
+        ENVIANDO = 'enviando', 'Enviando'
+        ENTREGUE = 'entregue', 'Entregue'
+        FALHOU = 'falhou', 'Falhou'
+
+    oportunidade = models.ForeignKey(
+        OportunidadeConviteEncontro,
+        on_delete=models.PROTECT,
+        related_name='entregas',
+    )
+    canal = models.CharField(max_length=20, choices=Canal.choices)
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.PENDENTE,
+    )
+    chave_idempotencia = models.UUIDField(
+        default=uuid4,
+        unique=True,
+        editable=False,
+    )
+    tentativas = models.PositiveSmallIntegerField(default=0)
+    primeira_tentativa_em = models.DateTimeField(null=True, blank=True)
+    ultima_tentativa_em = models.DateTimeField(null=True, blank=True)
+    entregue_em = models.DateTimeField(null=True, blank=True)
+    proxima_tentativa_em = models.DateTimeField(null=True, blank=True)
+    codigo_erro = models.CharField(max_length=100, blank=True, default='')
+    erro_tecnico = models.CharField(max_length=500, blank=True, default='')
+    criada_em = models.DateTimeField(auto_now_add=True)
+    atualizada_em = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        indexes = [
+            models.Index(
+                fields=['oportunidade', 'status'],
+                name='ent_conv_op_status_idx',
+            ),
+            models.Index(
+                fields=['status', 'proxima_tentativa_em'],
+                name='ent_conv_retry_idx',
+            ),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=['oportunidade', 'canal'],
+                name='ent_conv_op_canal_unica',
+            ),
+            models.CheckConstraint(
+                condition=models.Q(canal__in=('email', 'whatsapp')),
+                name='ent_conv_canal_valido',
+            ),
+            models.CheckConstraint(
+                condition=models.Q(
+                    status__in=('pendente', 'enviando', 'entregue', 'falhou')
+                ),
+                name='ent_conv_status_valido',
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(
+                        tentativas=0,
+                        primeira_tentativa_em__isnull=True,
+                        ultima_tentativa_em__isnull=True,
+                    )
+                    | models.Q(
+                        tentativas__gt=0,
+                        primeira_tentativa_em__isnull=False,
+                        ultima_tentativa_em__isnull=False,
+                    )
+                ),
+                name='ent_conv_tentativas_coerentes',
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(ultima_tentativa_em__isnull=True)
+                    | models.Q(
+                        ultima_tentativa_em__gte=models.F(
+                            'primeira_tentativa_em'
+                        )
+                    )
+                ),
+                name='ent_conv_tentativas_ordem',
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(
+                        status='entregue',
+                        entregue_em__isnull=False,
+                        tentativas__gt=0,
+                    )
+                    | (
+                        ~models.Q(status='entregue')
+                        & models.Q(entregue_em__isnull=True)
+                    )
+                ),
+                name='ent_conv_entrega_coerente',
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(primeira_tentativa_em__isnull=True)
+                    | models.Q(
+                        primeira_tentativa_em__gte=models.F('criada_em')
+                    )
+                ),
+                name='ent_conv_primeira_tentativa_ordem',
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(entregue_em__isnull=True)
+                    | models.Q(
+                        entregue_em__gte=models.F('primeira_tentativa_em')
+                    )
+                ),
+                name='ent_conv_entrega_ordem',
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(proxima_tentativa_em__isnull=True)
+                    | models.Q(
+                        tentativas__gt=0,
+                        ultima_tentativa_em__isnull=False,
+                        proxima_tentativa_em__gte=models.F(
+                            'ultima_tentativa_em'
+                        )
+                    )
+                ),
+                name='ent_conv_retry_ordem',
+            ),
+        ]
+
+    def __str__(self):
+        return f'{self.get_canal_display()} — Oportunidade {self.oportunidade_id}'
 
 
 class TrabalhoEncontro(models.Model):

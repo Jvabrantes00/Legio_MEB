@@ -422,6 +422,8 @@ da janela, sem reutilização indevida.
 
 ### R.3I.11 — Models de campanha, rodada, oportunidade e entrega
 
+**Estado:** concluída em 9 de outubro de 2026.
+
 **Prioridade:** FUNDACIONAL para campanha.
 
 **Objetivo:** criar as quatro estruturas ao redor de `ConviteEncontro`.
@@ -452,6 +454,27 @@ cd /home/vinicius/projects/Legio_MEB/backend
 **Commit sugerido:** `feat: add encounter invitation campaign models`
 
 **Riscos:** transformar convite em linha por rodada ou guardar token reversível.
+
+**Implementação:** a migration expansiva
+`0044_expand_campanha_convites` adicionou as quatro estruturas sem alterar
+`ConviteEncontro`. A campanha preserva início, autor, prazo e encerramento; a
+rodada possui sequência e tipo canônicos; a oportunidade liga uma rodada ao
+convite lógico e armazena somente digest SHA-256; a entrega mantém uma linha
+lógica por oportunidade/canal, contador e timestamps de tentativas, resultado,
+retry, erro técnico sanitizável e chave de idempotência. Os vínculos históricos
+usam `PROTECT`, e constraints locais cobrem escolhas, unicidades e coerência
+temporal. Não há envio, endpoint, geração/validação HTTP de token ou service de
+lifecycle nesta etapa.
+
+Em termos canônicos: `ConviteEncontro` continua sendo o vínculo lógico;
+`OportunidadeConviteEncontro`, a oportunidade daquela rodada; e
+`EntregaConviteEncontro`, a operação de transporte por canal. Uma nova rodada
+nunca cria outro convite lógico para representar a mesma relação.
+
+**Validação:** os testes estruturais foram escritos em
+`core/tests/test_campanha_convites_models.py`. A execução permanece manual,
+conforme a política do projeto; foram executados apenas os checks baratos
+registrados na entrega da etapa.
 
 ### R.3I.12 — Services de campanha e lista de espera
 
