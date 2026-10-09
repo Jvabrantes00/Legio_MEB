@@ -503,6 +503,42 @@ class Encontro(models.Model):
         return self.encontro
 
 
+class ConfiguracaoEncontristasEncontro(models.Model):
+    encontro = models.OneToOneField(
+        Encontro,
+        on_delete=models.PROTECT,
+        related_name='configuracao_encontristas',
+    )
+    capacidade = models.PositiveIntegerField()
+    idade_minima = models.PositiveSmallIntegerField()
+    idade_maxima = models.PositiveSmallIntegerField()
+    inscricoes_abrem_em = models.DateTimeField()
+    inscricoes_encerram_em = models.DateTimeField()
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(capacidade__gt=0),
+                name='cfg_encontr_cap_positiva',
+            ),
+            models.CheckConstraint(
+                condition=models.Q(idade_minima__lte=models.F('idade_maxima')),
+                name='cfg_encontr_idades_coerentes',
+            ),
+            models.CheckConstraint(
+                condition=models.Q(
+                    inscricoes_abrem_em__lt=models.F(
+                        'inscricoes_encerram_em'
+                    )
+                ),
+                name='cfg_encontr_janela_coerente',
+            ),
+        ]
+
+    def __str__(self):
+        return f'Configuração de encontristas — {self.encontro}'
+
+
 class CalendarioEncontro(models.Model):
     encontro = models.ForeignKey(
         Encontro,
