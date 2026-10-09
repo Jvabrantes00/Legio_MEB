@@ -1716,6 +1716,93 @@ class ParticipacaoEncontro(models.Model):
         ]
 
 
+class EventoAuditoriaEncontroQuerySet(models.QuerySet):
+    def update(self, **kwargs):
+        del kwargs
+        raise ValidationError(
+            'Eventos de auditoria de Encontro são imutáveis.'
+        )
+
+    def delete(self):
+        raise ValidationError(
+            'Eventos de auditoria de Encontro não podem ser removidos.'
+        )
+
+    def bulk_update(self, objs, fields, batch_size=None):
+        del objs, fields, batch_size
+        raise ValidationError(
+            'Eventos de auditoria de Encontro são imutáveis.'
+        )
+
+
+class EventoAuditoriaEncontro(models.Model):
+    encontro = models.ForeignKey(
+        Encontro,
+        on_delete=models.PROTECT,
+        related_name='eventos_auditoria',
+    )
+    ator = models.ForeignKey(
+        User,
+        on_delete=models.PROTECT,
+        related_name='eventos_auditoria_encontro',
+    )
+    fato = models.CharField(max_length=100)
+    entidade = models.CharField(max_length=100)
+    objeto_id = models.CharField(max_length=100)
+    valor_anterior = models.JSONField(default=dict)
+    valor_novo = models.JSONField(default=dict)
+    justificativa = models.TextField(blank=True, default='')
+    criado_em = models.DateTimeField(auto_now_add=True, editable=False)
+
+    objects = EventoAuditoriaEncontroQuerySet.as_manager()
+
+    class Meta:
+        ordering = ['-criado_em', '-id']
+        indexes = [
+            models.Index(
+                fields=['encontro', 'criado_em'],
+                name='aud_enc_data_idx',
+            ),
+            models.Index(
+                fields=['entidade', 'objeto_id', 'criado_em'],
+                name='aud_objeto_data_idx',
+            ),
+        ]
+        constraints = [
+            models.CheckConstraint(
+                condition=~models.Q(fato=''),
+                name='aud_fato_nao_vazio',
+            ),
+            models.CheckConstraint(
+                condition=~models.Q(entidade=''),
+                name='aud_entidade_nao_vazia',
+            ),
+            models.CheckConstraint(
+                condition=~models.Q(objeto_id=''),
+                name='aud_objeto_id_nao_vazio',
+            ),
+        ]
+
+    def save(self, *args, **kwargs):
+        if self.pk and type(self).objects.filter(pk=self.pk).exists():
+            raise ValidationError(
+                'Eventos de auditoria de Encontro são imutáveis.'
+            )
+        return super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        del args, kwargs
+        raise ValidationError(
+            'Eventos de auditoria de Encontro não podem ser removidos.'
+        )
+
+    def __str__(self):
+        return (
+            f'{self.fato} — Encontro {self.encontro_id} — '
+            f'{self.entidade} {self.objeto_id}'
+        )
+
+
 # Relação legada preservada para os contratos atuais de encontristas/equipes.
 class VinculoEncontroLegado(models.Model):
 

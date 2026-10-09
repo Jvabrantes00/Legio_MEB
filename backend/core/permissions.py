@@ -11,9 +11,22 @@ from .models import (
 )
 from .roles import (
     FICHAS_MANAGEMENT_ROLES,
+    FULL_ADMIN_ROLES,
     SiaRole,
     user_has_any_role,
 )
+
+
+def pode_consultar_auditoria_encontro(user):
+    if not (
+        getattr(user, 'is_authenticated', False)
+        and getattr(user, 'is_active', False)
+    ):
+        return False
+    return bool(
+        user.is_superuser
+        or user_has_any_role(user, *FULL_ADMIN_ROLES)
+    )
 
 
 def pode_registrar_presenca_preparatoria(user, encontro):
