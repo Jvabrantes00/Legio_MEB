@@ -16,6 +16,10 @@ ficha está em
 Este documento arquitetural continua responsável pelas fronteiras, fluxos e
 entidades conceituais; a especificação da ficha não congela schema técnico.
 
+A proposta de entidades, relações, constraints, locks, APIs e cutover está em
+[[R3C_ENCONTRISTAS_TECHNICAL_MODEL|R.3C.5 — Modelagem técnica de Encontristas]].
+Ela permanece sujeita a revisão humana e não representa schema implementado.
+
 ## Decisões aprovadas
 
 ### Configuração de encontristas

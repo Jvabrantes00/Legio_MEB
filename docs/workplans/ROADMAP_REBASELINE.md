@@ -1047,17 +1047,23 @@ iniciar implementação:
   auditoria;
 - **R.3C.4** concluiu a especificação funcional da ficha pública de Escalada e
   ESPPA, incluindo campos, condicionais, validações, revisão, privacidade e
-  limites da resolução cadastral.
+  limites da resolução cadastral;
+- **R.3C.5** propôs para revisão humana a modelagem técnica de configuração,
+  inscrição, dados declarados, Pré-Encontro, campanha, rodadas, oportunidades,
+  entregas, capacidade, concorrência, auditoria e cutover.
 
 O documento principal é
 [[R3C_ENCONTROS_ARCHITECTURE|R.3C — Arquitetura do Workspace/Encontristas]].
 O detalhamento da ficha está em
 [[R3C_PUBLIC_REGISTRATION_SPEC|R.3C — Ficha pública de Escalada e ESPPA]].
+O modelo técnico proposto está em
+[[R3C_ENCONTRISTAS_TECHNICAL_MODEL|R.3C.5 — Modelagem técnica de Encontristas]].
 Ele registra entidades somente em nível conceitual e mantém explícitos os
 schemas, contratos e mecanismos ainda pendentes. A nova `InscricaoEncontro`
 será expansiva e específica de um Encontro; a `Inscricao` atual permanece
 durante o cutover.
 
-R.3 continua aberta. O próximo checkpoint é fechar as pendências restantes
-necessárias à modelagem e à decomposição da implementação; não há autorização
-para iniciar backend, frontend, migrations ou infraestrutura assíncrona.
+R.3 continua aberta. O próximo checkpoint é a revisão humana da modelagem e o
+fechamento das últimas decisões antes da decomposição da implementação; não há
+autorização para iniciar backend, frontend, migrations ou infraestrutura
+assíncrona.
