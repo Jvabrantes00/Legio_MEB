@@ -199,6 +199,16 @@ REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': (
         'core.permissions.HasAnySiaRole',
     ),
+    'DEFAULT_THROTTLE_RATES': {
+        'public_registration_read': os.getenv(
+            'SIA_PUBLIC_REGISTRATION_READ_RATE',
+            '60/minute',
+        ),
+        'public_registration_submit': os.getenv(
+            'SIA_PUBLIC_REGISTRATION_SUBMIT_RATE',
+            '10/minute',
+        ),
+    },
 
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 10,

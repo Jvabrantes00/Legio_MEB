@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+from uuid import UUID
 
 from django.db import IntegrityError, transaction
 from django.db.models.deletion import ProtectedError
@@ -43,6 +44,25 @@ class ConfiguracaoEncontristasEncontroTests(TestCase):
             configuracao.inscricoes_encerram_em,
             self.encerramento,
         )
+
+    def test_public_id_e_uuid_automatico_distinto_unico_e_nao_editavel(self):
+        primeira = self.criar_configuracao()
+        segunda = self.criar_configuracao(
+            encontro=make_encontro(),
+        )
+        campo = ConfiguracaoEncontristasEncontro._meta.get_field('public_id')
+
+        self.assertIsInstance(primeira.public_id, UUID)
+        self.assertIsInstance(segunda.public_id, UUID)
+        self.assertNotEqual(primeira.public_id, segunda.public_id)
+        self.assertTrue(campo.unique)
+        self.assertFalse(campo.editable)
+
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            self.criar_configuracao(
+                encontro=make_encontro(),
+                public_id=primeira.public_id,
+            )
 
     def test_permite_uma_configuracao_por_encontro(self):
         self.criar_configuracao()

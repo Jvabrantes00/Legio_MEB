@@ -1,3 +1,4 @@
+import logging
 import mimetypes
 from io import BytesIO
 from pathlib import Path
@@ -6,14 +7,22 @@ from django.core.exceptions import ValidationError as django_core_validation_err
 from django.http import FileResponse, Http404
 from rest_framework import filters, mixins, status, viewsets
 from rest_framework.decorators import api_view, permission_classes, action
-from rest_framework.exceptions import APIException, MethodNotAllowed, PermissionDenied, ValidationError
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.exceptions import (
+    APIException,
+    MethodNotAllowed,
+    NotFound,
+    PermissionDenied,
+    ValidationError,
+)
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.views import APIView
 
 from django.shortcuts import get_object_or_404
 
 from .models import (
     Alpinista, AvaliacaoEncontro, CalendarioEncontro, ConviteEncontro,
+    ConfiguracaoEncontristasEncontro,
     CorrespondenciaCadastralInscricao,
     DiaEncontro, Encontro, EntregaMaterial, EquipeEncontro, Evento,
     FotoEncontro, FuncaoEncontro, Inscricao, InscricaoEncontro, Palestra,
@@ -73,8 +82,10 @@ from .serializers import (
     PreenchimentoPropostaVioleirosCommandSerializer,
     PropostaVioleirosSerializer,
     ComandoSemPayloadSerializer,
+    EncontroInscricaoPublicaSerializer,
     ResolucaoCadastralInscricaoSerializer,
     SelecaoCamposResolucaoSerializer,
+    SubmissaoInscricaoPublicaSerializer,
     SubstituicaoPropostaVioleirosCommandSerializer,
     )
 from .permissions import (
@@ -89,12 +100,17 @@ from .services import reunioes_preparatorias as reuniao_services
 from .services import trabalhos as trabalho_services
 from .services import formacoes as formacao_services
 from .services import propostas_violeiros as proposta_violeiros_services
+from .services import inscricoes_encontro as inscricao_encontro_services
 from .services import resolucao_cadastral as resolucao_cadastral_services
 from .services import calendario_institucional as calendario_services
 from .services import comandos_calendario as calendario_command_services
 from .services import exportacao_calendario as exportacao_calendario_services
 from .serializers import _erro_de_dominio, _erro_de_trabalho
 from .formacao_catalogo import TEMAS_FORMATIVOS
+from .throttles import (
+    PublicRegistrationReadThrottle,
+    PublicRegistrationSubmitThrottle,
+)
 from .roles import (
     EVENT_MANAGEMENT_ROLES,
     ENCOUNTER_PHOTO_MANAGEMENT_ROLES,
@@ -119,6 +135,10 @@ from django.db import IntegrityError, transaction
 from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
 from django_filters import rest_framework as django_filters
+
+
+public_registration_logger = logging.getLogger('core.public_registration')
+PUBLIC_REGISTRATION_NOT_FOUND = 'Recurso público não encontrado.'
 
 
 SUMMARY_PROFILE_FIELDS = (
@@ -1320,6 +1340,64 @@ class InscricaoEncontroCommandViewSet(
                 modulo='Inscricao',
                 descricao=f'Inscrição ID {inscricao.pk} criada.',
             )
+
+
+class InscricaoEncontroPublicaAPIView(APIView):
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
+    def get_throttles(self):
+        throttle_class = (
+            PublicRegistrationReadThrottle
+            if self.request.method == 'GET'
+            else PublicRegistrationSubmitThrottle
+        )
+        return [throttle_class()]
+
+    def _encontro(self, public_id):
+        configuracao = (
+            ConfiguracaoEncontristasEncontro.objects
+            .select_related('encontro')
+            .filter(
+                public_id=public_id,
+                encontro__tipo__in=(
+                    Encontro.Tipo.ESCALADA,
+                    Encontro.Tipo.ESPPA,
+                ),
+            )
+            .first()
+        )
+        if configuracao is None:
+            raise NotFound(PUBLIC_REGISTRATION_NOT_FOUND)
+        return configuracao.encontro
+
+    def get(self, request, public_id):
+        encontro = self._encontro(public_id)
+        serializer = EncontroInscricaoPublicaSerializer(encontro)
+        return Response(serializer.data)
+
+    def post(self, request, public_id):
+        encontro = self._encontro(public_id)
+        serializer = SubmissaoInscricaoPublicaSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            inscricao_encontro_services.submeter_inscricao_encontro(
+                encontro=encontro,
+                origem=InscricaoEncontro.Origem.PUBLICA,
+                **serializer.validated_data,
+            )
+        except django_core_validation_error as error:
+            public_registration_logger.info(
+                'Public encounter registration rejected.',
+            )
+            _erro_de_dominio(error)
+        public_registration_logger.info(
+            'Public encounter registration submitted.',
+        )
+        return Response(
+            {'mensagem': 'Inscrição enviada com sucesso.'},
+            status=status.HTTP_201_CREATED,
+        )
 
 
 class InscricaoResolucaoCadastralViewSet(

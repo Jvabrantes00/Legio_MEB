@@ -272,3 +272,64 @@ class ExpandInscricaoEncontroMigrationTests(TransactionTestCase):
         executor = MigrationExecutor(connection)
         executor.migrate(executor.loader.graph.leaf_nodes())
         super().tearDown()
+
+
+class PublicIdConfiguracaoEncontristasMigrationTests(TransactionTestCase):
+    migrate_from = ('core', '0042_alter_responsaveldeclaradoinscricao_cpf')
+    migrate_to = (
+        'core',
+        '0043_configuracaoencontristasencontro_public_id',
+    )
+
+    def setUp(self):
+        super().setUp()
+        executor = MigrationExecutor(connection)
+        executor.migrate([self.migrate_from])
+        old_apps = executor.loader.project_state([self.migrate_from]).apps
+        Encontro = old_apps.get_model('core', 'Encontro')
+        Configuracao = old_apps.get_model(
+            'core',
+            'ConfiguracaoEncontristasEncontro',
+        )
+        for numero in (1, 2):
+            encontro = Encontro.objects.create(
+                encontro=f'Escalada existente {numero}',
+                tipo='Escalada',
+                data_referencia='2030-06-01',
+                data_exato='1 de junho de 2030',
+                local='Local de teste',
+                status='agendado',
+            )
+            Configuracao.objects.create(
+                encontro=encontro,
+                capacidade=40,
+                idade_minima=15,
+                idade_maxima=29,
+                inscricoes_abrem_em='2030-01-01T08:00:00Z',
+                inscricoes_encerram_em='2030-02-01T08:00:00Z',
+            )
+
+        executor = MigrationExecutor(connection)
+        executor.migrate([self.migrate_to])
+        self.apps = executor.loader.project_state([self.migrate_to]).apps
+
+    def test_migration_preenche_uuid_distinto_em_registros_existentes(self):
+        Configuracao = self.apps.get_model(
+            'core',
+            'ConfiguracaoEncontristasEncontro',
+        )
+
+        public_ids = list(
+            Configuracao.objects
+            .order_by('pk')
+            .values_list('public_id', flat=True)
+        )
+
+        self.assertEqual(len(public_ids), 2)
+        self.assertTrue(all(public_ids))
+        self.assertEqual(len(set(public_ids)), 2)
+
+    def tearDown(self):
+        executor = MigrationExecutor(connection)
+        executor.migrate(executor.loader.graph.leaf_nodes())
+        super().tearDown()

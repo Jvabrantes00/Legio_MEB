@@ -5,6 +5,7 @@ from rest_framework import serializers
 from rest_framework.reverse import reverse
 from .models import (
     Alpinista, ConviteEncontro, CorrespondenciaCadastralInscricao,
+    DadosCuidadoInscricao, DadosDeclaradosInscricao, DadosEsppaInscricao,
     Encontro, EntregaMaterial, Evento,
     EquipeEncontro,
     FotoEncontro, FuncaoEncontro, Inscricao, InscricaoEncontro, LogSistema,
@@ -46,6 +47,192 @@ class StrictCommandSerializer(serializers.Serializer):
                 ]
             })
         return super().to_internal_value(data)
+
+
+class EncontroInscricaoPublicaSerializer(serializers.Serializer):
+    titulo = serializers.CharField(source='encontro', read_only=True)
+    tipo = serializers.ChoiceField(
+        choices=(Encontro.Tipo.ESCALADA, Encontro.Tipo.ESPPA),
+        read_only=True,
+    )
+    inscricoes_abrem_em = serializers.DateTimeField(
+        source='configuracao_encontristas.inscricoes_abrem_em',
+        read_only=True,
+    )
+    inscricoes_encerram_em = serializers.DateTimeField(
+        source='configuracao_encontristas.inscricoes_encerram_em',
+        read_only=True,
+    )
+    inscricoes_abertas = serializers.SerializerMethodField()
+
+    def get_inscricoes_abertas(self, encontro):
+        momento = self.context.get('momento') or timezone.now()
+        configuracao = encontro.configuracao_encontristas
+        return (
+            configuracao.inscricoes_abrem_em
+            <= momento
+            <= configuracao.inscricoes_encerram_em
+        )
+
+
+class DadosDeclaradosInscricaoPublicaSerializer(StrictCommandSerializer):
+    nome_completo = serializers.CharField(max_length=255)
+    apelido = serializers.CharField(
+        max_length=255,
+        required=False,
+        allow_blank=True,
+    )
+    data_nascimento = serializers.DateField()
+    cpf = serializers.CharField(
+        max_length=14,
+        required=False,
+        allow_blank=True,
+        allow_null=True,
+    )
+    email = serializers.EmailField(required=False, allow_blank=True)
+    telefone_whatsapp = serializers.CharField(
+        max_length=20,
+        required=False,
+        allow_blank=True,
+    )
+    cep = serializers.CharField(max_length=9)
+    logradouro = serializers.CharField(max_length=255)
+    numero = serializers.CharField(max_length=20)
+    complemento = serializers.CharField(
+        max_length=255,
+        required=False,
+        allow_blank=True,
+    )
+    bairro = serializers.CharField(max_length=100)
+    cidade = serializers.CharField(max_length=100)
+    uf = serializers.CharField(max_length=2)
+    como_conheceu = serializers.ChoiceField(
+        choices=DadosDeclaradosInscricao.ComoConheceu.choices,
+    )
+    como_conheceu_outro = serializers.CharField(
+        max_length=255,
+        required=False,
+        allow_blank=True,
+    )
+    batismo = serializers.ChoiceField(
+        choices=DadosDeclaradosInscricao.Sacramento.choices,
+        required=False,
+    )
+    primeira_comunhao = serializers.ChoiceField(
+        choices=DadosDeclaradosInscricao.Sacramento.choices,
+        required=False,
+    )
+    crisma = serializers.ChoiceField(
+        choices=DadosDeclaradosInscricao.Sacramento.choices,
+        required=False,
+    )
+
+
+class ResponsavelInscricaoPublicaSerializer(StrictCommandSerializer):
+    nome_completo = serializers.CharField(max_length=255)
+    cpf = serializers.CharField(
+        max_length=14,
+        required=False,
+        allow_blank=True,
+        allow_null=True,
+    )
+    parentesco = serializers.CharField(max_length=100)
+    telefone_whatsapp = serializers.CharField(max_length=20)
+    email = serializers.EmailField(required=False, allow_blank=True)
+
+
+class DadosCuidadoInscricaoPublicaSerializer(StrictCommandSerializer):
+    possui_alergias = serializers.ChoiceField(
+        choices=DadosCuidadoInscricao.RespostaBinaria.choices,
+    )
+    alergias = serializers.CharField(required=False, allow_blank=True)
+    possui_restricoes_intolerancias = serializers.ChoiceField(
+        choices=DadosCuidadoInscricao.RespostaBinaria.choices,
+    )
+    restricoes_intolerancias = serializers.CharField(
+        required=False,
+        allow_blank=True,
+    )
+    usa_medicamentos = serializers.ChoiceField(
+        choices=DadosCuidadoInscricao.RespostaBinaria.choices,
+    )
+    medicamentos = serializers.CharField(required=False, allow_blank=True)
+    horarios_medicamentos = serializers.CharField(
+        required=False,
+        allow_blank=True,
+    )
+    observacoes_medicamentos = serializers.CharField(
+        required=False,
+        allow_blank=True,
+    )
+    neurodivergencia_apoio = serializers.ChoiceField(
+        choices=DadosCuidadoInscricao.RespostaApoio.choices,
+    )
+    neurodivergencia_condicao = serializers.CharField(
+        required=False,
+        allow_blank=True,
+    )
+    necessidades_apoio = serializers.CharField(
+        required=False,
+        allow_blank=True,
+    )
+    sensibilidades_desconfortos = serializers.CharField(
+        required=False,
+        allow_blank=True,
+    )
+    o_que_ajuda = serializers.CharField(required=False, allow_blank=True)
+    outras_informacoes = serializers.CharField(
+        required=False,
+        allow_blank=True,
+    )
+    observacoes = serializers.CharField(required=False, allow_blank=True)
+
+
+class DadosEsppaInscricaoPublicaSerializer(StrictCommandSerializer):
+    estado_civil = serializers.ChoiceField(
+        choices=DadosEsppaInscricao.EstadoCivil.choices,
+    )
+    nome_conjuge = serializers.CharField(
+        max_length=255,
+        required=False,
+        allow_blank=True,
+    )
+    telefone_conjuge = serializers.CharField(
+        max_length=20,
+        required=False,
+        allow_blank=True,
+    )
+    nome_referencia = serializers.CharField(
+        max_length=255,
+        required=False,
+        allow_blank=True,
+    )
+    relacao_referencia = serializers.ChoiceField(
+        choices=DadosEsppaInscricao.RelacaoReferencia.choices,
+        required=False,
+        allow_blank=True,
+    )
+    telefone_referencia = serializers.CharField(
+        max_length=20,
+        required=False,
+        allow_blank=True,
+    )
+
+
+class SubmissaoInscricaoPublicaSerializer(StrictCommandSerializer):
+    dados_declarados = DadosDeclaradosInscricaoPublicaSerializer()
+    responsavel = ResponsavelInscricaoPublicaSerializer(
+        required=False,
+        allow_null=True,
+    )
+    dados_cuidado = DadosCuidadoInscricaoPublicaSerializer(
+        required=False,
+        allow_null=True,
+    )
+    dados_esppa = DadosEsppaInscricaoPublicaSerializer(
+        required=False,
+        allow_null=True,
+    )
 
 
 class CorrespondenciaCadastralInternaSerializer(serializers.ModelSerializer):

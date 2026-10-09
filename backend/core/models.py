@@ -504,6 +504,11 @@ class Encontro(models.Model):
 
 
 class ConfiguracaoEncontristasEncontro(models.Model):
+    public_id = models.UUIDField(
+        default=uuid4,
+        editable=False,
+        unique=True,
+    )
     encontro = models.OneToOneField(
         Encontro,
         on_delete=models.PROTECT,
