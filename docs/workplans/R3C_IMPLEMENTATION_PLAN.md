@@ -552,6 +552,8 @@ correção não cria armazenamento reversível, outbox ou envio.
 
 ### R.3I.13 — Link público e resposta ao convite
 
+**Estado:** concluída em 9 de outubro de 2026.
+
 **Prioridade:** NECESSÁRIO PARA MVP; SEGURANÇA OBRIGATÓRIA.
 
 **Objetivo:** consumir oportunidade uma única vez após token e nascimento,
@@ -579,6 +581,25 @@ npm test -- src/lib/public-invitation.test.ts
 npx tsc --noEmit --incremental false
 ```
 
+Teste isolado da última vaga em PostgreSQL efêmero, sem acesso ao `sia_dev`:
+
+```bash
+cd /home/vinicius/projects/Legio_MEB/backend
+pg_virtualenv -v 16 bash -c '
+export DJANGO_SECRET_KEY="test-only-key-not-for-production"
+export JWT_SIGNING_KEY="test-only-jwt-key-not-for-production"
+export DJANGO_ALLOWED_HOSTS="testserver,localhost"
+export POSTGRES_DB="$PGDATABASE"
+export POSTGRES_USER="$PGUSER"
+export POSTGRES_PASSWORD="$PGPASSWORD"
+export POSTGRES_HOST="$PGHOST"
+export POSTGRES_PORT="$PGPORT"
+exec ./.venv/bin/python manage.py test \
+  core.tests.test_oportunidade_convite_services.OportunidadeConviteConcurrencyTests \
+  --settings=setup.settings --verbosity=2 --noinput
+'
+```
+
 **Critério de conclusão:** cada oportunidade aceita no máximo uma decisão e
 nenhuma resposta isolada ultrapassa capacidade.
 
@@ -586,6 +607,41 @@ nenhuma resposta isolada ultrapassa capacidade.
 
 **Riscos:** enumeração, replay, data de nascimento como segredo único e corrida
 na última vaga.
+
+**Implementação:** o segredo one-shot emitido pela campanha permanece somente
+em memória no boundary de emissão; o banco conserva exclusivamente seu digest
+SHA-256. A superfície pública exige token opaco e nascimento canônico da
+`Pessoa`, responde de forma uniforme antes dessa autenticação completa e é
+protegida por throttle próprio. Depois da validação, o contrato allowlist
+expõe apenas título, datas, prazo, finalidade e estado necessários à decisão.
+
+Confirmação e recusa bloqueiam a configuração de encontristas como mutex,
+recarregam oportunidade e convite e produzem uma única decisão transacional.
+A confirmação revalida prazo, campanha, rodada, elegibilidade e capacidade. A
+primeira confirmação que ocupa a última vaga vence; as demais oportunidades
+pendentes da mesma rodada são invalidadas sem transformar seus convites em
+recusa. Uma vaga futura exige nova rodada `REPOSICAO` e novos tokens. Replay de
+uma oportunidade consumida é somente leitura e não altera a primeira decisão
+nem duplica auditoria.
+
+Expiração é reconciliada de modo lazy. Reprogramação chama explicitamente a
+reconciliação de elegibilidade e suspende oportunidades pendentes afetadas,
+sem signal e sem resposta automática. Confirmação, recusa, suspensão e
+invalidação por lotação geram auditoria estruturada sem token, digest,
+nascimento ou PII. Não houve alteração de schema ou migration.
+
+O BFF usa endpoint Django fixo, payload allowlist, timeout, `no-store`,
+same-origin e CSRF double-submit, sem encaminhar JWT, cookies ou headers do
+browser. A página pública `/convites/[token]` aplica `noindex` e política de
+referrer, solicita nascimento antes de revelar o Encontro, exige confirmação
+explícita para recusar e remove ações após qualquer estado terminal. O token
+não integra chamadas internas por URL nem headers e não é registrado por
+telemetria custom.
+
+**Validação:** foram escritos testes focados de service, API, BFF e componente,
+além do teste PostgreSQL para a corrida da última vaga. Os testes focados em
+SQLite e Vitest passaram; o teste concorrente permanece reservado à execução
+manual em PostgreSQL isolado, conforme a política do projeto.
 
 ### R.3I.14 — Adapters de e-mail e WhatsApp
 

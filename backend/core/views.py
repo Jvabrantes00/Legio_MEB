@@ -92,6 +92,8 @@ from .serializers import (
     ProrrogarCampanhaConvitesSerializer,
     ProjecaoCampanhaConvitesSerializer,
     ReabrirRecusaCampanhaSerializer,
+    ConvitePublicoCommandSerializer,
+    ConvitePublicoSerializer,
     SelecaoCamposResolucaoSerializer,
     SubmissaoInscricaoPublicaSerializer,
     SubstituicaoPropostaVioleirosCommandSerializer,
@@ -111,6 +113,7 @@ from .services import propostas_violeiros as proposta_violeiros_services
 from .services import inscricoes_encontro as inscricao_encontro_services
 from .services import resolucao_cadastral as resolucao_cadastral_services
 from .services import campanhas_convites as campanha_convites_services
+from .services import oportunidades_convites as oportunidade_convite_services
 from .services import calendario_institucional as calendario_services
 from .services import comandos_calendario as calendario_command_services
 from .services import exportacao_calendario as exportacao_calendario_services
@@ -119,6 +122,7 @@ from .formacao_catalogo import TEMAS_FORMATIVOS
 from .throttles import (
     PublicRegistrationReadThrottle,
     PublicRegistrationSubmitThrottle,
+    PublicInvitationThrottle,
 )
 from .roles import (
     EVENT_MANAGEMENT_ROLES,
@@ -535,6 +539,7 @@ class CalendarioEncontroCommandViewSet(viewsets.GenericViewSet):
                 calendario_command_services.reprogramar_agenda(
                     encontro,
                     dias=serializer.validated_data['dias'],
+                    ator=request.user,
                 )
                 self._auditar(request, encontro, 'agenda reprogramada')
         except django_core_validation_error as error:
@@ -1418,6 +1423,41 @@ class InscricaoEncontroPublicaAPIView(APIView):
             {'mensagem': 'Inscrição enviada com sucesso.'},
             status=status.HTTP_201_CREATED,
         )
+
+
+class ConviteEncontroPublicoAPIView(APIView):
+    authentication_classes = []
+    permission_classes = [AllowAny]
+    throttle_classes = [PublicInvitationThrottle]
+
+    def post(self, request):
+        serializer = ConvitePublicoCommandSerializer(data=request.data)
+        if not serializer.is_valid():
+            raise NotFound(
+                oportunidade_convite_services.MENSAGEM_NAO_VALIDADO
+            )
+        dados = serializer.validated_data
+        try:
+            if dados['acao'] == 'validar':
+                resultado = (
+                    oportunidade_convite_services.consultar_convite_publico(
+                        token=dados['token'],
+                        data_nascimento=dados['data_nascimento'],
+                    )
+                )
+            else:
+                resultado = (
+                    oportunidade_convite_services.responder_convite_publico(
+                        token=dados['token'],
+                        data_nascimento=dados['data_nascimento'],
+                        decisao=dados['acao'],
+                    )
+                )
+        except oportunidade_convite_services.ConvitePublicoNaoValidado:
+            raise NotFound(
+                oportunidade_convite_services.MENSAGEM_NAO_VALIDADO
+            )
+        return Response(ConvitePublicoSerializer(resultado.as_dict()).data)
 
 
 class InscricaoResolucaoCadastralViewSet(
