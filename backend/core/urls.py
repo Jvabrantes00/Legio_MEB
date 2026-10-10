@@ -20,6 +20,17 @@ from .views import (
     PropostaVioleirosViewSet,
     SessaoFormativaCommandViewSet,
     CalendarioEncontroCommandViewSet,
+    AtendimentoPreEncontroListaAPIView,
+    AtendimentoPreEncontroBuscaAPIView,
+    AtendimentoPreEncontroDetalheAPIView,
+    CheckinPreEncontroAPIView,
+    RegularizacaoPreEncontroAPIView,
+    PagamentoPreEncontroAPIView,
+    CuidadosPreEncontroAPIView,
+    ConferenciaCuidadoPreEncontroAPIView,
+    FotoPreEncontroAPIView,
+    DecisaoVagaPreEncontroAPIView,
+    CapacidadePreEncontroAPIView,
 )
 from .views import dashboard_stats
 from .views import current_user
@@ -116,6 +127,61 @@ router.register(r'entregas-materiais', EntregaMaterialViewSet)
 
 # Exporta as rotas 
 urlpatterns = [
+    path(
+        'encontros/<int:encontro_id>/pre-encontro/atendimentos/',
+        AtendimentoPreEncontroListaAPIView.as_view(),
+        name='pre-encontro-atendimentos',
+    ),
+    path(
+        'encontros/<int:encontro_id>/pre-encontro/atendimentos/busca/',
+        AtendimentoPreEncontroBuscaAPIView.as_view(),
+        name='pre-encontro-atendimentos-busca',
+    ),
+    path(
+        'encontros/<int:encontro_id>/pre-encontro/atendimentos/<int:atendimento_id>/',
+        AtendimentoPreEncontroDetalheAPIView.as_view(),
+        name='pre-encontro-atendimento-detalhe',
+    ),
+    path(
+        'encontros/<int:encontro_id>/pre-encontro/check-in/',
+        CheckinPreEncontroAPIView.as_view(),
+        name='pre-encontro-check-in',
+    ),
+    path(
+        'encontros/<int:encontro_id>/pre-encontro/atendimentos/<int:atendimento_id>/regularizar/',
+        RegularizacaoPreEncontroAPIView.as_view(),
+        name='pre-encontro-regularizar',
+    ),
+    path(
+        'encontros/<int:encontro_id>/pre-encontro/atendimentos/<int:atendimento_id>/pagamento/',
+        PagamentoPreEncontroAPIView.as_view(),
+        name='pre-encontro-pagamento',
+    ),
+    path(
+        'encontros/<int:encontro_id>/pre-encontro/atendimentos/<int:atendimento_id>/cuidados/',
+        CuidadosPreEncontroAPIView.as_view(),
+        name='pre-encontro-cuidados',
+    ),
+    path(
+        'encontros/<int:encontro_id>/pre-encontro/atendimentos/<int:atendimento_id>/cuidados/conferir/',
+        ConferenciaCuidadoPreEncontroAPIView.as_view(),
+        name='pre-encontro-cuidados-conferir',
+    ),
+    path(
+        'encontros/<int:encontro_id>/pre-encontro/atendimentos/<int:atendimento_id>/foto/',
+        FotoPreEncontroAPIView.as_view(),
+        name='pre-encontro-foto',
+    ),
+    path(
+        'encontros/<int:encontro_id>/pre-encontro/atendimentos/<int:atendimento_id>/decisao-vaga/',
+        DecisaoVagaPreEncontroAPIView.as_view(),
+        name='pre-encontro-decisao-vaga',
+    ),
+    path(
+        'encontros/<int:encontro_id>/pre-encontro/capacidade/',
+        CapacidadePreEncontroAPIView.as_view(),
+        name='pre-encontro-capacidade',
+    ),
     path(
         'public/convites/',
         ConviteEncontroPublicoAPIView.as_view(),

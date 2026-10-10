@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from enum import StrEnum
+from hashlib import sha256
 
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
@@ -15,6 +16,7 @@ from core.models import (
     DadosCuidadoInscricao,
     DecisaoVagaPreEncontro,
     Encontro,
+    FotoTemporariaPreEncontro,
     InscricaoEncontro,
     PagamentoPreEncontro,
     Pessoa,
@@ -24,6 +26,7 @@ from core.permissions import (
     pode_aumentar_capacidade_pre_encontro,
     pode_conferir_cuidados_pre_encontro,
     pode_operar_checkin_pre_encontro,
+    pode_operar_foto_pre_encontro,
     pode_registrar_pagamento_pre_encontro,
     pode_regularizar_pre_encontro,
     pode_resolver_vaga_pre_encontro,
@@ -869,3 +872,52 @@ def aumentar_capacidade_pre_encontro(
     )
     _recalcular_disputa_bloqueada(encontro, configuracao_atualizada)
     return configuracao_atualizada
+
+
+@transaction.atomic
+def registrar_foto_pre_encontro(*, usuario, atendimento, arquivo):
+    encontro = _encontro_do_atendimento(atendimento)
+    _exigir_permissao(
+        pode_operar_foto_pre_encontro(usuario, encontro),
+        'Seu usuário não pode operar a foto deste Pré-Encontro.',
+    )
+    encontro = _bloquear_encontro(encontro)
+    _exigir_lifecycle(encontro)
+    atendimento = _bloquear_atendimento(atendimento, encontro)
+    foto = (
+        FotoTemporariaPreEncontro.objects
+        .select_for_update(of=('self',))
+        .filter(atendimento=atendimento)
+        .first()
+    )
+    nome_anterior = foto.arquivo.name if foto is not None else ''
+    storage_anterior = foto.arquivo.storage if foto is not None else None
+    if foto is None:
+        foto = FotoTemporariaPreEncontro(atendimento=atendimento)
+
+    arquivo.seek(0)
+    conteudo = arquivo.read()
+    arquivo.seek(0)
+    foto.arquivo = arquivo
+    foto.nome_original = arquivo.name[:255]
+    foto.content_type = getattr(arquivo, 'content_type', '')[:100]
+    foto.tamanho = arquivo.size
+    foto.sha256 = sha256(conteudo).hexdigest()
+    foto.full_clean()
+    foto.save()
+
+    if nome_anterior and nome_anterior != foto.arquivo.name:
+        transaction.on_commit(
+            lambda: storage_anterior.delete(nome_anterior),
+        )
+    _auditar(
+        encontro=encontro,
+        usuario=usuario,
+        fato='pre_encontro.foto_registrada',
+        entidade='foto_temporaria_pre_encontro',
+        objeto_id=foto.pk,
+        anterior={'foto_existente': bool(nome_anterior)},
+        novo={'foto_existente': True},
+        campos={'foto_existente'},
+    )
+    return foto

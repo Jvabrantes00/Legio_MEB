@@ -90,6 +90,25 @@ comandos explícitos sobre o domínio canônico de Encontros.
 - A API contextual oferece apenas criação e correção; ausência de regra
   explícita permanece negada.
 
+### Pré-Encontro operacional
+
+- Suporte, Diretoria e Fichas consultam a lista, a busca e o detalhe
+  operacional. A Coordenação Geral alocada consulta somente no próprio
+  Encontro; Comunicação recebe a mesma projeção mínima para localizar o
+  atendimento e operar a foto.
+- Comunicação pode enviar, substituir e visualizar a foto privada, sem obter
+  check-in, regularização, pagamento, cuidados, decisão de vaga ou capacidade.
+- Check-in e regularização pertencem a Suporte, Diretoria e Fichas, conforme
+  as policies administrativas já aplicadas pelo domínio.
+- Pagamento e cuidado seguem as policies do domínio: Fichas e administração
+  ampla, além da Coordenação Geral do mesmo Encontro. O conteúdo de cuidado
+  fica em endpoint separado e nunca integra lista, busca ou detalhe comum.
+- A decisão excepcional de vaga pertence à Diretoria. Aumento de capacidade
+  pertence a Suporte e Diretoria pelo comando canônico. O superuser permanece
+  bypass técnico separado.
+- Todos os subrecursos são escopados pelo Encontro; vínculo com outro Encontro
+  resulta em `404`. Ausência de papel ou vínculo explícito permanece negada.
+
 ### Equipes e trabalho em Encontro
 
 - Suporte, Diretoria e Fichas podem consultar snapshots por Encontro e

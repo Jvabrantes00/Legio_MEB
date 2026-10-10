@@ -1021,6 +1021,9 @@ bloco.
 
 ### R.3I.19 — APIs internas do Pré-Encontro
 
+**Estado:** implementada em 10 de outubro de 2026; validações focadas
+aprovadas.
+
 **Prioridade:** NECESSÁRIO PARA MVP.
 
 **Objetivo:** expor consultas e commands mínimos para a operação digital.
@@ -1053,6 +1056,33 @@ cuidado em contratos operacionais comuns.
 **Commit sugerido:** `feat: expose pre-encounter operation api`
 
 **Riscos:** ampliar `/api/sia` além dos paths necessários.
+
+**Implementação:** a API interna ficou aninhada em
+`/api/encontros/{encontro_id}/pre-encontro/`, com lista paginada, busca
+escopada, detalhe operacional e commands explícitos para check-in,
+regularização, pagamento, conferência de cuidados, foto, decisão de vaga e
+aumento autorizado de capacidade. Os contratos comuns expõem somente
+identificação operacional, origem e indicadores; o conteúdo de cuidado existe
+exclusivamente no endpoint restrito próprio. Recursos pertencentes a outro
+Encontro são resolvidos como `404`, e não foi criado CRUD genérico.
+
+Comunicação pode consultar a projeção operacional mínima e operar upload,
+substituição e preview autenticado da foto privada. Essa permissão não alcança
+check-in, regularização, pagamento, cuidados, vaga ou capacidade. A foto usa
+chave aleatória, não retorna storage key nem `/media`, e a substituição remove
+o arquivo anterior somente depois do commit. As demais autorizações continuam
+delegadas às policies e aos services canônicos da I.18.
+
+O BFF ganhou uma allowlist específica que combina método e formato exato do
+path de Pré-Encontro, valida IDs inteiros e rejeita traversal, URL absoluta,
+segmentos extras e métodos não previstos. O browser continua sem acesso ao
+JWT, e o proxy genérico não ganhou wildcard novo.
+
+**Validação executada:** 15 testes focados de API backend e 19 casos focados
+da allowlist BFF passaram. `manage.py check`, `compileall`, TypeScript e
+`makemigrations --check --dry-run` também foram executados; nenhuma migration
+foi gerada. A advertência do migration check corresponde apenas à
+indisponibilidade esperada do PostgreSQL local dentro da sandbox.
 
 ### R.3I.20 — Frontend de check-in do Pré-Encontro
 

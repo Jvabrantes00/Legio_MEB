@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { applyAuthenticationResult, authenticatedDjangoRequest } from "./django-auth";
 import { validateCsrf } from "./csrf";
 import { backendApiUrl, getSiaServerConfig } from "./sia-config";
+import { isAllowedPreEncounterRequest } from "./pre-encounter-bff";
 
 const ALLOWED_RESOURCES = new Set([
   "alpinistas",
@@ -28,9 +29,16 @@ function invalidPathPart(part: string): boolean {
   return !part || part === "." || part === ".." || /[\\/\0]/.test(part);
 }
 
-export function validateProxyPath(path: readonly string[], searchParams: URLSearchParams) {
+export function validateProxyPath(
+  path: readonly string[],
+  searchParams: URLSearchParams,
+  method = "GET",
+) {
   if (!path.length || path.some(invalidPathPart) || !ALLOWED_RESOURCES.has(path[0])) {
     throw new Error("Caminho de API não permitido.");
+  }
+  if (path.includes("pre-encontro") && !isAllowedPreEncounterRequest(method, path)) {
+    throw new Error("Operação de Pré-Encontro não permitida.");
   }
   for (const key of searchParams.keys()) {
     if (BLOCKED_QUERY_KEYS.has(key.toLowerCase())) {
@@ -137,7 +145,7 @@ export async function proxySiaRequest(
   if (csrfFailure) return csrfFailure;
 
   try {
-    validateProxyPath(path, request.nextUrl.searchParams);
+    validateProxyPath(path, request.nextUrl.searchParams, request.method);
   } catch (error) {
     return NextResponse.json(
       { detail: error instanceof Error ? error.message : "Caminho inválido." },

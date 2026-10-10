@@ -4,15 +4,18 @@ from django.utils import timezone
 from rest_framework import serializers
 from rest_framework.reverse import reverse
 from .models import (
-    Alpinista, CampanhaConvitesEncontro, ConviteEncontro,
+    Alpinista, AtendimentoPreEncontro, CampanhaConvitesEncontro,
+    ConferenciaCuidadoPreEncontro, ConviteEncontro,
     CorrespondenciaCadastralInscricao,
     DadosCuidadoInscricao, DadosDeclaradosInscricao, DadosEsppaInscricao,
     Encontro, EntregaMaterial, Evento,
     EquipeEncontro,
-    FotoEncontro, FuncaoEncontro, Inscricao, InscricaoEncontro, LogSistema,
+    FotoEncontro, FotoTemporariaPreEncontro, FuncaoEncontro, Inscricao,
+    InscricaoEncontro, LogSistema,
     Material, Palestra,
     ParticipacaoEncontro as ResultadoParticipacaoEncontro, ParticipacaoEvento,
-    PalestranteSessao, PerfilAlpinista, Pessoa, PresencaPreparatoria,
+    PagamentoPreEncontro, PalestranteSessao, PerfilAlpinista, Pessoa,
+    PresencaPreparatoria,
     PublicacaoCalendarioInstitucional,
     ItemPropostaVioleiros, PropostaVioleiros,
     OportunidadeConviteEncontro, ReuniaoPreparatoriaEncontro,
@@ -49,6 +52,199 @@ class StrictCommandSerializer(serializers.Serializer):
                 ]
             })
         return super().to_internal_value(data)
+
+
+def _identificacao_atendimento(atendimento):
+    if atendimento.pessoa_id:
+        return atendimento.pessoa.nome
+    if atendimento.inscricao_id:
+        try:
+            return atendimento.inscricao.dados_declarados.nome_completo
+        except DadosDeclaradosInscricao.DoesNotExist:
+            pass
+    return atendimento.nome_informado
+
+
+class AtendimentoPreEncontroOperacionalSerializer(serializers.Serializer):
+    id = serializers.IntegerField(read_only=True)
+    identificacao = serializers.SerializerMethodField()
+    origem = serializers.SerializerMethodField()
+    presente = serializers.SerializerMethodField()
+    registrado_em = serializers.DateTimeField(read_only=True)
+    pagamento = serializers.SerializerMethodField()
+    aptidao = serializers.SerializerMethodField()
+    situacao_vaga = serializers.SerializerMethodField()
+    possui_foto = serializers.SerializerMethodField()
+    possui_dados_cuidado = serializers.SerializerMethodField()
+    cuidado_conferido = serializers.SerializerMethodField()
+
+    def get_identificacao(self, atendimento):
+        return _identificacao_atendimento(atendimento)
+
+    def get_origem(self, atendimento):
+        if atendimento.inscricao_id:
+            return 'inscricao'
+        if atendimento.pessoa_id:
+            return 'pessoa'
+        return 'avulso'
+
+    def get_presente(self, atendimento):
+        return True
+
+    def get_pagamento(self, atendimento):
+        try:
+            return atendimento.pagamento.status
+        except PagamentoPreEncontro.DoesNotExist:
+            return PagamentoPreEncontro.Status.PENDENTE
+
+    def get_aptidao(self, atendimento):
+        aptidao = self.context['aptidoes'][atendimento.pk]
+        return {'situacao': aptidao.situacao, 'motivo': aptidao.motivo}
+
+    def get_situacao_vaga(self, atendimento):
+        try:
+            return atendimento.decisao_vaga.status
+        except AttributeError:
+            return None
+
+    def get_possui_foto(self, atendimento):
+        return hasattr(atendimento, 'foto_privada')
+
+    def get_possui_dados_cuidado(self, atendimento):
+        return bool(
+            atendimento.inscricao_id
+            and hasattr(atendimento.inscricao, 'dados_cuidado')
+        )
+
+    def get_cuidado_conferido(self, atendimento):
+        if not self.get_possui_dados_cuidado(atendimento):
+            return False
+        try:
+            conferencia = atendimento.conferencia_cuidado
+        except ConferenciaCuidadoPreEncontro.DoesNotExist:
+            return False
+        return (
+            conferencia.dados_cuidado_id
+            == atendimento.inscricao.dados_cuidado.pk
+            and conferencia.dados_cuidado_atualizado_em
+            == atendimento.inscricao.dados_cuidado.atualizado_em
+        )
+
+
+class AtendimentoPreEncontroDetalheSerializer(
+    AtendimentoPreEncontroOperacionalSerializer,
+):
+    pessoa_id = serializers.IntegerField(read_only=True, allow_null=True)
+    inscricao_id = serializers.IntegerField(read_only=True, allow_null=True)
+
+
+class CheckinPreEncontroCommandSerializer(StrictCommandSerializer):
+    inscricao_id = serializers.IntegerField(required=False, allow_null=True)
+    pessoa_id = serializers.IntegerField(required=False, allow_null=True)
+    nome_informado = serializers.CharField(required=False, allow_blank=True)
+    data_nascimento_informada = serializers.DateField(
+        required=False,
+        allow_null=True,
+    )
+    cpf_informado = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        allow_null=True,
+    )
+    telefone_informado = serializers.CharField(required=False, allow_blank=True)
+    observacoes = serializers.CharField(required=False, allow_blank=True)
+
+
+class RegularizacaoPreEncontroCommandSerializer(StrictCommandSerializer):
+    pessoa_id = serializers.IntegerField(required=False, allow_null=True)
+    inscricao_id = serializers.IntegerField(required=False, allow_null=True)
+
+    def validate(self, attrs):
+        if not attrs or all(value is None for value in attrs.values()):
+            raise serializers.ValidationError(
+                'Informe Pessoa ou inscrição para regularizar.',
+            )
+        return attrs
+
+
+class PagamentoPreEncontroCommandSerializer(StrictCommandSerializer):
+    status = serializers.ChoiceField(choices=PagamentoPreEncontro.Status.choices)
+    valor = serializers.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        required=False,
+        allow_null=True,
+    )
+    forma = serializers.ChoiceField(
+        choices=PagamentoPreEncontro.Forma.choices,
+        required=False,
+        allow_blank=True,
+    )
+    pago_em = serializers.DateTimeField(required=False, allow_null=True)
+    observacao = serializers.CharField(required=False, allow_blank=True)
+
+
+class PagamentoPreEncontroSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PagamentoPreEncontro
+        fields = ('status', 'valor', 'forma', 'pago_em', 'observacao')
+        read_only_fields = fields
+
+
+class CuidadosPreEncontroSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DadosCuidadoInscricao
+        fields = (
+            'possui_alergias', 'alergias',
+            'possui_restricoes_intolerancias', 'restricoes_intolerancias',
+            'usa_medicamentos', 'medicamentos', 'horarios_medicamentos',
+            'observacoes_medicamentos', 'neurodivergencia_apoio',
+            'neurodivergencia_condicao', 'necessidades_apoio',
+            'sensibilidades_desconfortos', 'o_que_ajuda',
+            'outras_informacoes', 'observacoes', 'atualizado_em',
+        )
+        read_only_fields = fields
+
+
+class ConferenciaCuidadoPreEncontroSerializer(serializers.ModelSerializer):
+    conferido = serializers.SerializerMethodField()
+    dados_alterados_apos_conferencia = serializers.SerializerMethodField()
+    ator = serializers.CharField(source='conferido_por.get_username')
+
+    class Meta:
+        model = ConferenciaCuidadoPreEncontro
+        fields = (
+            'conferido', 'conferido_em', 'ator',
+            'dados_alterados_apos_conferencia',
+        )
+        read_only_fields = fields
+
+    def get_conferido(self, conferencia):
+        return True
+
+    def get_dados_alterados_apos_conferencia(self, conferencia):
+        return (
+            conferencia.dados_cuidado.atualizado_em
+            != conferencia.dados_cuidado_atualizado_em
+        )
+
+
+class DecisaoVagaPreEncontroCommandSerializer(StrictCommandSerializer):
+    status = serializers.ChoiceField(choices=('aprovado', 'nao_aprovado'))
+    justificativa = serializers.CharField(required=False, allow_blank=True)
+
+
+class FotoPreEncontroCommandSerializer(StrictCommandSerializer):
+    foto = serializers.ImageField(
+        required=True,
+        allow_null=False,
+        validators=[validate_image_upload_size],
+    )
+
+
+class CapacidadePreEncontroCommandSerializer(StrictCommandSerializer):
+    capacidade = serializers.IntegerField(min_value=1)
+    justificativa = serializers.CharField(required=False, allow_blank=True)
 
 
 class EncontroInscricaoPublicaSerializer(serializers.Serializer):

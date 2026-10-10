@@ -170,6 +170,29 @@ def pode_aumentar_capacidade_pre_encontro(user, encontro):
     return pode_gerir_configuracao_encontristas(user)
 
 
+def pode_consultar_operacao_pre_encontro(user, encontro):
+    return bool(
+        _usuario_ativo(user)
+        and (
+            user.is_superuser
+            or user_has_any_role(
+                user,
+                *FICHAS_MANAGEMENT_ROLES,
+                SiaRole.COMUNICACAO,
+            )
+            or pertence_coordenacao_geral_encontro(user, encontro)
+        )
+    )
+
+
+def pode_operar_foto_pre_encontro(user, encontro):
+    return pode_consultar_operacao_pre_encontro(user, encontro)
+
+
+def pode_consultar_cuidados_pre_encontro(user, encontro):
+    return pode_conferir_cuidados_pre_encontro(user, encontro)
+
+
 def pode_registrar_presenca_preparatoria(user, encontro):
     if not (
         getattr(user, 'is_authenticated', False)

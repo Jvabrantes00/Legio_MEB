@@ -6,6 +6,7 @@ from pathlib import Path
 from django.core.exceptions import ValidationError as django_core_validation_error
 from django.http import FileResponse, Http404
 from rest_framework import filters, mixins, status, viewsets
+from rest_framework.pagination import PageNumberPagination
 from rest_framework.decorators import api_view, permission_classes, action
 from rest_framework.exceptions import (
     APIException,
@@ -24,9 +25,11 @@ from .models import (
     Alpinista, AvaliacaoEncontro, CalendarioEncontro,
     CampanhaConvitesEncontro, ConviteEncontro,
     ConfiguracaoEncontristasEncontro,
-    CorrespondenciaCadastralInscricao,
+    CorrespondenciaCadastralInscricao, AtendimentoPreEncontro,
+    DadosCuidadoInscricao, DecisaoVagaPreEncontro,
     DiaEncontro, Encontro, EntregaMaterial, EquipeEncontro, Evento,
-    FotoEncontro, FuncaoEncontro, Inscricao, InscricaoEncontro, Palestra,
+    FotoEncontro, FotoTemporariaPreEncontro, FuncaoEncontro, Inscricao,
+    InscricaoEncontro, PagamentoPreEncontro, Pessoa, PreEncontro, Palestra,
     ParticipacaoEncontro as ResultadoParticipacaoEncontro,
     ParticipacaoEvento, LogSistema, Material, PalestranteSessao,
     OportunidadeConviteEncontro, PerfilAlpinista, PresencaPreparatoria,
@@ -97,12 +100,32 @@ from .serializers import (
     SelecaoCamposResolucaoSerializer,
     SubmissaoInscricaoPublicaSerializer,
     SubstituicaoPropostaVioleirosCommandSerializer,
+    AtendimentoPreEncontroOperacionalSerializer,
+    AtendimentoPreEncontroDetalheSerializer,
+    CheckinPreEncontroCommandSerializer,
+    RegularizacaoPreEncontroCommandSerializer,
+    PagamentoPreEncontroCommandSerializer,
+    PagamentoPreEncontroSerializer,
+    CuidadosPreEncontroSerializer,
+    ConferenciaCuidadoPreEncontroSerializer,
+    DecisaoVagaPreEncontroCommandSerializer,
+    FotoPreEncontroCommandSerializer,
+    CapacidadePreEncontroCommandSerializer,
     )
 from .permissions import (
     AlpinistaQueryPolicy,
     CanRegisterPreparatoryAttendance,
     HasAnySiaRole,
     require_sia_roles,
+    pode_aumentar_capacidade_pre_encontro,
+    pode_conferir_cuidados_pre_encontro,
+    pode_consultar_cuidados_pre_encontro,
+    pode_consultar_operacao_pre_encontro,
+    pode_operar_checkin_pre_encontro,
+    pode_operar_foto_pre_encontro,
+    pode_registrar_pagamento_pre_encontro,
+    pode_regularizar_pre_encontro,
+    pode_resolver_vaga_pre_encontro,
 )
 from .services.reunioes_preparatorias import corrigir_presenca_preparatoria
 from .services import avaliacoes_encontro as avaliacao_services
@@ -117,6 +140,7 @@ from .services import oportunidades_convites as oportunidade_convite_services
 from .services import calendario_institucional as calendario_services
 from .services import comandos_calendario as calendario_command_services
 from .services import exportacao_calendario as exportacao_calendario_services
+from .services import pre_encontro as pre_encontro_services
 from .serializers import _erro_de_dominio, _erro_de_trabalho
 from .formacao_catalogo import TEMAS_FORMATIVOS
 from .throttles import (
@@ -1355,6 +1379,388 @@ class InscricaoEncontroCommandViewSet(
                 modulo='Inscricao',
                 descricao=f'Inscrição ID {inscricao.pk} criada.',
             )
+
+
+def _pre_encontro_do_contexto(encontro_id):
+    encontro = get_object_or_404(Encontro, pk=encontro_id)
+    pre_encontro = get_object_or_404(
+        PreEncontro.objects.select_related('encontro'),
+        encontro=encontro,
+    )
+    return encontro, pre_encontro
+
+
+def _atendimento_pre_encontro_do_contexto(encontro_id, atendimento_id):
+    encontro, pre_encontro = _pre_encontro_do_contexto(encontro_id)
+    atendimento = get_object_or_404(
+        _atendimentos_pre_encontro_queryset(),
+        pk=atendimento_id,
+        pre_encontro=pre_encontro,
+    )
+    return encontro, atendimento
+
+
+def _atendimentos_pre_encontro_queryset():
+    return AtendimentoPreEncontro.objects.select_related(
+        'pre_encontro',
+        'pre_encontro__encontro',
+        'pessoa',
+        'inscricao',
+        'inscricao__dados_declarados',
+        'inscricao__dados_cuidado',
+        'pagamento',
+        'decisao_vaga',
+        'foto_privada',
+        'conferencia_cuidado',
+        'conferencia_cuidado__dados_cuidado',
+        'conferencia_cuidado__conferido_por',
+    )
+
+
+def _exigir_policy(permitido, mensagem='Acesso negado.'):
+    if not permitido:
+        raise PermissionDenied(mensagem)
+
+
+def _serializar_atendimentos(atendimentos, serializer_class, *, many=False):
+    itens = list(atendimentos) if many else [atendimentos]
+    aptidoes = {
+        item.pk: pre_encontro_services.avaliar_aptidao_pre_encontro(item)
+        for item in itens
+    }
+    objeto = itens if many else itens[0]
+    return serializer_class(
+        objeto,
+        many=many,
+        context={'aptidoes': aptidoes},
+    ).data
+
+
+class AtendimentoPreEncontroListaAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, encontro_id):
+        encontro, pre_encontro = _pre_encontro_do_contexto(encontro_id)
+        _exigir_policy(
+            pode_consultar_operacao_pre_encontro(request.user, encontro),
+        )
+        atendimentos = _atendimentos_pre_encontro_queryset().filter(
+            pre_encontro=pre_encontro,
+        ).order_by('registrado_em', 'pk')
+
+        presente = request.query_params.get('presente')
+        if presente is not None:
+            if presente.lower() not in {'true', 'false'}:
+                raise ValidationError({'presente': ['Use true ou false.']})
+            if presente.lower() == 'false':
+                atendimentos = atendimentos.none()
+        pagamento = request.query_params.get('pagamento')
+        if pagamento:
+            if pagamento not in PagamentoPreEncontro.Status.values:
+                raise ValidationError({'pagamento': ['Status inválido.']})
+            if pagamento == PagamentoPreEncontro.Status.PENDENTE:
+                atendimentos = atendimentos.filter(
+                    Q(pagamento__isnull=True) | Q(pagamento__status=pagamento),
+                )
+            else:
+                atendimentos = atendimentos.filter(pagamento__status=pagamento)
+        situacao_vaga = request.query_params.get('situacao_vaga')
+        if situacao_vaga:
+            valores_vaga = {
+                item.value
+                for item in DecisaoVagaPreEncontro.Status
+            }
+            if situacao_vaga not in valores_vaga:
+                raise ValidationError({
+                    'situacao_vaga': ['Situação de vaga inválida.'],
+                })
+            atendimentos = atendimentos.filter(decisao_vaga__status=situacao_vaga)
+
+        itens = list(atendimentos)
+        aptidao = request.query_params.get('aptidao')
+        if aptidao:
+            valores = {item.value for item in pre_encontro_services.SituacaoAptidaoPreEncontro}
+            if aptidao not in valores:
+                raise ValidationError({'aptidao': ['Situação inválida.']})
+            itens = [
+                item for item in itens
+                if pre_encontro_services.avaliar_aptidao_pre_encontro(item).situacao
+                == aptidao
+            ]
+
+        paginator = PageNumberPagination()
+        pagina = paginator.paginate_queryset(itens, request, view=self)
+        dados = _serializar_atendimentos(
+            pagina,
+            AtendimentoPreEncontroOperacionalSerializer,
+            many=True,
+        )
+        return paginator.get_paginated_response(dados)
+
+
+class AtendimentoPreEncontroBuscaAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, encontro_id):
+        encontro, pre_encontro = _pre_encontro_do_contexto(encontro_id)
+        _exigir_policy(
+            pode_consultar_operacao_pre_encontro(request.user, encontro),
+        )
+        termo = request.query_params.get('q', '').strip()
+        if not termo:
+            raise ValidationError({'q': ['Informe um termo de busca.']})
+        digitos = ''.join(caractere for caractere in termo if caractere.isdigit())
+        criterio = (
+            Q(nome_informado__icontains=termo)
+            | Q(pessoa__nome__icontains=termo)
+            | Q(inscricao__dados_declarados__nome_completo__icontains=termo)
+            | Q(telefone_informado__icontains=termo)
+            | Q(pessoa__telefones__numero__icontains=termo)
+            | Q(inscricao__dados_declarados__telefone_whatsapp__icontains=termo)
+            | Q(inscricao__identificador__icontains=termo)
+        )
+        if digitos:
+            criterio |= (
+                Q(cpf_informado__icontains=digitos)
+                | Q(pessoa__cpf__icontains=digitos)
+                | Q(inscricao__dados_declarados__cpf__icontains=digitos)
+            )
+        atendimentos = list(
+            _atendimentos_pre_encontro_queryset()
+            .filter(criterio, pre_encontro=pre_encontro)
+            .distinct()
+            .order_by('registrado_em', 'pk')
+        )
+        paginator = PageNumberPagination()
+        pagina = paginator.paginate_queryset(atendimentos, request, view=self)
+        dados = _serializar_atendimentos(
+            pagina,
+            AtendimentoPreEncontroOperacionalSerializer,
+            many=True,
+        )
+        return paginator.get_paginated_response(dados)
+
+
+class AtendimentoPreEncontroDetalheAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, encontro_id, atendimento_id):
+        encontro, atendimento = _atendimento_pre_encontro_do_contexto(
+            encontro_id,
+            atendimento_id,
+        )
+        _exigir_policy(
+            pode_consultar_operacao_pre_encontro(request.user, encontro),
+        )
+        return Response(_serializar_atendimentos(
+            atendimento,
+            AtendimentoPreEncontroDetalheSerializer,
+        ))
+
+
+class CheckinPreEncontroAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, encontro_id):
+        encontro, pre_encontro = _pre_encontro_do_contexto(encontro_id)
+        _exigir_policy(pode_operar_checkin_pre_encontro(request.user, encontro))
+        comando = CheckinPreEncontroCommandSerializer(data=request.data)
+        comando.is_valid(raise_exception=True)
+        dados = comando.validated_data.copy()
+        inscricao_id = dados.pop('inscricao_id', None)
+        pessoa_id = dados.pop('pessoa_id', None)
+        inscricao = (
+            get_object_or_404(InscricaoEncontro, pk=inscricao_id, encontro=encontro)
+            if inscricao_id is not None else None
+        )
+        pessoa = get_object_or_404(Pessoa, pk=pessoa_id) if pessoa_id is not None else None
+        try:
+            atendimento = pre_encontro_services.registrar_checkin_pre_encontro(
+                usuario=request.user,
+                pre_encontro=pre_encontro,
+                inscricao=inscricao,
+                pessoa=pessoa,
+                **dados,
+            )
+        except django_core_validation_error as error:
+            _erro_de_dominio(error)
+        atendimento = _atendimentos_pre_encontro_queryset().get(pk=atendimento.pk)
+        return Response(
+            _serializar_atendimentos(
+                atendimento,
+                AtendimentoPreEncontroDetalheSerializer,
+            ),
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class RegularizacaoPreEncontroAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, encontro_id, atendimento_id):
+        encontro, atendimento = _atendimento_pre_encontro_do_contexto(encontro_id, atendimento_id)
+        _exigir_policy(pode_regularizar_pre_encontro(request.user, encontro))
+        comando = RegularizacaoPreEncontroCommandSerializer(data=request.data)
+        comando.is_valid(raise_exception=True)
+        pessoa_id = comando.validated_data.get('pessoa_id')
+        inscricao_id = comando.validated_data.get('inscricao_id')
+        pessoa = get_object_or_404(Pessoa, pk=pessoa_id) if pessoa_id else None
+        inscricao = (
+            get_object_or_404(InscricaoEncontro, pk=inscricao_id, encontro=encontro)
+            if inscricao_id else None
+        )
+        try:
+            atendimento = pre_encontro_services.regularizar_atendimento_pre_encontro(
+                usuario=request.user,
+                atendimento=atendimento,
+                pessoa=pessoa,
+                inscricao=inscricao,
+            )
+        except django_core_validation_error as error:
+            _erro_de_dominio(error)
+        atendimento = _atendimentos_pre_encontro_queryset().get(pk=atendimento.pk)
+        return Response(_serializar_atendimentos(
+            atendimento,
+            AtendimentoPreEncontroDetalheSerializer,
+        ))
+
+
+class PagamentoPreEncontroAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def put(self, request, encontro_id, atendimento_id):
+        encontro, atendimento = _atendimento_pre_encontro_do_contexto(encontro_id, atendimento_id)
+        _exigir_policy(pode_registrar_pagamento_pre_encontro(request.user, encontro))
+        comando = PagamentoPreEncontroCommandSerializer(data=request.data)
+        comando.is_valid(raise_exception=True)
+        try:
+            pagamento = pre_encontro_services.registrar_pagamento_pre_encontro(
+                usuario=request.user,
+                atendimento=atendimento,
+                **comando.validated_data,
+            )
+        except django_core_validation_error as error:
+            _erro_de_dominio(error)
+        return Response(PagamentoPreEncontroSerializer(pagamento).data)
+
+
+class CuidadosPreEncontroAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, encontro_id, atendimento_id):
+        encontro, atendimento = _atendimento_pre_encontro_do_contexto(encontro_id, atendimento_id)
+        _exigir_policy(pode_consultar_cuidados_pre_encontro(request.user, encontro))
+        if not atendimento.inscricao_id:
+            raise NotFound('Dados de cuidado não encontrados.')
+        dados = get_object_or_404(
+            DadosCuidadoInscricao,
+            inscricao=atendimento.inscricao,
+        )
+        return Response(CuidadosPreEncontroSerializer(dados).data)
+
+
+class ConferenciaCuidadoPreEncontroAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, encontro_id, atendimento_id):
+        encontro, atendimento = _atendimento_pre_encontro_do_contexto(encontro_id, atendimento_id)
+        _exigir_policy(pode_conferir_cuidados_pre_encontro(request.user, encontro))
+        if request.data:
+            raise ValidationError({'campos_extras': ['Este comando não recebe campos.']})
+        if not atendimento.inscricao_id:
+            raise NotFound('Dados de cuidado não encontrados.')
+        dados = get_object_or_404(DadosCuidadoInscricao, inscricao=atendimento.inscricao)
+        try:
+            conferencia = pre_encontro_services.conferir_cuidados_pre_encontro(
+                usuario=request.user,
+                atendimento=atendimento,
+                dados_cuidado=dados,
+            )
+        except django_core_validation_error as error:
+            _erro_de_dominio(error)
+        conferencia = conferencia.__class__.objects.select_related(
+            'dados_cuidado', 'conferido_por',
+        ).get(pk=conferencia.pk)
+        return Response(ConferenciaCuidadoPreEncontroSerializer(conferencia).data)
+
+
+class FotoPreEncontroAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, encontro_id, atendimento_id):
+        encontro, atendimento = _atendimento_pre_encontro_do_contexto(encontro_id, atendimento_id)
+        _exigir_policy(pode_operar_foto_pre_encontro(request.user, encontro))
+        foto = get_object_or_404(FotoTemporariaPreEncontro, atendimento=atendimento)
+        try:
+            arquivo = foto.arquivo.open('rb')
+        except (FileNotFoundError, OSError) as error:
+            raise Http404('Arquivo de imagem não encontrado.') from error
+        resposta = FileResponse(
+            arquivo,
+            as_attachment=False,
+            filename='foto-pre-encontro',
+            content_type=foto.content_type or 'application/octet-stream',
+        )
+        resposta['Cache-Control'] = 'private, no-store'
+        resposta['X-Content-Type-Options'] = 'nosniff'
+        return resposta
+
+    def put(self, request, encontro_id, atendimento_id):
+        encontro, atendimento = _atendimento_pre_encontro_do_contexto(encontro_id, atendimento_id)
+        _exigir_policy(pode_operar_foto_pre_encontro(request.user, encontro))
+        comando = FotoPreEncontroCommandSerializer(data=request.data)
+        comando.is_valid(raise_exception=True)
+        try:
+            pre_encontro_services.registrar_foto_pre_encontro(
+                usuario=request.user,
+                atendimento=atendimento,
+                arquivo=comando.validated_data['foto'],
+            )
+        except django_core_validation_error as error:
+            _erro_de_dominio(error)
+        return Response({'possui_foto': True})
+
+
+class DecisaoVagaPreEncontroAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, encontro_id, atendimento_id):
+        encontro, atendimento = _atendimento_pre_encontro_do_contexto(encontro_id, atendimento_id)
+        _exigir_policy(pode_resolver_vaga_pre_encontro(request.user, encontro))
+        comando = DecisaoVagaPreEncontroCommandSerializer(data=request.data)
+        comando.is_valid(raise_exception=True)
+        try:
+            decisao = pre_encontro_services.resolver_vaga_pre_encontro(
+                usuario=request.user,
+                atendimento=atendimento,
+                **comando.validated_data,
+            )
+        except django_core_validation_error as error:
+            _erro_de_dominio(error)
+        return Response({'status': decisao.status})
+
+
+class CapacidadePreEncontroAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, encontro_id):
+        encontro, _ = _pre_encontro_do_contexto(encontro_id)
+        _exigir_policy(pode_aumentar_capacidade_pre_encontro(request.user, encontro))
+        comando = CapacidadePreEncontroCommandSerializer(data=request.data)
+        comando.is_valid(raise_exception=True)
+        configuracao = get_object_or_404(
+            ConfiguracaoEncontristasEncontro,
+            encontro=encontro,
+        )
+        try:
+            configuracao = pre_encontro_services.aumentar_capacidade_pre_encontro(
+                usuario=request.user,
+                configuracao=configuracao,
+                **comando.validated_data,
+            )
+        except django_core_validation_error as error:
+            _erro_de_dominio(error)
+        return Response({'capacidade': configuracao.capacidade})
 
 
 class InscricaoEncontroPublicaAPIView(APIView):
