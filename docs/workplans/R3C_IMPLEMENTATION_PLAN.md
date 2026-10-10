@@ -892,6 +892,8 @@ PostgreSQL 16 descartável.
 
 ### R.3I.17 — Models de Pré-Encontro e atendimento
 
+**Estado:** implementada em 10 de outubro de 2026; validação focada aprovada.
+
 **Prioridade:** FUNDACIONAL para Pré-Encontro.
 
 **Objetivo:** criar `PreEncontro` zero-ou-um, atendimento, fatos operacionais e
@@ -924,6 +926,29 @@ criar aptidão ou overbooking por `save()`.
 **Commit sugerido:** `feat: add pre-encounter check-in models`
 
 **Riscos:** confundir Pré com reunião preparatória ou exigir Pessoa/inscrição.
+
+**Implementação:** a migration expansiva `0047` adiciona `PreEncontro`,
+`AtendimentoPreEncontro`, `PagamentoPreEncontro`,
+`DecisaoVagaPreEncontro` e `FotoTemporariaPreEncontro`. O atendimento aceita
+inscrição, Pessoa ou snapshot avulso mínimo e preserva os dados informados
+quando os vínculos são acrescentados. Unicidades condicionais protegem
+inscrição, Pessoa e CPF conhecido dentro do mesmo Pré. Pagamento, decisão e
+foto são fatos separados e nenhum model calcula aptidão, altera capacidade ou
+promove a inscrição.
+
+A foto reutiliza a referência de arquivo protegida do projeto, com chave
+aleatória sob `pre_encontros/fotos/`, e permanece ligada ao atendimento mesmo
+após a associação de Pessoa. Não foi criado endpoint nem exposição por
+`/media`; `Pessoa.foto` e os arquivos existentes não foram alterados. O
+`PreEncontro` referencia apenas `Encontro` e não possui relação com Agenda ou
+reunião preparatória.
+
+**Validação executada:** os 16 testes focados de
+`core.tests.test_pre_encontro_models` passaram em SQLite, incluindo constraints
+estruturais, regularização sem perda do snapshot e ausência de efeitos em
+capacidade, convite, inscrição e `PerfilAlpinista`. `manage.py check`,
+`makemigrations --check --dry-run`, `compileall` e `git diff --check` completam
+as validações baratas do bloco.
 
 ### R.3I.18 — Services, capacidade e autorização do Pré
 

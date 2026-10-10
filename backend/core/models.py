@@ -17,6 +17,11 @@ def calendario_publicacao_upload_to(instance, filename):
         f'{instance.periodo.lower()}/{uuid4().hex}.pdf'
     )
 
+
+def foto_pre_encontro_upload_to(instance, filename):
+    del instance, filename
+    return f'pre_encontros/fotos/{uuid4().hex}'
+
 class Pessoa(models.Model):
     class EstadoCivil(models.TextChoices):
         SOLTEIRO = 'solteiro', 'Solteiro'
@@ -1029,6 +1034,274 @@ class CorrespondenciaCadastralInscricao(models.Model):
             f'Correspondência {self.pk or "nova"} — '
             f'inscrição {self.inscricao_id}'
         )
+
+
+class PreEncontro(models.Model):
+    encontro = models.OneToOneField(
+        Encontro,
+        on_delete=models.PROTECT,
+        related_name='pre_encontro',
+    )
+    data = models.DateField()
+    horario = models.TimeField()
+    local = models.CharField(max_length=255)
+    observacoes = models.TextField(blank=True, default='')
+    criado_em = models.DateTimeField(auto_now_add=True)
+    atualizado_em = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f'Pré-Encontro — {self.encontro}'
+
+
+class AtendimentoPreEncontro(models.Model):
+    pre_encontro = models.ForeignKey(
+        PreEncontro,
+        on_delete=models.PROTECT,
+        related_name='atendimentos',
+    )
+    inscricao = models.ForeignKey(
+        InscricaoEncontro,
+        on_delete=models.PROTECT,
+        related_name='atendimentos_pre_encontro',
+        null=True,
+        blank=True,
+    )
+    pessoa = models.ForeignKey(
+        Pessoa,
+        on_delete=models.PROTECT,
+        related_name='atendimentos_pre_encontro',
+        null=True,
+        blank=True,
+    )
+    nome_informado = models.CharField(max_length=255, blank=True, default='')
+    data_nascimento_informada = models.DateField(null=True, blank=True)
+    cpf_informado = models.CharField(
+        max_length=14,
+        null=True,
+        blank=True,
+        validators=[validate_cpf],
+    )
+    telefone_informado = models.CharField(
+        max_length=20,
+        blank=True,
+        default='',
+    )
+    registrado_por = models.ForeignKey(
+        User,
+        on_delete=models.PROTECT,
+        related_name='atendimentos_pre_encontro_registrados',
+    )
+    registrado_em = models.DateTimeField(default=timezone.now)
+    observacoes = models.TextField(blank=True, default='')
+    criado_em = models.DateTimeField(auto_now_add=True)
+    atualizado_em = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        indexes = [
+            models.Index(
+                fields=['pre_encontro', 'registrado_em'],
+                name='atend_pre_data_idx',
+            ),
+        ]
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    models.Q(inscricao__isnull=False)
+                    | models.Q(pessoa__isnull=False)
+                    | (
+                        ~models.Q(nome_informado='')
+                        & models.Q(data_nascimento_informada__isnull=False)
+                        & ~models.Q(telefone_informado='')
+                    )
+                ),
+                name='atend_pre_origem_valida',
+            ),
+            models.UniqueConstraint(
+                fields=['pre_encontro', 'inscricao'],
+                condition=models.Q(inscricao__isnull=False),
+                name='atend_pre_inscricao_unica',
+            ),
+            models.UniqueConstraint(
+                fields=['pre_encontro', 'pessoa'],
+                condition=models.Q(pessoa__isnull=False),
+                name='atend_pre_pessoa_unica',
+            ),
+            models.UniqueConstraint(
+                fields=['pre_encontro', 'cpf_informado'],
+                condition=(
+                    models.Q(cpf_informado__isnull=False)
+                    & ~models.Q(cpf_informado='')
+                ),
+                name='atend_pre_cpf_unico',
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(cpf_informado__isnull=True)
+                    | models.Q(cpf_informado='')
+                    | models.Q(cpf_informado__regex=r'^\d{11}$')
+                ),
+                name='atend_pre_cpf_canonico',
+            ),
+        ]
+
+    def clean(self):
+        super().clean()
+        self.cpf_informado = normalize_cpf(self.cpf_informado)
+
+    def __str__(self):
+        return f'Atendimento {self.pk or "novo"} — Pré {self.pre_encontro_id}'
+
+
+class PagamentoPreEncontro(models.Model):
+    class Status(models.TextChoices):
+        PENDENTE = 'pendente', 'Pendente'
+        PAGO = 'pago', 'Pago'
+        ISENTO = 'isento', 'Isento'
+
+    class Forma(models.TextChoices):
+        PIX = 'pix', 'PIX'
+        DINHEIRO = 'dinheiro', 'Dinheiro'
+        CARTAO = 'cartao', 'Cartão'
+        OUTRO = 'outro', 'Outro'
+
+    atendimento = models.OneToOneField(
+        AtendimentoPreEncontro,
+        on_delete=models.PROTECT,
+        related_name='pagamento',
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.PENDENTE,
+    )
+    valor = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+    )
+    forma = models.CharField(
+        max_length=20,
+        choices=Forma.choices,
+        blank=True,
+        default='',
+    )
+    pago_em = models.DateTimeField(null=True, blank=True)
+    observacao = models.TextField(blank=True, default='')
+    criado_em = models.DateTimeField(auto_now_add=True)
+    atualizado_em = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(status__in=('pendente', 'pago', 'isento')),
+                name='pag_pre_status_valido',
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(valor__isnull=True)
+                    | models.Q(valor__gte=0)
+                ),
+                name='pag_pre_valor_nao_negativo',
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(forma='')
+                    | models.Q(
+                        forma__in=('pix', 'dinheiro', 'cartao', 'outro')
+                    )
+                ),
+                name='pag_pre_forma_valida',
+            ),
+        ]
+
+    def __str__(self):
+        return f'Pagamento {self.status} — Atendimento {self.atendimento_id}'
+
+
+class DecisaoVagaPreEncontro(models.Model):
+    class Status(models.TextChoices):
+        AGUARDANDO_DECISAO_DIRETORIA = (
+            'aguardando_decisao_diretoria',
+            'Aguardando decisão da Diretoria',
+        )
+        APROVADO = 'aprovado', 'Aprovado'
+        NAO_APROVADO = 'nao_aprovado', 'Não aprovado'
+
+    atendimento = models.OneToOneField(
+        AtendimentoPreEncontro,
+        on_delete=models.PROTECT,
+        related_name='decisao_vaga',
+    )
+    status = models.CharField(
+        max_length=30,
+        choices=Status.choices,
+        default=Status.AGUARDANDO_DECISAO_DIRETORIA,
+    )
+    decidida_por = models.ForeignKey(
+        User,
+        on_delete=models.PROTECT,
+        related_name='decisoes_vaga_pre_encontro',
+        null=True,
+        blank=True,
+    )
+    decidida_em = models.DateTimeField(null=True, blank=True)
+    justificativa = models.TextField(blank=True, default='')
+    criado_em = models.DateTimeField(auto_now_add=True)
+    atualizado_em = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(
+                    status__in=(
+                        'aguardando_decisao_diretoria',
+                        'aprovado',
+                        'nao_aprovado',
+                    )
+                ),
+                name='dec_vaga_pre_status_valido',
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(
+                        status='aguardando_decisao_diretoria',
+                        decidida_por__isnull=True,
+                        decidida_em__isnull=True,
+                    )
+                    | models.Q(
+                        status__in=('aprovado', 'nao_aprovado'),
+                        decidida_por__isnull=False,
+                        decidida_em__isnull=False,
+                    )
+                ),
+                name='dec_vaga_pre_decisao_coerente',
+            ),
+        ]
+
+    def __str__(self):
+        return f'Decisão {self.status} — Atendimento {self.atendimento_id}'
+
+
+class FotoTemporariaPreEncontro(models.Model):
+    atendimento = models.OneToOneField(
+        AtendimentoPreEncontro,
+        on_delete=models.PROTECT,
+        related_name='foto_privada',
+    )
+    arquivo = models.ImageField(
+        upload_to=foto_pre_encontro_upload_to,
+        max_length=255,
+        validators=[validate_image_upload_size],
+    )
+    nome_original = models.CharField(max_length=255, blank=True, default='')
+    content_type = models.CharField(max_length=100, blank=True, default='')
+    tamanho = models.PositiveBigIntegerField(null=True, blank=True)
+    sha256 = models.CharField(max_length=64, blank=True, default='')
+    criado_em = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f'Foto privada — Atendimento {self.atendimento_id}'
 
 
 class CalendarioEncontro(models.Model):
