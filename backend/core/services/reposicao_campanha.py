@@ -3,6 +3,8 @@ from django.utils import timezone
 
 from core.models import (
     CampanhaConvitesEncontro,
+    ConfiguracaoEncontristasEncontro,
+    Encontro,
     SinalReposicaoCampanha,
 )
 
@@ -72,15 +74,35 @@ def registrar_transicao_lotado_para_disponivel(
 
 @transaction.atomic
 def processar_sinal_reposicao_campanha(*, sinal_id, momento=None):
+    referencia = (
+        SinalReposicaoCampanha.objects
+        .filter(pk=sinal_id)
+        .values('campanha_id', 'campanha__encontro_id')
+        .first()
+    )
+    if referencia is None:
+        return None
+
+    encontro_id = referencia['campanha__encontro_id']
+    Encontro.objects.select_for_update(of=('self',)).get(pk=encontro_id)
+    ConfiguracaoEncontristasEncontro.objects.select_for_update(
+        of=('self',)
+    ).get(encontro_id=encontro_id)
+    campanha = (
+        CampanhaConvitesEncontro.objects
+        .select_related('encontro')
+        .select_for_update(of=('self',))
+        .get(pk=referencia['campanha_id'])
+    )
     try:
         sinal = (
             SinalReposicaoCampanha.objects
-            .select_for_update()
-            .select_related('campanha')
+            .select_for_update(of=('self',))
             .get(pk=sinal_id)
         )
     except SinalReposicaoCampanha.DoesNotExist:
         return None
+    sinal.campanha = campanha
     if sinal.status == SinalReposicaoCampanha.Status.PROCESSADO:
         return sinal
 

@@ -189,8 +189,8 @@ def _campanha_bloqueada(campanha):
     try:
         return (
             CampanhaConvitesEncontro.objects
-            .select_for_update()
             .select_related('encontro')
+            .select_for_update(of=('self',))
             .get(pk=campanha.pk)
         )
     except CampanhaConvitesEncontro.DoesNotExist:

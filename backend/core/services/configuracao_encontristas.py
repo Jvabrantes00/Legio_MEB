@@ -169,14 +169,24 @@ def alterar_configuracao_encontristas(
     if configuracao is None or configuracao.pk is None:
         raise ValidationError('Configuração deve estar persistida.')
     try:
+        referencia = (
+            ConfiguracaoEncontristasEncontro.objects
+            .only('encontro_id')
+            .get(pk=configuracao.pk)
+        )
+        encontro_bloqueado = (
+            Encontro.objects
+            .select_for_update(of=('self',))
+            .get(pk=referencia.encontro_id)
+        )
         configuracao_bloqueada = (
             ConfiguracaoEncontristasEncontro.objects
-            .select_for_update()
-            .select_related('encontro')
+            .select_for_update(of=('self',))
             .get(pk=configuracao.pk)
         )
     except ConfiguracaoEncontristasEncontro.DoesNotExist as error:
         raise ValidationError('Configuração não encontrada.') from error
+    configuracao_bloqueada.encontro = encontro_bloqueado
 
     valores = {
         'capacidade': capacidade,

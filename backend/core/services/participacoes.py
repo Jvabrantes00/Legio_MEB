@@ -274,15 +274,15 @@ def responder_convite(convite, *, status):
     if status not in STATUS_RESPOSTA_CONVITE:
         raise ValidationError('Status de resposta do convite inválido.')
 
+    encontro_bloqueado = _bloquear_encontro(convite.encontro)
     configuracao = None
     if (
         status == ConviteEncontro.Status.CONFIRMADO
         and convite.finalidade == ConviteEncontro.Finalidade.PARTICIPAR
     ):
-        configuracao = bloquear_configuracao_capacidade(convite.encontro)
+        configuracao = bloquear_configuracao_capacidade(encontro_bloqueado)
 
     _bloquear_pessoa(convite.pessoa)
-    _bloquear_encontro(convite.encontro)
     convite_bloqueado = _bloquear_convite(convite)
     if convite_bloqueado.inscricao_id is not None:
         _bloquear_inscricao(convite_bloqueado.inscricao)

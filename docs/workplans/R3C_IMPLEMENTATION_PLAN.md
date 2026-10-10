@@ -801,6 +801,9 @@ permanecem para validação manual/checkpoint.
 
 ### R.3I.16 — Checkpoint PostgreSQL de campanha e capacidade
 
+**Estado:** preparado em 10 de outubro de 2026; execução PostgreSQL manual
+pendente de revalidação após correções do primeiro checkpoint.
+
 **Prioridade:** NECESSÁRIO PARA MVP; CHECKPOINT.
 
 **Objetivo:** validar locks, constraints e idempotência em PostgreSQL real.
@@ -839,6 +842,53 @@ o cluster temporário é removido sem acessar `sia_dev`.
 **Commit sugerido:** `test: validate invitation concurrency on postgres`
 
 **Riscos:** teste artificial que não abre conexões reais por thread.
+
+**Checkpoint preparado:**
+`core/tests/test_campanha_convites_concurrency.py` reúne onze cenários que
+exigem `connection.vendor == "postgresql"`, usam `TransactionTestCase`, uma
+conexão Django por thread, `Barrier` e fechamento explícito das conexões. Os
+dois cenários de última vaga da I.13 foram reutilizados e reforçados com
+asserts de auditoria e ausência de recusa falsa. Os demais cobrem resposta
+duplicada (`confirmar × confirmar` e `confirmar × recusar`), colisão da
+unicidade oportunidade/rodada, sinal processado simultaneamente, outbox/task
+duplicada, retry vencido concorrente, aumento de capacidade × processamento
+do sinal, redução de capacidade × confirmação e confirmação × reprogramação.
+
+As asserções verificam diretamente contagens, estados, sequências, auditoria,
+limite de tentativas, unicidades, ciphertext e ausência de overbooking. SMTP,
+WhatsApp e Redis reais não são usados. A execução SQLite foi feita apenas para
+validar import/discovery e produziu 11 skips explícitos; ela não constitui
+evidência de concorrência.
+
+**Auditoria de locks:** confirmação pública e interna compartilham a
+configuração de encontristas como mutex antes de contar ocupação. Alteração de
+capacidade bloqueia configuração e depois consulta campanha/sinal;
+reprogramação bloqueia Encontro/calendário antes de reconciliar oportunidades;
+outbox e entregas são bloqueadas nessa ordem; processamento da reposição
+bloqueia sinal, campanha e configuração. A ordem configuração → campanha do
+aumento e campanha → configuração do processamento é uma inversão potencial;
+o cenário capacidade × sinal foi escrito especificamente para tentar
+reproduzi-la no PostgreSQL. Na preparação inicial, não houve refatoração
+preventiva antes dessa evidência real.
+
+**Primeira execução PostgreSQL:** 8/11 cenários passaram. PostgreSQL reproduziu
+deadlock em capacidade × reposição e confirmação × reprogramação; o cenário de
+reposição restante falhou por usar `aberta_em` em 2030 e tentar encerrar a
+rodada com o relógio real de 2026. A colisão
+`op_conv_rod_convite_unica` ocorreu dentro do cenário esperado e o respectivo
+teste passou, confirmando a constraint.
+
+**Correções preparadas para revalidação:** os fluxos compartilhados agora
+adquirem explicitamente `Encontro → ConfiguracaoEncontristasEncontro` antes dos
+demais recursos. O processamento de sinal continua com campanha e sinal nessa
+ordem posterior; confirmação bloqueia oportunidade e convite somente depois
+do mutex de Encontro/configuração. Consultas com `select_related()` restringem
+`FOR UPDATE` a `of=("self",)`, removendo locks implícitos dos joins. O teste usa
+um instante relativo a `timezone.now()`, preservando
+`rod_conv_datas_coerentes`. Não foi adicionado retry de deadlock, nenhuma
+constraint foi relaxada e nenhuma migration foi criada. A aprovação do
+checkpoint continua dependente da reexecução dos mesmos onze cenários no
+PostgreSQL 16 descartável.
 
 ### R.3I.17 — Models de Pré-Encontro e atendimento
 

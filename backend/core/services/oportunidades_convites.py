@@ -279,8 +279,10 @@ def consultar_convite_publico(*, token, data_nascimento, momento=None):
         token=token,
         data_nascimento=data_nascimento,
     )
-    oportunidade = _queryset_oportunidade().select_for_update().get(
-        pk=autenticada.pk,
+    oportunidade = (
+        _queryset_oportunidade()
+        .select_for_update(of=('self',))
+        .get(pk=autenticada.pk)
     )
     _expirar_se_necessario(oportunidade, momento=instante)
     if oportunidade.status == OportunidadeConviteEncontro.Status.PENDENTE:
@@ -317,15 +319,19 @@ def _invalidar_por_lotacao(oportunidade):
 
 
 def _bloquear_para_resposta(autenticada):
-    encontro = autenticada.convite.encontro
+    encontro = Encontro.objects.select_for_update(of=('self',)).get(
+        pk=autenticada.convite.encontro_id,
+    )
     configuracao = bloquear_configuracao_capacidade(
         encontro,
         obrigatoria=True,
     )
-    oportunidade = _queryset_oportunidade().select_for_update().get(
-        pk=autenticada.pk,
+    oportunidade = (
+        _queryset_oportunidade()
+        .select_for_update(of=('self',))
+        .get(pk=autenticada.pk)
     )
-    convite = ConviteEncontro.objects.select_for_update().get(
+    convite = ConviteEncontro.objects.select_for_update(of=('self',)).get(
         pk=oportunidade.convite_id,
     )
     oportunidade.convite = convite
@@ -421,7 +427,7 @@ def responder_convite_publico(
         if confirmados == configuracao.capacidade:
             concorrentes = list(
                 _queryset_oportunidade()
-                .select_for_update()
+                .select_for_update(of=('self',))
                 .filter(
                     rodada=oportunidade.rodada,
                     status=OportunidadeConviteEncontro.Status.PENDENTE,
@@ -440,7 +446,7 @@ def reconciliar_oportunidades_apos_reprogramacao(*, encontro, ator=None):
         raise ValidationError('Encontro deve estar persistido.')
     oportunidades = list(
         _queryset_oportunidade()
-        .select_for_update()
+        .select_for_update(of=('self',))
         .filter(
             convite__encontro=encontro,
             status=OportunidadeConviteEncontro.Status.PENDENTE,
