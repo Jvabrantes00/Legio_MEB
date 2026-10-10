@@ -1304,6 +1304,29 @@ class FotoTemporariaPreEncontro(models.Model):
         return f'Foto privada — Atendimento {self.atendimento_id}'
 
 
+class ConferenciaCuidadoPreEncontro(models.Model):
+    atendimento = models.OneToOneField(
+        AtendimentoPreEncontro,
+        on_delete=models.PROTECT,
+        related_name='conferencia_cuidado',
+    )
+    dados_cuidado = models.ForeignKey(
+        DadosCuidadoInscricao,
+        on_delete=models.PROTECT,
+        related_name='conferencias_pre_encontro',
+    )
+    conferido_por = models.ForeignKey(
+        User,
+        on_delete=models.PROTECT,
+        related_name='conferencias_cuidado_pre_encontro',
+    )
+    conferido_em = models.DateTimeField(default=timezone.now)
+    dados_cuidado_atualizado_em = models.DateTimeField()
+
+    def __str__(self):
+        return f'Conferência de cuidado — Atendimento {self.atendimento_id}'
+
+
 class CalendarioEncontro(models.Model):
     encontro = models.ForeignKey(
         Encontro,

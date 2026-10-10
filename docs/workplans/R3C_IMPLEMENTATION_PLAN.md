@@ -952,6 +952,8 @@ as validações baratas do bloco.
 
 ### R.3I.18 — Services, capacidade e autorização do Pré
 
+**Estado:** implementada em 10 de outubro de 2026; validação focada aprovada.
+
 **Prioridade:** NECESSÁRIO PARA MVP.
 
 **Objetivo:** registrar presença, regularizar, conferir cuidado, pagamento,
@@ -986,6 +988,36 @@ disputa excepcional, sem cadastro paralelo de coordenador.
 
 **Riscos:** reutilizar `concede_registro_presenca` para cuidado ou escolher por
 ordem de chegada.
+
+**Implementação:** `core.services.pre_encontro` separa check-in,
+regularização, pagamento, conferência de cuidados, derivação de aptidão,
+resolução de disputa e aumento de capacidade. Atendimento avulso puro não é
+apto; pagamento, foto e conferência não entram na fórmula. Quando os candidatos
+não confirmados excedem as vagas restantes, todos os indefinidos ficam em
+`AGUARDANDO_DECISAO_DIRETORIA`, sem escolha por instante de chegada. Somente
+Diretoria resolve a disputa de negócio; o aumento reutiliza o comando canônico
+de configuração e vagas excepcionalmente aprovadas também protegem contra
+redução que produziria overbooking.
+
+A policy contextual deriva da cadeia `VinculoUsuarioPessoa` →
+`TrabalhoEncontro` → equipe snapshot com código `coordenacao-geral`, sem usar
+`concede_registro_presenca` e sem identidade paralela. Essa Coordenação pode
+registrar pagamento e conferir cuidados apenas no próprio Encontro. Fichas e
+as policies administrativas preservam seus comandos explícitos; decisão de
+vaga não foi ampliada.
+
+A migration expansiva `0048` cria somente
+`ConferenciaCuidadoPreEncontro`, uma linha por atendimento, com referência aos
+`DadosCuidadoInscricao`, ator, instante e marker `atualizado_em` observado. A
+repetição atualiza a mesma linha; `EventoAuditoriaEncontro` registra cada ação
+sem funcionar como estado operacional. Nenhum backfill foi criado.
+
+**Validação executada:** 22 testes focados de services e autorização
+passaram em SQLite. Eles cobrem as três origens, idempotência, contexto,
+lifecycle, aptidão derivada, disputa sem prioridade, decisão exclusiva,
+capacidade, marker dos cuidados, auditoria e negações. Os checks baratos do
+bloco completam a validação local; PostgreSQL concorrente permanece fora deste
+bloco.
 
 ### R.3I.19 — APIs internas do Pré-Encontro
 

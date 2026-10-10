@@ -2,9 +2,11 @@ from datetime import date, datetime
 
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
+from django.db.models import Q
 from rest_framework.exceptions import PermissionDenied
 
 from core.models import (
+    DecisaoVagaPreEncontro,
     ConfiguracaoEncontristasEncontro,
     ConviteEncontro,
     Encontro,
@@ -64,11 +66,27 @@ def _valor_auditavel(valor):
 
 
 def _ocupacao_confirmada(encontro):
-    return ConviteEncontro.objects.filter(
+    pessoas_confirmadas = set(ConviteEncontro.objects.filter(
         encontro=encontro,
         finalidade=ConviteEncontro.Finalidade.PARTICIPAR,
         status=ConviteEncontro.Status.CONFIRMADO,
-    ).count()
+    ).values_list('pessoa_id', flat=True))
+    decisoes_aprovadas_sem_confirmacao = (
+        DecisaoVagaPreEncontro.objects
+        .filter(
+            atendimento__pre_encontro__encontro=encontro,
+            status=DecisaoVagaPreEncontro.Status.APROVADO,
+        )
+        .exclude(
+            Q(atendimento__pessoa_id__in=pessoas_confirmadas)
+            | Q(
+                atendimento__pessoa__isnull=True,
+                atendimento__inscricao__pessoa_id__in=pessoas_confirmadas,
+            )
+        )
+        .count()
+    )
+    return len(pessoas_confirmadas) + decisoes_aprovadas_sem_confirmacao
 
 
 def _validar_capacidade_disponivel(encontro, capacidade):

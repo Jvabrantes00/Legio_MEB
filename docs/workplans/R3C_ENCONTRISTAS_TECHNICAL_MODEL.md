@@ -31,11 +31,12 @@ R.3 permanece aberta. Nenhuma estrutura legada é removida nesta etapa.
 | `InscricaoEncontro` | Inscrição lógica em uma edição | Muitas para um Encontro; zero ou uma Pessoa | `ENVIADA`, `CANCELADA` | unicidade parcial Pessoa/Encontro quando resolvida; índices por Encontro/status/origem, Pessoa/Encontro e envio | Sim | Público cria/edita/cancela na janela; Fichas regulariza; sem deleção operacional |
 | `DadosDeclaradosInscricao` | Campos cadastrais estruturados e snapshot atual | Um-para-um com inscrição | Sem estado | uma ficha atual por inscrição; versão de schema positiva | Sim | Público na janela e Fichas após encerramento; atualização não altera Pessoa |
 | `ResponsavelDeclaradoInscricao` | Responsável informado para menor | Zero ou um por inscrição | Sem estado | obrigatório por service quando menor; CPF não é único entre inscrições | Sim | Público/Fichas conforme a janela; nunca cria vínculo familiar |
-| `DadosCuidadoInscricao` | Conteúdo restrito de cuidado e acolhimento | Zero ou um por inscrição | Sem estado | uma linha por inscrição; validações condicionais no service | Especialmente sensível | Público declara; Fichas/Diretoria/Suporte e coordenação contextual consultam; Fichas confere |
+| `DadosCuidadoInscricao` | Conteúdo restrito de cuidado e acolhimento | Zero ou um por inscrição | Sem estado | uma linha por inscrição; validações condicionais no service | Especialmente sensível | Público declara; consulta e conferência obedecem ao Encontro e às policies específicas |
 | `DadosEsppaInscricao` | Estado civil, cônjuge ou referência declarados | Zero ou um; permitido somente para ESPPA | Sem estado | coerência cônjuge/referência por service | Sim | Público/Fichas; nunca cria Pessoa ou vínculo canônico |
 | `CorrespondenciaCadastralInscricao` | Sugestão e decisão sobre possível Pessoa | Muitas por inscrição; cada uma aponta a uma Pessoa candidata | `SUGERIDA`, `REJEITADA`, `ACEITA` | no máximo uma aceita por inscrição; candidato único por inscrição | Sim | Sistema sugere; Fichas decide; decisão auditável |
 | `PreEncontro` | Marco operacional obrigatório anterior ao Encontro | Zero ou um por Encontro na v1 | Sem estado próprio | unicidade por Encontro; data/hora/local coerentes | Não | Fichas/Diretoria/Suporte gerem; integra a Agenda sem ser Preparatória |
 | `AtendimentoPreEncontro` | Check-in, presença, vaga, cuidado, pagamento, foto e regularização | Pertence ao Pré; inscrição e Pessoa opcionais | Sem máquina geral; fatos operacionais independentes | ao menos inscrição, Pessoa ou nome informado; unicidades condicionais; índices por Pré, inscrição, Pessoa e regularização | Sim | Fichas/equipe autorizada; nunca apagado ao regularizar |
+| `ConferenciaCuidadoPreEncontro` | Registra que os dados de cuidado foram conferidos operacionalmente | Zero ou uma por atendimento; referencia os dados conferidos | Atualizada deterministicamente em nova conferência | atendimento único; ator, instante e marker de atualização obrigatórios | Especialmente sensível | Fichas e Coordenação Geral contextual conferem; Diretoria/Suporte seguem policy global |
 | `FotoTemporariaPreEncontro` | Foto protegida antes da resolução da Pessoa | Zero ou uma por atendimento | Pendente de vinculação ou vinculada, se necessário | uma foto ativa por atendimento; storage privado | Sim | Fichas/equipe autorizada; vinculada por service após resolução |
 | `CampanhaConvitesEncontro` | Coordena início, prazo, prorrogação e encerramento | Uma por Encontro/finalidade participar | `ATIVA`, `AGUARDANDO_DECISAO`, `ENCERRADA` | uma campanha lógica por Encontro; prazo posterior ao início; timestamps coerentes | Não | Fichas inicia/prorroga/encerra; sistema muda para aguardando decisão no prazo |
 | `RodadaConvitesEncontro` | Contexto temporal de oportunidades | Muitas por campanha | `ABERTA`, `ENCERRADA` | número sequencial único por campanha; tipo `INICIAL`, `REPOSICAO` ou `PRORROGACAO` | Não | Service da campanha cria; fechamento não reabre links |
@@ -194,6 +195,11 @@ o que ajuda e informações adicionais.
 As respostas condicionais são validadas por service/serializer; não se tentam
 constraints SQL frágeis para texto relacionado. Esses dados não participam da
 elegibilidade automática e podem ser conferidos operacionalmente no Pré.
+`ConferenciaCuidadoPreEncontro` persiste esse fato sem copiar o conteúdo
+sensível: referencia a linha conferida e guarda ator, instante e o
+`atualizado_em` observado. Nova conferência atualiza a mesma linha; o histórico
+das ações fica em `EventoAuditoriaEncontro`, que não é fonte do estado
+operacional. Ter ou não conferência não altera aptidão.
 
 ### Autorização contextual
 
@@ -208,6 +214,11 @@ Não será criado cadastro paralelo de coordenador temporário. A flag atual
 `concede_registro_presenca` autoriza outra finalidade e não será usada como
 atalho para cuidado; a policy deriva diretamente do vínculo de trabalho
 vigente na Coordenação Geral.
+
+Fichas e integrantes vigentes da Coordenação Geral canônica podem conferir
+cuidados no mesmo Encontro. Coordenação de outro Encontro não recebe essa
+capacidade. Consulta e conferência continuam operações distintas e sujeitas à
+minimização dos dados sensíveis.
 
 O acesso termina em `FINALIZADO` e `CANCELADO`, permanece em `ADIADO` e nunca
 se estende a outro Encontro. Fichas, Diretoria e Suporte usam suas capacidades

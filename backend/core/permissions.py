@@ -89,6 +89,87 @@ def pode_consultar_campanha_convites(user):
     )
 
 
+def _usuario_ativo(user):
+    return bool(
+        getattr(user, 'is_authenticated', False)
+        and getattr(user, 'is_active', False)
+    )
+
+
+def pertence_coordenacao_geral_encontro(user, encontro):
+    if not (
+        _usuario_ativo(user)
+        and encontro is not None
+        and encontro.pk is not None
+    ):
+        return False
+    try:
+        pessoa_id = user.vinculo_pessoa.pessoa_id
+    except VinculoUsuarioPessoa.DoesNotExist:
+        return False
+    return TrabalhoEncontro.objects.filter(
+        pessoa_id=pessoa_id,
+        encontro=encontro,
+        status=TrabalhoEncontro.Status.ALOCADO,
+        role_equipe__equipe_encontro__encontro=encontro,
+        role_equipe__equipe_encontro__codigo='coordenacao-geral',
+    ).exists()
+
+
+def pode_operar_checkin_pre_encontro(user, encontro):
+    del encontro
+    return bool(
+        _usuario_ativo(user)
+        and (
+            user.is_superuser
+            or user_has_any_role(user, *FICHAS_MANAGEMENT_ROLES)
+        )
+    )
+
+
+def pode_regularizar_pre_encontro(user, encontro):
+    del encontro
+    return pode_resolver_cadastro_inscricao(user)
+
+
+def pode_registrar_pagamento_pre_encontro(user, encontro):
+    return bool(
+        _usuario_ativo(user)
+        and (
+            user.is_superuser
+            or user_has_any_role(user, *FICHAS_MANAGEMENT_ROLES)
+            or pertence_coordenacao_geral_encontro(user, encontro)
+        )
+    )
+
+
+def pode_conferir_cuidados_pre_encontro(user, encontro):
+    return bool(
+        _usuario_ativo(user)
+        and (
+            user.is_superuser
+            or user_has_any_role(user, *FICHAS_MANAGEMENT_ROLES)
+            or pertence_coordenacao_geral_encontro(user, encontro)
+        )
+    )
+
+
+def pode_resolver_vaga_pre_encontro(user, encontro):
+    del encontro
+    return bool(
+        _usuario_ativo(user)
+        and (
+            user.is_superuser
+            or user_has_any_role(user, SiaRole.DIRETORIA)
+        )
+    )
+
+
+def pode_aumentar_capacidade_pre_encontro(user, encontro):
+    del encontro
+    return pode_gerir_configuracao_encontristas(user)
+
+
 def pode_registrar_presenca_preparatoria(user, encontro):
     if not (
         getattr(user, 'is_authenticated', False)
