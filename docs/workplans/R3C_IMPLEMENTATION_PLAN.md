@@ -662,6 +662,8 @@ em PostgreSQL isolado, conforme a política do projeto.
 
 ### R.3I.14 — Adapters de e-mail e WhatsApp
 
+**Estado:** concluída em 10 de outubro de 2026.
+
 **Prioridade:** NECESSÁRIO PARA MVP.
 
 **Objetivo:** definir interfaces independentes de provider e implementações de
@@ -692,6 +694,40 @@ dependem de SMTP/WhatsApp reais.
 **Commit sugerido:** `feat: add invitation delivery adapters`
 
 **Riscos:** acoplar provider ou registrar conteúdo/telefone/e-mail.
+
+**Implementação:** `core.notifications` define contrato, payload e resultado
+tipados, sem dependência de ORM ou do lifecycle da campanha. O payload contém
+somente destinatário, nome público do Encontro, prazo e link seguro; os campos
+de destinatário e link ficam fora de `repr`. O token one-shot pode atravessar
+esse boundary apenas como dado transitório para compor a mensagem e não é
+persistido, recuperado de digest, registrado ou devolvido no resultado.
+
+E-mail usa um adapter SMTP baseado na infraestrutura nativa do Django, com
+host, porta, TLS/SSL, autenticação, remetente e timeout configuráveis por
+ambiente. Mailpit é somente uma configuração SMTP de desenvolvimento
+documentada em `.env.example`, sem acoplamento do domínio. A mensagem textual
+é mínima e não confunde resposta ao convite com presença, vaga garantida ou
+participação concluída.
+
+WhatsApp possui somente adapter mock determinístico nos modos `sucesso`,
+`falha` e `timeout`, sem SDK, HTTP ou provider real. A factory resolve adapters
+por settings e falha explicitamente para backends desconhecidos, permitindo
+substituição futura sem alterar a campanha. Falhas de configuração, payload,
+timeout, conexão e autenticação são reduzidas a códigos e categorias
+sanitizados; nenhum payload é logado.
+
+`EntregaConviteEncontro` não foi alterado nem persistido pelos adapters. O
+orquestrador que registrará tentativas/resultados e o transporte assíncrono
+durável continuam fora deste bloco e exigem decisão própria. Não houve
+migration, endpoint, UI, disparo automático ou integração da campanha a um
+provider concreto.
+
+**Validação:** foram escritos testes sem rede em
+`core/tests/test_convite_delivery_adapters.py` para contrato substituível,
+payload mínimo, SMTP, remetente/timeout configuráveis, falhas sanitizadas,
+segredo ausente de `repr` e logs, factory sem fallback e os três modos do mock
+WhatsApp. A execução focada e os checks baratos ficam registrados na entrega
+do bloco; nenhuma suíte completa foi executada.
 
 ### R.3I.15 — Infraestrutura assíncrona e tasks
 

@@ -38,6 +38,26 @@ def env_list(name, default=''):
     return [item.strip() for item in value.split(',') if item.strip()]
 
 
+def env_int(name, default):
+    value = os.getenv(name, str(default))
+    try:
+        return int(value)
+    except ValueError as error:
+        raise ImproperlyConfigured(
+            f'A variável de ambiente {name} deve ser um número inteiro.'
+        ) from error
+
+
+def env_float(name, default):
+    value = os.getenv(name, str(default))
+    try:
+        return float(value)
+    except ValueError as error:
+        raise ImproperlyConfigured(
+            f'A variável de ambiente {name} deve ser numérica.'
+        ) from error
+
+
 def required_env(name):
     value = os.getenv(name)
     if not value:
@@ -234,6 +254,30 @@ SIMPLE_JWT = {
         'rest_framework_simplejwt.tokens.AccessToken',
     ),
 }
+
+# Adapters de entrega de convites. O transporte é configurado por ambiente e
+# permanece desacoplado do lifecycle da campanha.
+SIA_INVITATION_EMAIL_BACKEND = os.getenv(
+    'SIA_INVITATION_EMAIL_BACKEND',
+    'smtp',
+).strip().lower()
+SIA_SMTP_HOST = os.getenv('SIA_SMTP_HOST', '')
+SIA_SMTP_PORT = env_int('SIA_SMTP_PORT', 25)
+SIA_SMTP_USERNAME = os.getenv('SIA_SMTP_USERNAME', '')
+SIA_SMTP_PASSWORD = os.getenv('SIA_SMTP_PASSWORD', '')
+SIA_SMTP_FROM_EMAIL = os.getenv('SIA_SMTP_FROM_EMAIL', '')
+SIA_SMTP_USE_TLS = env_bool('SIA_SMTP_USE_TLS', default=False)
+SIA_SMTP_USE_SSL = env_bool('SIA_SMTP_USE_SSL', default=False)
+SIA_SMTP_TIMEOUT = env_float('SIA_SMTP_TIMEOUT', 10)
+
+SIA_WHATSAPP_BACKEND = os.getenv(
+    'SIA_WHATSAPP_BACKEND',
+    'mock',
+).strip().lower()
+SIA_WHATSAPP_MOCK_MODE = os.getenv(
+    'SIA_WHATSAPP_MOCK_MODE',
+    'sucesso',
+).strip().lower()
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
