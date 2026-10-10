@@ -22,3 +22,6 @@ db.sqlite3-journal
 
 # Arquivos de mídia (uploads de usuários, fotos)
 media/
+
+backend/celerybeat-schedule
+backend/celerybeat-schedule.*

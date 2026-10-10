@@ -2096,6 +2096,144 @@ class EntregaConviteEncontro(models.Model):
         return f'{self.get_canal_display()} — Oportunidade {self.oportunidade_id}'
 
 
+class OutboxEntregaConvite(models.Model):
+    class Status(models.TextChoices):
+        PENDENTE = 'pendente', 'Pendente'
+        CONCLUIDA = 'concluida', 'Concluída'
+
+    oportunidade = models.OneToOneField(
+        OportunidadeConviteEncontro,
+        on_delete=models.PROTECT,
+        related_name='outbox_entrega',
+    )
+    segredo_criptografado = models.TextField(null=True, blank=True)
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.PENDENTE,
+    )
+    proxima_tentativa_em = models.DateTimeField(null=True, blank=True)
+    segredo_destruido_em = models.DateTimeField(null=True, blank=True)
+    criada_em = models.DateTimeField(auto_now_add=True)
+    atualizada_em = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        indexes = [
+            models.Index(
+                fields=['status', 'proxima_tentativa_em'],
+                name='out_conv_status_retry_idx',
+            ),
+        ]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(status__in=('pendente', 'concluida')),
+                name='out_conv_status_valido',
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(
+                        status='pendente',
+                        segredo_criptografado__isnull=False,
+                        segredo_destruido_em__isnull=True,
+                    )
+                    | models.Q(
+                        status='concluida',
+                        segredo_criptografado__isnull=True,
+                        segredo_destruido_em__isnull=False,
+                    )
+                ),
+                name='out_conv_segredo_lifecycle',
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(segredo_destruido_em__isnull=True)
+                    | models.Q(
+                        segredo_destruido_em__gte=models.F('criada_em')
+                    )
+                ),
+                name='out_conv_destruicao_ordem',
+            ),
+        ]
+
+    def __str__(self):
+        return f'Outbox — Oportunidade {self.oportunidade_id}'
+
+
+class SinalReposicaoCampanha(models.Model):
+    class Status(models.TextChoices):
+        PENDENTE = 'pendente', 'Pendente'
+        PROCESSADO = 'processado', 'Processado'
+
+    class Motivo(models.TextChoices):
+        CONFIRMACAO_LIBERADA = (
+            'confirmacao_liberada',
+            'Confirmação liberada',
+        )
+        CAPACIDADE_AUMENTADA = (
+            'capacidade_aumentada',
+            'Capacidade aumentada',
+        )
+
+    campanha = models.ForeignKey(
+        CampanhaConvitesEncontro,
+        on_delete=models.PROTECT,
+        related_name='sinais_reposicao',
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.PENDENTE,
+    )
+    motivo = models.CharField(max_length=30, choices=Motivo.choices)
+    processado_em = models.DateTimeField(null=True, blank=True)
+    criada_em = models.DateTimeField(auto_now_add=True)
+    atualizada_em = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        indexes = [
+            models.Index(
+                fields=['status', 'criada_em'],
+                name='sin_rep_status_data_idx',
+            ),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=['campanha'],
+                condition=models.Q(status='pendente'),
+                name='sin_rep_pendente_unico_campanha',
+            ),
+            models.CheckConstraint(
+                condition=models.Q(status__in=('pendente', 'processado')),
+                name='sin_rep_status_valido',
+            ),
+            models.CheckConstraint(
+                condition=models.Q(
+                    motivo__in=(
+                        'confirmacao_liberada',
+                        'capacidade_aumentada',
+                    )
+                ),
+                name='sin_rep_motivo_valido',
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(
+                        status='pendente',
+                        processado_em__isnull=True,
+                    )
+                    | models.Q(
+                        status='processado',
+                        processado_em__isnull=False,
+                    )
+                ),
+                name='sin_rep_processamento_coerente',
+            ),
+        ]
+
+    def __str__(self):
+        return f'Sinal de reposição — Campanha {self.campanha_id}'
+
+
 class TrabalhoEncontro(models.Model):
     class Status(models.TextChoices):
         AGUARDANDO_ALOCACAO = (

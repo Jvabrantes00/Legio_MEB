@@ -16,7 +16,9 @@ _IDENTIFICADOR_RE = re.compile(r'^[a-z][a-z0-9_.-]{0,99}$')
 _OBJETO_ID_RE = re.compile(r'^[A-Za-z0-9:_-]{1,100}$')
 ORIGEM_INTERNA = 'interna'
 ORIGEM_PUBLICA = 'publica'
-ORIGENS_EVENTO = frozenset({ORIGEM_INTERNA, ORIGEM_PUBLICA})
+ORIGEM_AUTOMATICA = 'automatica'
+ORIGENS_SEM_ATOR = frozenset({ORIGEM_PUBLICA, ORIGEM_AUTOMATICA})
+ORIGENS_EVENTO = frozenset({ORIGEM_INTERNA, *ORIGENS_SEM_ATOR})
 _CAMPOS_SENSIVEIS = frozenset({
     'alergia',
     'alergias',
@@ -119,8 +121,10 @@ def registrar_evento_auditoria_encontro(
 
     if origem not in ORIGENS_EVENTO:
         raise ValidationError('Origem do evento de auditoria inválida.')
-    if origem == ORIGEM_PUBLICA and ator is not None:
-        raise ValidationError('Evento público não pode possuir ator interno.')
+    if origem in ORIGENS_SEM_ATOR and ator is not None:
+        raise ValidationError(
+            'Evento público ou automático não pode possuir ator interno.'
+        )
     if origem == ORIGEM_INTERNA and ator is None:
         raise ValidationError('Evento interno exige ator ativo.')
 
@@ -143,9 +147,9 @@ def registrar_evento_auditoria_encontro(
     campos_permitidos = frozenset(campos_permitidos)
     if not all(isinstance(campo, str) for campo in campos_permitidos):
         raise ValidationError('A allowlist possui campo inválido.')
-    if origem == ORIGEM_PUBLICA and 'origem' not in campos_permitidos:
+    if origem in ORIGENS_SEM_ATOR and 'origem' not in campos_permitidos:
         raise ValidationError(
-            'Evento público exige origem na allowlist de auditoria.'
+            'Evento sem ator exige origem na allowlist de auditoria.'
         )
 
     anterior = _normalizar_diferenca(
@@ -158,13 +162,13 @@ def registrar_evento_auditoria_encontro(
         valor_novo,
         campos_permitidos,
     )
-    if origem == ORIGEM_PUBLICA:
-        if anterior.get('origem', ORIGEM_PUBLICA) != ORIGEM_PUBLICA:
-            raise ValidationError('Origem pública conflitante no valor anterior.')
-        if novo.get('origem', ORIGEM_PUBLICA) != ORIGEM_PUBLICA:
-            raise ValidationError('Origem pública conflitante no valor novo.')
-        anterior['origem'] = ORIGEM_PUBLICA
-        novo['origem'] = ORIGEM_PUBLICA
+    if origem in ORIGENS_SEM_ATOR:
+        if anterior.get('origem', origem) != origem:
+            raise ValidationError('Origem conflitante no valor anterior.')
+        if novo.get('origem', origem) != origem:
+            raise ValidationError('Origem conflitante no valor novo.')
+        anterior['origem'] = origem
+        novo['origem'] = origem
     if not isinstance(justificativa, str):
         raise ValidationError('Justificativa deve ser textual.')
 

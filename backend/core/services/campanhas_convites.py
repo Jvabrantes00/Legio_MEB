@@ -30,6 +30,7 @@ from core.services.elegibilidade_encontristas import (
     ResultadoElegibilidadeEncontrista,
     avaliar_elegibilidade_encontrista,
 )
+from core.services.entregas_convites import criar_outbox_entrega_convite
 from core.services.participacoes import responder_convite
 
 
@@ -110,6 +111,7 @@ _STATUS_AUTOMATICOS_CONVITE = frozenset({
     ConviteEncontro.Status.SEM_RESPOSTA,
 })
 _CAMPOS_AUDITORIA = frozenset({
+    'origem',
     'campanha_id',
     'status',
     'prazo_confirmacao',
@@ -290,6 +292,7 @@ def _auditar(
     anterior,
     novo,
     justificativa='',
+    origem='interna',
 ):
     return registrar_evento_auditoria_encontro(
         encontro=campanha.encontro,
@@ -301,6 +304,7 @@ def _auditar(
         valor_novo=novo,
         campos_permitidos=_CAMPOS_AUDITORIA,
         justificativa=justificativa,
+        origem=origem,
     )
 
 
@@ -404,6 +408,11 @@ def _abrir_rodada(
             convite=convite,
             token_digest=token_digest,
             expira_em=campanha.prazo_confirmacao,
+        )
+        criar_outbox_entrega_convite(
+            oportunidade=oportunidade,
+            token=token,
+            canais=candidato.canais,
         )
         oportunidades.append(oportunidade)
         emissoes.append(EmissaoOportunidadeConvite(
@@ -512,9 +521,7 @@ def iniciar_campanha(
     )
 
 
-@transaction.atomic
-def processar_prazo(*, usuario, campanha, momento=None):
-    _exigir_gestao(usuario)
+def _processar_prazo(*, campanha, momento, usuario, origem):
     instante = _momento(momento)
     campanha = _campanha_bloqueada(campanha)
     _configuracao(campanha.encontro, bloquear=True)
@@ -543,8 +550,30 @@ def processar_prazo(*, usuario, campanha, momento=None):
         objeto_id=campanha.pk,
         anterior={'status': anterior},
         novo={'status': campanha.status},
+        origem=origem,
     )
     return campanha
+
+
+@transaction.atomic
+def processar_prazo(*, usuario, campanha, momento=None):
+    _exigir_gestao(usuario)
+    return _processar_prazo(
+        campanha=campanha,
+        momento=momento,
+        usuario=usuario,
+        origem='interna',
+    )
+
+
+@transaction.atomic
+def processar_prazo_automaticamente(*, campanha, momento=None):
+    return _processar_prazo(
+        campanha=campanha,
+        momento=momento,
+        usuario=None,
+        origem='automatica',
+    )
 
 
 @transaction.atomic
@@ -783,15 +812,14 @@ def reabrir_recusa(
     return abertura
 
 
-@transaction.atomic
-def abrir_reposicao_nova_vaga(
+def _abrir_reposicao_nova_vaga(
     *,
-    usuario,
     campanha,
-    justificativa='',
-    momento=None,
+    justificativa,
+    momento,
+    usuario,
+    origem,
 ):
-    _exigir_gestao(usuario)
     instante = _momento(momento)
     campanha = _campanha_bloqueada(campanha)
     configuracao = _configuracao(campanha.encontro, bloquear=True)
@@ -848,5 +876,39 @@ def abrir_reposicao_nova_vaga(
             'capacidade': configuracao.capacidade,
         },
         justificativa=justificativa,
+        origem=origem,
     )
     return abertura
+
+
+@transaction.atomic
+def abrir_reposicao_nova_vaga(
+    *,
+    usuario,
+    campanha,
+    justificativa='',
+    momento=None,
+):
+    _exigir_gestao(usuario)
+    return _abrir_reposicao_nova_vaga(
+        campanha=campanha,
+        justificativa=justificativa,
+        momento=momento,
+        usuario=usuario,
+        origem='interna',
+    )
+
+
+@transaction.atomic
+def abrir_reposicao_nova_vaga_automaticamente(
+    *,
+    campanha,
+    momento=None,
+):
+    return _abrir_reposicao_nova_vaga(
+        campanha=campanha,
+        justificativa='',
+        momento=momento,
+        usuario=None,
+        origem='automatica',
+    )

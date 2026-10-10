@@ -279,6 +279,50 @@ SIA_WHATSAPP_MOCK_MODE = os.getenv(
     'sucesso',
 ).strip().lower()
 
+# Processamento assíncrono de convites. Redis transporta somente IDs; todo
+# estado durável e canônico permanece no PostgreSQL.
+CELERY_BROKER_URL = os.getenv(
+    'CELERY_BROKER_URL',
+    'redis://127.0.0.1:6379/0',
+)
+CELERY_RESULT_BACKEND = None
+CELERY_TASK_IGNORE_RESULT = True
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TIMEZONE = TIME_ZONE
+CELERY_ENABLE_UTC = True
+CELERY_TASK_ACKS_LATE = True
+CELERY_TASK_REJECT_ON_WORKER_LOST = True
+CELERY_WORKER_PREFETCH_MULTIPLIER = 1
+CELERY_BROKER_TRANSPORT_OPTIONS = {'visibility_timeout': 3600}
+
+SIA_INVITATION_OUTBOX_KEY = os.getenv('SIA_INVITATION_OUTBOX_KEY', '')
+SIA_PUBLIC_INVITATION_BASE_URL = os.getenv(
+    'SIA_PUBLIC_INVITATION_BASE_URL',
+    '',
+).rstrip('/')
+SIA_CELERY_OUTBOX_INTERVAL = env_int('SIA_CELERY_OUTBOX_INTERVAL', 300)
+SIA_CELERY_CAMPAIGN_INTERVAL = env_int(
+    'SIA_CELERY_CAMPAIGN_INTERVAL',
+    300,
+)
+
+CELERY_BEAT_SCHEDULE = {
+    'reconciliar-outbox-convites': {
+        'task': 'core.reconciliar_outboxes_convites',
+        'schedule': SIA_CELERY_OUTBOX_INTERVAL,
+    },
+    'processar-prazos-campanhas': {
+        'task': 'core.processar_prazos_campanhas',
+        'schedule': SIA_CELERY_CAMPAIGN_INTERVAL,
+    },
+    'processar-sinais-reposicao': {
+        'task': 'core.processar_sinais_reposicao',
+        'schedule': SIA_CELERY_CAMPAIGN_INTERVAL,
+    },
+}
+
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 MEDIA_URL = '/media/'

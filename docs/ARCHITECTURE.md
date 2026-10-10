@@ -140,6 +140,26 @@ Configurações locais e URLs do tunnel não pertencem ao Git. O frontend em
 desenvolvimento precisa iniciar com `NODE_ENV=development` para aplicar
 `allowedDevOrigins` derivado da origem configurada.
 
+## Processamento assíncrono de convites
+
+O PostgreSQL é a única autoridade para campanha, rodada, oportunidade,
+entrega, retry, prazo, outbox e sinal de reposição. Redis é somente o broker
+operacional do Celery; limpar ou reiniciar Redis não remove o trabalho
+pendente, que o Beat reconcilia a partir do banco.
+
+Tasks recebem apenas IDs técnicos. O token one-shot é cifrado de forma
+autenticada em uma outbox criada na mesma transação da oportunidade e nunca
+atravessa Redis, logs ou auditoria. A publicação ocorre em `on_commit`; depois
+que todos os canais atingem estado terminal, o ciphertext é destruído e fica
+somente o histórico operacional sem segredo. Worker e Beat não tomam decisões
+humanas de campanha: apenas executam entrega, prazo vencido e sinais duráveis
+de reposição já registrados por uma transição observável.
+
+O estado local é idempotente, mas SMTP não oferece garantia universal de
+exactly-once. Se o provider aceitar a mensagem e o worker cair antes de gravar
+o sucesso, um retry pode duplicar a mensagem externa. A operação e os exemplos
+de units estão em `docs/operations/INVITATION_ASYNC.md`.
+
 ## Fronteiras para novas entidades
 
 Novas entidades da Fase 1 devem manter o fluxo Browser → Next/BFF →

@@ -119,7 +119,9 @@ class CampanhaConvitesServiceTests(TestCase):
         self.assertFalse(hasattr(oportunidade, 'token'))
         self.assertNotIn(emissao.token, repr(emissao))
         self.assertNotIn(emissao.token, repr(resultado))
-        self.assertFalse(EntregaConviteEncontro.objects.exists())
+        entrega = EntregaConviteEncontro.objects.get()
+        self.assertEqual(entrega.canal, EntregaConviteEncontro.Canal.EMAIL)
+        self.assertEqual(entrega.status, EntregaConviteEncontro.Status.PENDENTE)
 
     def test_segundo_inicio_e_negado_sem_duplicar(self):
         self.iniciar()

@@ -21,6 +21,11 @@ DATABASES = {
 
 ALLOWED_HOSTS = ['testserver', 'localhost']
 
+SIA_INVITATION_OUTBOX_KEY = (
+    'MDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDA='
+)
+SIA_PUBLIC_INVITATION_BASE_URL = 'http://testserver/convites'
+
 # Senhas continuam passando pelo mecanismo do Django, mas com um hasher rápido
 # apropriado para dados descartáveis de teste.
 PASSWORD_HASHERS = [

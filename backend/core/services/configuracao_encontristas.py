@@ -16,6 +16,9 @@ from core.permissions import (
 from core.services.auditoria_encontros import (
     registrar_evento_auditoria_encontro,
 )
+from core.services.reposicao_campanha import (
+    registrar_transicao_lotado_para_disponivel,
+)
 
 
 _NAO_INFORMADO = object()
@@ -191,6 +194,10 @@ def alterar_configuracao_encontristas(
         raise ValidationError('Informe ao menos um campo para alterar.')
 
     anteriores = _snapshot(configuracao_bloqueada, informados)
+    capacidade_anterior = configuracao_bloqueada.capacidade
+    ocupacao_anterior = _ocupacao_confirmada(
+        configuracao_bloqueada.encontro
+    )
     for campo, valor in informados.items():
         setattr(configuracao_bloqueada, campo, valor)
     novos = _snapshot(configuracao_bloqueada, informados)
@@ -209,6 +216,16 @@ def alterar_configuracao_encontristas(
             configuracao_bloqueada.capacidade,
         )
     configuracao_bloqueada.save(update_fields=sorted(alterados))
+
+    if 'capacidade' in alterados:
+        registrar_transicao_lotado_para_disponivel(
+            encontro=configuracao_bloqueada.encontro,
+            ocupacao_antes=ocupacao_anterior,
+            capacidade_antes=capacidade_anterior,
+            ocupacao_depois=ocupacao_anterior,
+            capacidade_depois=configuracao_bloqueada.capacidade,
+            motivo='capacidade_aumentada',
+        )
 
     registrar_evento_auditoria_encontro(
         encontro=configuracao_bloqueada.encontro,

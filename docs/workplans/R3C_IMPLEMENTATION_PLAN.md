@@ -731,6 +731,8 @@ do bloco; nenhuma suíte completa foi executada.
 
 ### R.3I.15 — Infraestrutura assíncrona e tasks
 
+**Estado:** concluída em 10 de outubro de 2026.
+
 **Prioridade:** NECESSÁRIO PARA MVP operacional.
 
 **Objetivo:** introduzir Redis, Celery Worker/Beat e tasks idempotentes após a
@@ -763,6 +765,39 @@ não duplica oportunidade ou entrega.
 
 **Riscos:** estado de negócio no Redis, task publicada antes do commit ou
 dependência operacional não documentada.
+
+**Implementação:** Celery/Redis foram introduzidos somente como transporte e
+agendamento operacional. PostgreSQL preserva todo estado canônico. Cada nova
+oportunidade com canal aplicável cria, na mesma transação, uma única outbox com
+token cifrado via Fernet e uma entrega por canal; `on_commit` publica somente o
+ID da outbox. O worker resolve destinatários no momento do envio, processa
+e-mail e WhatsApp mock de modo independente, limita cada canal a três
+tentativas com backoff determinístico e destrói o ciphertext quando todos os
+canais terminam. O Beat reconcilia outboxes, prazos vencidos e sinais duráveis
+de reposição, permitindo recuperar perda de publicação no broker sem inventar
+token para oportunidades históricas.
+
+O processamento automático de prazo somente leva a campanha a
+`AGUARDANDO_DECISAO`; prorrogar e encerrar continuam decisões humanas de
+Fichas. Reposição automática exige `SinalReposicaoCampanha` criado numa
+transição observável de lotado para disponível. O aumento de capacidade já
+produz esse sinal no mesmo fluxo transacional. Não foi encontrado no domínio
+atual um command legítimo para retirar/corrigir um convite já `CONFIRMADO`;
+portanto, nenhum fluxo novo foi inventado, e a primitive de registro da
+transição fica disponível para integração pelo futuro command legítimo.
+
+A auditoria distingue `interna`, `publica` e `automatica`: somente a interna
+aceita e exige usuário ativo; pública e automática exigem `ator=None`. A
+migration expansiva `0046_expand_outbox_e_sinal_reposicao` não altera nem
+preenche oportunidades anteriores. Operação local, saúde, configuração e
+exemplos de systemd estão em `docs/operations/INVITATION_ASYNC.md`.
+
+**Validação:** `core/tests/test_convite_tasks.py` cobre atomicidade,
+criptografia, publicação pós-commit, falha do broker, reconciliação,
+independência dos canais, retries, idempotência, limpeza do segredo, prazo
+automático, auditoria automática e sinal de reposição. O módulo focado e os
+checks baratos foram executados; suíte completa e serviços externos reais
+permanecem para validação manual/checkpoint.
 
 ### R.3I.16 — Checkpoint PostgreSQL de campanha e capacidade
 
