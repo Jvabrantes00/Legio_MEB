@@ -48,6 +48,35 @@ class EventoAuditoriaEncontroTests(TestCase):
         self.assertEqual(evento.justificativa, 'Ajuste operacional aprovado.')
         self.assertEqual(LogSistema.objects.count(), 0)
 
+    def test_evento_publico_exige_origem_explicita_e_aceita_ator_nulo(self):
+        evento = self.registrar(
+            ator=None,
+            origem='publica',
+            valor_anterior={'capacidade': 80},
+            valor_novo={'capacidade': 90},
+            campos_permitidos={'capacidade', 'origem'},
+        )
+
+        self.assertIsNone(evento.ator)
+        self.assertEqual(evento.valor_anterior['origem'], 'publica')
+        self.assertEqual(evento.valor_novo['origem'], 'publica')
+
+    def test_evento_interno_exige_ator_ativo(self):
+        with self.assertRaises(ValidationError):
+            self.registrar(ator=None)
+
+        self.ator.is_active = False
+        self.ator.save(update_fields=['is_active'])
+        with self.assertRaises(ValidationError):
+            self.registrar()
+
+    def test_evento_publico_rejeita_ator_interno(self):
+        with self.assertRaises(ValidationError):
+            self.registrar(
+                origem='publica',
+                campos_permitidos={'capacidade', 'origem'},
+            )
+
     def test_constraints_rejeitam_identificadores_vazios(self):
         campos = ('fato', 'entidade', 'objeto_id')
         for campo in campos:

@@ -628,7 +628,23 @@ Expiração é reconciliada de modo lazy. Reprogramação chama explicitamente a
 reconciliação de elegibilidade e suspende oportunidades pendentes afetadas,
 sem signal e sem resposta automática. Confirmação, recusa, suspensão e
 invalidação por lotação geram auditoria estruturada sem token, digest,
-nascimento ou PII. Não houve alteração de schema ou migration.
+nascimento ou PII.
+
+A correção estrutural posterior criou a migration expansiva
+`0045_alter_eventoauditoriaencontro_ator`: `ator` passou a aceitar `NULL` para
+ações públicas reais, preservando `PROTECT` quando houver usuário interno. O
+service canônico exige ator ativo para origem interna e aceita ator ausente
+somente quando a origem pública é informada explicitamente; nesse caso, a
+origem também integra os JSONs minimizados do evento. Não foi criada constraint
+SQL de ator/origem porque `origem` não é coluna do model, mas dado estruturado
+nos JSONs de auditoria; a invariável permanece centralizada no service, sem
+ator técnico ou fallback para o iniciador da campanha.
+
+O mutex de capacidade da configuração de encontristas e a contagem de
+confirmações foram compartilhados pelos caminhos público e interno. Assim,
+qualquer Encontro com capacidade configurada rejeita uma confirmação interna
+que produziria `N + 1`, e a corrida pública × interna fica reservada ao teste
+focado em PostgreSQL isolado.
 
 O BFF usa endpoint Django fixo, payload allowlist, timeout, `no-store`,
 same-origin e CSRF double-submit, sem encaminhar JWT, cookies ou headers do
@@ -639,9 +655,10 @@ não integra chamadas internas por URL nem headers e não é registrado por
 telemetria custom.
 
 **Validação:** foram escritos testes focados de service, API, BFF e componente,
-além do teste PostgreSQL para a corrida da última vaga. Os testes focados em
-SQLite e Vitest passaram; o teste concorrente permanece reservado à execução
-manual em PostgreSQL isolado, conforme a política do projeto.
+além dos testes PostgreSQL para a corrida pública × pública e pública ×
+interna pela última vaga. Os testes focados em SQLite e Vitest são executados
+separadamente; os testes concorrentes permanecem reservados à execução manual
+em PostgreSQL isolado, conforme a política do projeto.
 
 ### R.3I.14 — Adapters de e-mail e WhatsApp
 

@@ -3,6 +3,7 @@ from django.db import IntegrityError, transaction
 from django.utils import timezone
 
 from core.models import (
+    ConfiguracaoEncontristasEncontro,
     ConviteEncontro,
     DiaEncontro,
     Encontro,
@@ -52,6 +53,33 @@ def _bloquear_convite(convite):
         )
     except ConviteEncontro.DoesNotExist as error:
         raise ValidationError('Convite não encontrado.') from error
+
+
+def bloquear_configuracao_capacidade(encontro, *, obrigatoria=False):
+    encontro_id = _pk(encontro, 'Encontro')
+    configuracao = (
+        ConfiguracaoEncontristasEncontro.objects
+        .select_for_update()
+        .filter(encontro_id=encontro_id)
+        .first()
+    )
+    if configuracao is None and obrigatoria:
+        raise ValidationError('Configuração de encontristas ausente.')
+    return configuracao
+
+
+def ocupacao_confirmada_participacao(*, convite, configuracao):
+    if convite.finalidade != ConviteEncontro.Finalidade.PARTICIPAR:
+        raise ValidationError('Capacidade se aplica a convite para participar.')
+    if configuracao.encontro_id != convite.encontro_id:
+        raise ValidationError(
+            'Configuração e convite devem pertencer ao mesmo Encontro.'
+        )
+    return ConviteEncontro.objects.filter(
+        encontro_id=convite.encontro_id,
+        finalidade=ConviteEncontro.Finalidade.PARTICIPAR,
+        status=ConviteEncontro.Status.CONFIRMADO,
+    ).count()
 
 
 def _bloquear_inscricao(inscricao):
@@ -246,6 +274,13 @@ def responder_convite(convite, *, status):
     if status not in STATUS_RESPOSTA_CONVITE:
         raise ValidationError('Status de resposta do convite inválido.')
 
+    configuracao = None
+    if (
+        status == ConviteEncontro.Status.CONFIRMADO
+        and convite.finalidade == ConviteEncontro.Finalidade.PARTICIPAR
+    ):
+        configuracao = bloquear_configuracao_capacidade(convite.encontro)
+
     _bloquear_pessoa(convite.pessoa)
     _bloquear_encontro(convite.encontro)
     convite_bloqueado = _bloquear_convite(convite)
@@ -256,6 +291,14 @@ def responder_convite(convite, *, status):
         return convite_bloqueado
     if convite_bloqueado.status != ConviteEncontro.Status.CONVIDADO:
         raise ValidationError('O convite já possui uma resposta definitiva.')
+
+    if configuracao is not None:
+        confirmados = ocupacao_confirmada_participacao(
+            convite=convite_bloqueado,
+            configuracao=configuracao,
+        )
+        if confirmados >= configuracao.capacidade:
+            raise ValidationError('A capacidade de encontristas foi preenchida.')
 
     convite_bloqueado.status = status
     convite_bloqueado.save(update_fields=['status', 'atualizado_em'])

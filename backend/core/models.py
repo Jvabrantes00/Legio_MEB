@@ -2657,6 +2657,8 @@ class EventoAuditoriaEncontro(models.Model):
         User,
         on_delete=models.PROTECT,
         related_name='eventos_auditoria_encontro',
+        blank=True,
+        null=True,
     )
     fato = models.CharField(max_length=100)
     entidade = models.CharField(max_length=100)

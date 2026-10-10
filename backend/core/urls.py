@@ -11,6 +11,7 @@ from .views import (
     ParticipacaoEncontroViewSet, ParticipacaoEventoViewSet, LogSistemaViewSet,
     InscricaoEncontroCommandViewSet, ConviteEncontroCommandViewSet,
     InscricaoEncontroPublicaAPIView,
+    ConviteEncontroPublicoAPIView,
     InscricaoResolucaoCadastralViewSet,
     CampanhaConvitesEncontroViewSet,
     ResultadoParticipacaoCommandViewSet,
@@ -115,6 +116,11 @@ router.register(r'entregas-materiais', EntregaMaterialViewSet)
 
 # Exporta as rotas 
 urlpatterns = [
+    path(
+        'public/convites/',
+        ConviteEncontroPublicoAPIView.as_view(),
+        name='convite-encontro-publico',
+    ),
     path(
         'public/encontros/<uuid:public_id>/inscricao/',
         InscricaoEncontroPublicaAPIView.as_view(),

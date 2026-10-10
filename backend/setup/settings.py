@@ -208,6 +208,10 @@ REST_FRAMEWORK = {
             'SIA_PUBLIC_REGISTRATION_SUBMIT_RATE',
             '10/minute',
         ),
+        'public_invitation': os.getenv(
+            'SIA_PUBLIC_INVITATION_RATE',
+            '10/minute',
+        ),
     },
 
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',

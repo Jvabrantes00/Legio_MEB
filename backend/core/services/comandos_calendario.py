@@ -6,6 +6,7 @@ from django.db import transaction
 from core.models import Encontro
 from core.services import avaliacoes_encontro as avaliacao_services
 from core.services import encontros as encontro_services
+from core.services import oportunidades_convites as oportunidade_services
 from core.services import reunioes_preparatorias as reuniao_services
 
 
@@ -96,9 +97,13 @@ def oficializar_agenda(encontro):
 
 
 @transaction.atomic
-def reprogramar_agenda(encontro, *, dias):
+def reprogramar_agenda(encontro, *, dias, ator=None):
     calendario = encontro_services.reprogramar_agenda(encontro, dias=dias)
     _sincronizar_datas_legadas(calendario.encontro, dias)
+    oportunidade_services.reconciliar_oportunidades_apos_reprogramacao(
+        encontro=calendario.encontro,
+        ator=ator,
+    )
     return calendario
 
 

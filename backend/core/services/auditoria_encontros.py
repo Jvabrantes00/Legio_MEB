@@ -14,6 +14,9 @@ from core.permissions import pode_consultar_auditoria_encontro
 
 _IDENTIFICADOR_RE = re.compile(r'^[a-z][a-z0-9_.-]{0,99}$')
 _OBJETO_ID_RE = re.compile(r'^[A-Za-z0-9:_-]{1,100}$')
+ORIGEM_INTERNA = 'interna'
+ORIGEM_PUBLICA = 'publica'
+ORIGENS_EVENTO = frozenset({ORIGEM_INTERNA, ORIGEM_PUBLICA})
 _CAMPOS_SENSIVEIS = frozenset({
     'alergia',
     'alergias',
@@ -110,26 +113,40 @@ def registrar_evento_auditoria_encontro(
     valor_novo,
     campos_permitidos,
     justificativa='',
+    origem=ORIGEM_INTERNA,
 ):
     encontro_id = _pk(encontro, 'Encontro')
-    ator_id = _pk(ator, 'Ator')
+
+    if origem not in ORIGENS_EVENTO:
+        raise ValidationError('Origem do evento de auditoria inválida.')
+    if origem == ORIGEM_PUBLICA and ator is not None:
+        raise ValidationError('Evento público não pode possuir ator interno.')
+    if origem == ORIGEM_INTERNA and ator is None:
+        raise ValidationError('Evento interno exige ator ativo.')
 
     try:
         encontro_persistido = Encontro.objects.get(pk=encontro_id)
     except Encontro.DoesNotExist as error:
         raise ValidationError('Encontro não encontrado.') from error
 
-    user_model = get_user_model()
-    try:
-        ator_persistido = user_model.objects.get(pk=ator_id, is_active=True)
-    except user_model.DoesNotExist as error:
-        raise ValidationError('Ator ativo não encontrado.') from error
+    ator_persistido = None
+    if origem == ORIGEM_INTERNA:
+        ator_id = _pk(ator, 'Ator')
+        user_model = get_user_model()
+        try:
+            ator_persistido = user_model.objects.get(pk=ator_id, is_active=True)
+        except user_model.DoesNotExist as error:
+            raise ValidationError('Ator ativo não encontrado.') from error
 
     if not isinstance(campos_permitidos, (set, frozenset, tuple, list)):
         raise ValidationError('A allowlist de campos deve ser explícita.')
     campos_permitidos = frozenset(campos_permitidos)
     if not all(isinstance(campo, str) for campo in campos_permitidos):
         raise ValidationError('A allowlist possui campo inválido.')
+    if origem == ORIGEM_PUBLICA and 'origem' not in campos_permitidos:
+        raise ValidationError(
+            'Evento público exige origem na allowlist de auditoria.'
+        )
 
     anterior = _normalizar_diferenca(
         'Valor anterior',
@@ -141,6 +158,13 @@ def registrar_evento_auditoria_encontro(
         valor_novo,
         campos_permitidos,
     )
+    if origem == ORIGEM_PUBLICA:
+        if anterior.get('origem', ORIGEM_PUBLICA) != ORIGEM_PUBLICA:
+            raise ValidationError('Origem pública conflitante no valor anterior.')
+        if novo.get('origem', ORIGEM_PUBLICA) != ORIGEM_PUBLICA:
+            raise ValidationError('Origem pública conflitante no valor novo.')
+        anterior['origem'] = ORIGEM_PUBLICA
+        novo['origem'] = ORIGEM_PUBLICA
     if not isinstance(justificativa, str):
         raise ValidationError('Justificativa deve ser textual.')
 

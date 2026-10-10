@@ -7,3 +7,7 @@ class PublicRegistrationReadThrottle(AnonRateThrottle):
 
 class PublicRegistrationSubmitThrottle(AnonRateThrottle):
     scope = 'public_registration_submit'
+
+
+class PublicInvitationThrottle(AnonRateThrottle):
+    scope = 'public_invitation'

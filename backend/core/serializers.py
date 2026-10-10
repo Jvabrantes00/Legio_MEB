@@ -427,6 +427,37 @@ class ProjecaoCampanhaConvitesSerializer(serializers.Serializer):
     candidatos = CandidatoCampanhaSerializer(many=True, read_only=True)
 
 
+class ConvitePublicoCommandSerializer(StrictCommandSerializer):
+    token = serializers.CharField(
+        min_length=1,
+        max_length=128,
+        trim_whitespace=False,
+    )
+    data_nascimento = serializers.DateField()
+    acao = serializers.ChoiceField(
+        choices=('validar', 'confirmar', 'recusar'),
+    )
+
+
+class ConvitePublicoSerializer(serializers.Serializer):
+    estado = serializers.ChoiceField(choices=(
+        'pendente',
+        'confirmado',
+        'recusado',
+        'expirado',
+        'suspenso',
+        'indisponivel',
+    ))
+    titulo_encontro = serializers.CharField()
+    datas_encontro = serializers.ListField(
+        child=serializers.DateField(),
+    )
+    prazo_resposta = serializers.DateTimeField()
+    finalidade = serializers.ChoiceField(choices=('participar',))
+    pode_responder = serializers.BooleanField()
+    mensagem = serializers.CharField()
+
+
 def calculate_age(birth_date):
     if birth_date is None:
         return None
