@@ -1078,7 +1078,14 @@ path de Pré-Encontro, valida IDs inteiros e rejeita traversal, URL absoluta,
 segmentos extras e métodos não previstos. O browser continua sem acesso ao
 JWT, e o proxy genérico não ganhou wildcard novo.
 
-**Validação executada:** 15 testes focados de API backend e 19 casos focados
+Como complemento de contrato para a I.20, o endpoint contextual
+`capabilities/` passou a projetar consulta, check-in e capacidade no nível do
+Encontro. O detalhe projeta regularização, pagamento, cuidados, foto e decisão
+de vaga no nível do atendimento. Todas as flags reutilizam as policies
+canônicas e incorporam a disponibilidade pelo lifecycle atual; lista e busca
+permanecem leves. O client não precisa conhecer role nem vínculo contextual.
+
+**Validação executada:** 20 testes focados de API backend e 26 casos focados
 da allowlist BFF passaram. `manage.py check`, `compileall`, TypeScript e
 `makemigrations --check --dry-run` também foram executados; nenhuma migration
 foi gerada. A advertência do migration check corresponde apenas à

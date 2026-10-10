@@ -25,6 +25,8 @@ from core.models import (
 from core.permissions import (
     pode_aumentar_capacidade_pre_encontro,
     pode_conferir_cuidados_pre_encontro,
+    pode_consultar_cuidados_pre_encontro,
+    pode_consultar_operacao_pre_encontro,
     pode_operar_checkin_pre_encontro,
     pode_operar_foto_pre_encontro,
     pode_registrar_pagamento_pre_encontro,
@@ -56,10 +58,132 @@ class AptidaoPreEncontro:
         return self.situacao == SituacaoAptidaoPreEncontro.APTO
 
 
+@dataclass(frozen=True)
+class CapabilitiesContextoPreEncontro:
+    consultar_operacao: bool
+    registrar_checkin: bool
+    aumentar_capacidade: bool
+
+    def as_dict(self):
+        return {
+            'consultar_operacao': self.consultar_operacao,
+            'registrar_checkin': self.registrar_checkin,
+            'aumentar_capacidade': self.aumentar_capacidade,
+        }
+
+
+@dataclass(frozen=True)
+class CapabilitiesAtendimentoPreEncontro:
+    regularizar: bool
+    registrar_pagamento: bool
+    consultar_cuidados: bool
+    conferir_cuidados: bool
+    visualizar_foto: bool
+    alterar_foto: bool
+    decidir_vaga: bool
+
+    def as_dict(self):
+        return {
+            'regularizar': self.regularizar,
+            'registrar_pagamento': self.registrar_pagamento,
+            'consultar_cuidados': self.consultar_cuidados,
+            'conferir_cuidados': self.conferir_cuidados,
+            'visualizar_foto': self.visualizar_foto,
+            'alterar_foto': self.alterar_foto,
+            'decidir_vaga': self.decidir_vaga,
+        }
+
+
 _STATUS_ENCERRADOS = {
     Encontro.Status.CANCELADO,
     Encontro.Status.FINALIZADO,
 }
+
+
+def _lifecycle_permite_operacao(encontro, *, depende_data=False):
+    if encontro.status in _STATUS_ENCERRADOS:
+        return False
+    return not (depende_data and encontro.status == Encontro.Status.ADIADO)
+
+
+def projetar_capabilities_contexto_pre_encontro(*, usuario, encontro):
+    mutavel = _lifecycle_permite_operacao(encontro)
+    permite_operacao_datada = _lifecycle_permite_operacao(
+        encontro,
+        depende_data=True,
+    )
+    return CapabilitiesContextoPreEncontro(
+        consultar_operacao=pode_consultar_operacao_pre_encontro(
+            usuario,
+            encontro,
+        ),
+        registrar_checkin=(
+            permite_operacao_datada
+            and pode_operar_checkin_pre_encontro(usuario, encontro)
+        ),
+        aumentar_capacidade=(
+            mutavel
+            and pode_aumentar_capacidade_pre_encontro(usuario, encontro)
+        ),
+    )
+
+
+def projetar_capabilities_atendimento_pre_encontro(
+    *,
+    usuario,
+    atendimento,
+):
+    encontro = atendimento.pre_encontro.encontro
+    mutavel = _lifecycle_permite_operacao(encontro)
+    permite_operacao_datada = _lifecycle_permite_operacao(
+        encontro,
+        depende_data=True,
+    )
+    possui_cuidado = bool(
+        atendimento.inscricao_id
+        and hasattr(atendimento.inscricao, 'dados_cuidado')
+    )
+    possui_foto = hasattr(atendimento, 'foto_privada')
+    try:
+        decisao_pendente = (
+            atendimento.decisao_vaga.status
+            == DecisaoVagaPreEncontro.Status.AGUARDANDO_DECISAO_DIRETORIA
+        )
+    except DecisaoVagaPreEncontro.DoesNotExist:
+        decisao_pendente = False
+    return CapabilitiesAtendimentoPreEncontro(
+        regularizar=(
+            mutavel
+            and (atendimento.pessoa_id is None or atendimento.inscricao_id is None)
+            and pode_regularizar_pre_encontro(usuario, encontro)
+        ),
+        registrar_pagamento=(
+            mutavel
+            and pode_registrar_pagamento_pre_encontro(usuario, encontro)
+        ),
+        consultar_cuidados=(
+            possui_cuidado
+            and pode_consultar_cuidados_pre_encontro(usuario, encontro)
+        ),
+        conferir_cuidados=(
+            mutavel
+            and possui_cuidado
+            and pode_conferir_cuidados_pre_encontro(usuario, encontro)
+        ),
+        visualizar_foto=(
+            possui_foto
+            and pode_operar_foto_pre_encontro(usuario, encontro)
+        ),
+        alterar_foto=(
+            mutavel
+            and pode_operar_foto_pre_encontro(usuario, encontro)
+        ),
+        decidir_vaga=(
+            permite_operacao_datada
+            and decisao_pendente
+            and pode_resolver_vaga_pre_encontro(usuario, encontro)
+        ),
+    )
 
 
 def _erro(campo, mensagem):
@@ -153,7 +277,7 @@ def _encontro_do_atendimento(atendimento):
 def _exigir_lifecycle(encontro, *, depende_data=False):
     if encontro.status in _STATUS_ENCERRADOS:
         _erro('encontro', 'O Encontro não aceita novas operações do Pré.')
-    if depende_data and encontro.status == Encontro.Status.ADIADO:
+    if not _lifecycle_permite_operacao(encontro, depende_data=depende_data):
         _erro(
             'encontro',
             'O Encontro adiado precisa ser reprogramado antes desta operação.',

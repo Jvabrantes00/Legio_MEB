@@ -15,7 +15,7 @@ export function isAllowedPreEncounterRequest(
   const tail = path.slice(3);
   if (method === "GET") {
     return (
-      (tail.length === 1 && tail[0] === "atendimentos")
+      (tail.length === 1 && (tail[0] === "atendimentos" || tail[0] === "capabilities"))
       || (tail.length === 2 && tail[0] === "atendimentos" && tail[1] === "busca")
       || (tail.length === 2 && tail[0] === "atendimentos" && isId(tail[1]))
       || (

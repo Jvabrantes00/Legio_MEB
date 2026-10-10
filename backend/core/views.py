@@ -111,6 +111,7 @@ from .serializers import (
     DecisaoVagaPreEncontroCommandSerializer,
     FotoPreEncontroCommandSerializer,
     CapacidadePreEncontroCommandSerializer,
+    CapabilitiesContextoPreEncontroSerializer,
     )
 from .permissions import (
     AlpinistaQueryPolicy,
@@ -1422,7 +1423,13 @@ def _exigir_policy(permitido, mensagem='Acesso negado.'):
         raise PermissionDenied(mensagem)
 
 
-def _serializar_atendimentos(atendimentos, serializer_class, *, many=False):
+def _serializar_atendimentos(
+    atendimentos,
+    serializer_class,
+    *,
+    many=False,
+    usuario=None,
+):
     itens = list(atendimentos) if many else [atendimentos]
     aptidoes = {
         item.pk: pre_encontro_services.avaliar_aptidao_pre_encontro(item)
@@ -1432,8 +1439,24 @@ def _serializar_atendimentos(atendimentos, serializer_class, *, many=False):
     return serializer_class(
         objeto,
         many=many,
-        context={'aptidoes': aptidoes},
+        context={'aptidoes': aptidoes, 'usuario': usuario},
     ).data
+
+
+class CapabilitiesContextoPreEncontroAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, encontro_id):
+        encontro, _ = _pre_encontro_do_contexto(encontro_id)
+        capabilities = (
+            pre_encontro_services.projetar_capabilities_contexto_pre_encontro(
+                usuario=request.user,
+                encontro=encontro,
+            )
+        )
+        return Response(CapabilitiesContextoPreEncontroSerializer(
+            capabilities,
+        ).data)
 
 
 class AtendimentoPreEncontroListaAPIView(APIView):
@@ -1494,6 +1517,7 @@ class AtendimentoPreEncontroListaAPIView(APIView):
             pagina,
             AtendimentoPreEncontroOperacionalSerializer,
             many=True,
+            usuario=request.user,
         )
         return paginator.get_paginated_response(dados)
 
@@ -1537,6 +1561,7 @@ class AtendimentoPreEncontroBuscaAPIView(APIView):
             pagina,
             AtendimentoPreEncontroOperacionalSerializer,
             many=True,
+            usuario=request.user,
         )
         return paginator.get_paginated_response(dados)
 
@@ -1555,6 +1580,7 @@ class AtendimentoPreEncontroDetalheAPIView(APIView):
         return Response(_serializar_atendimentos(
             atendimento,
             AtendimentoPreEncontroDetalheSerializer,
+            usuario=request.user,
         ))
 
 
@@ -1589,6 +1615,7 @@ class CheckinPreEncontroAPIView(APIView):
             _serializar_atendimentos(
                 atendimento,
                 AtendimentoPreEncontroDetalheSerializer,
+                usuario=request.user,
             ),
             status=status.HTTP_201_CREATED,
         )
@@ -1622,6 +1649,7 @@ class RegularizacaoPreEncontroAPIView(APIView):
         return Response(_serializar_atendimentos(
             atendimento,
             AtendimentoPreEncontroDetalheSerializer,
+            usuario=request.user,
         ))
 
 

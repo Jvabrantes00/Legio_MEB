@@ -29,6 +29,13 @@ from core.models import (
     VinculoUsuarioPessoa,
 )
 from core.roles import SiaRole
+from core.permissions import (
+    pode_aumentar_capacidade_pre_encontro,
+    pode_consultar_operacao_pre_encontro,
+    pode_operar_checkin_pre_encontro,
+    pode_registrar_pagamento_pre_encontro,
+    pode_resolver_vaga_pre_encontro,
+)
 from core.services.pre_encontro import registrar_checkin_pre_encontro
 from core.tests.factories import make_encontro
 
@@ -96,6 +103,9 @@ class PreEncontroApiTests(TestCase):
     def _atendimento_url(self, suffix='', *, encontro=None, atendimento=None):
         atendimento = atendimento or self.atendimento
         return f'{self._base(encontro)}/atendimentos/{atendimento.pk}/{suffix}'
+
+    def _capabilities_url(self, encontro=None):
+        return f'{self._base(encontro)}/capabilities/'
 
     def _foto(self, nome='foto.png'):
         arquivo = BytesIO()
@@ -192,6 +202,145 @@ class PreEncontroApiTests(TestCase):
             self.assertNotIn('alergias', item)
             self.assertNotIn('medicamentos', item)
             self.assertNotIn('observacoes', item)
+
+    def test_capabilities_contextuais_reutilizam_policies_e_default_deny(self):
+        casos = (
+            (self.fichas, True, True, False),
+            (self.comunicacao, True, False, False),
+            (self.suporte, True, True, True),
+            (self.sem_papel, False, False, False),
+        )
+        for usuario, consultar, checkin, capacidade in casos:
+            self._autenticar(usuario)
+            resposta = self.client.get(self._capabilities_url())
+            self.assertEqual(resposta.status_code, status.HTTP_200_OK)
+            self.assertEqual(resposta.data, {
+                'consultar_operacao': consultar,
+                'registrar_checkin': checkin,
+                'aumentar_capacidade': capacidade,
+            })
+            self.assertEqual(
+                resposta.data['consultar_operacao'],
+                pode_consultar_operacao_pre_encontro(usuario, self.encontro),
+            )
+            self.assertEqual(
+                resposta.data['registrar_checkin'],
+                pode_operar_checkin_pre_encontro(usuario, self.encontro),
+            )
+            self.assertEqual(
+                resposta.data['aumentar_capacidade'],
+                pode_aumentar_capacidade_pre_encontro(usuario, self.encontro),
+            )
+            self.assertNotIn('roles', resposta.data)
+
+    def test_capabilities_de_item_por_policy_sem_vazar_cuidado(self):
+        coordenacao = self._coordenacao('coord-capabilities')
+        casos = (
+            (self.fichas, True, True, True, False),
+            (coordenacao, True, True, True, False),
+            (self.comunicacao, False, False, True, False),
+        )
+        for usuario, pagamento, cuidados, foto, decisao in casos:
+            self._autenticar(usuario)
+            resposta = self.client.get(self._atendimento_url())
+            self.assertEqual(resposta.status_code, status.HTTP_200_OK)
+            capabilities = resposta.data['capabilities']
+            self.assertEqual(capabilities['registrar_pagamento'], pagamento)
+            self.assertEqual(capabilities['consultar_cuidados'], cuidados)
+            self.assertEqual(capabilities['conferir_cuidados'], cuidados)
+            self.assertEqual(capabilities['alterar_foto'], foto)
+            self.assertFalse(capabilities['visualizar_foto'])
+            self.assertEqual(capabilities['decidir_vaga'], decisao)
+            self.assertEqual(
+                capabilities['registrar_pagamento'],
+                pode_registrar_pagamento_pre_encontro(usuario, self.encontro),
+            )
+            self.assertNotIn('alergias', resposta.data)
+            self.assertNotIn('medicamentos', resposta.data)
+
+    def test_coordenacao_de_outro_encontro_nao_recebe_capability_contextual(self):
+        outro_encontro, _ = self._outro_contexto()
+        coordenacao = self._coordenacao(
+            'coord-outro-capabilities',
+            encontro=outro_encontro,
+        )
+        self._autenticar(coordenacao)
+        contexto = self.client.get(self._capabilities_url())
+        detalhe = self.client.get(self._atendimento_url())
+        mismatch = self.client.get(
+            self._atendimento_url(encontro=outro_encontro),
+        )
+        self.assertEqual(contexto.status_code, status.HTTP_200_OK)
+        self.assertEqual(contexto.data, {
+            'consultar_operacao': False,
+            'registrar_checkin': False,
+            'aumentar_capacidade': False,
+        })
+        self.assertEqual(detalhe.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(mismatch.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_lifecycle_bloqueia_capabilities_mutaveis(self):
+        self._autenticar(self.suporte)
+        for estado in (Encontro.Status.CANCELADO, Encontro.Status.FINALIZADO):
+            self.encontro.status = estado
+            self.encontro.save(update_fields=['status'])
+            contexto = self.client.get(self._capabilities_url()).data
+            detalhe = self.client.get(self._atendimento_url()).data
+            self.assertTrue(contexto['consultar_operacao'])
+            self.assertFalse(contexto['registrar_checkin'])
+            self.assertFalse(contexto['aumentar_capacidade'])
+            self.assertFalse(detalhe['capabilities']['regularizar'])
+            self.assertFalse(detalhe['capabilities']['registrar_pagamento'])
+            self.assertFalse(detalhe['capabilities']['conferir_cuidados'])
+            self.assertFalse(detalhe['capabilities']['alterar_foto'])
+            self.assertFalse(detalhe['capabilities']['decidir_vaga'])
+
+        self.encontro.status = Encontro.Status.ADIADO
+        self.encontro.save(update_fields=['status'])
+        contexto = self.client.get(self._capabilities_url()).data
+        detalhe = self.client.get(self._atendimento_url()).data
+        self.assertFalse(contexto['registrar_checkin'])
+        self.assertTrue(contexto['aumentar_capacidade'])
+        self.assertTrue(detalhe['capabilities']['registrar_pagamento'])
+        self.assertTrue(detalhe['capabilities']['alterar_foto'])
+        self.assertFalse(detalhe['capabilities']['decidir_vaga'])
+
+    def test_decidir_vaga_so_quando_policy_e_estado_permitem(self):
+        self.configuracao.capacidade = 1
+        self.configuracao.save(update_fields=['capacidade'])
+        segundo = registrar_checkin_pre_encontro(
+            usuario=self.fichas,
+            pre_encontro=self.pre,
+            pessoa=Pessoa.objects.create(nome='Capabilities em disputa'),
+        )
+        self.assertTrue(
+            DecisaoVagaPreEncontro.objects.filter(atendimento=segundo).exists(),
+        )
+        for usuario, esperado in (
+            (self.diretoria, True),
+            (self.fichas, False),
+            (self._coordenacao('coord-cap-sem-decisao'), False),
+            (self.comunicacao, False),
+            (self.suporte, False),
+        ):
+            self._autenticar(usuario)
+            resposta = self.client.get(
+                self._atendimento_url(atendimento=segundo),
+            )
+            self.assertEqual(resposta.status_code, status.HTTP_200_OK)
+            self.assertEqual(
+                resposta.data['capabilities']['decidir_vaga'],
+                esperado,
+            )
+            self.assertEqual(
+                esperado,
+                pode_resolver_vaga_pre_encontro(usuario, self.encontro),
+            )
+
+        superuser = User.objects.create_superuser('super-capabilities')
+        self._autenticar(superuser)
+        resposta = self.client.get(self._atendimento_url(atendimento=segundo))
+        self.assertTrue(resposta.data['capabilities']['decidir_vaga'])
 
     def test_busca_por_nome_cpf_telefone_e_inscricao_e_escopada(self):
         outro_encontro, outro_atendimento = self._outro_contexto()
@@ -379,10 +528,13 @@ class PreEncontroApiTests(TestCase):
                 format='multipart',
             )
             preview = self.client.get(self._atendimento_url('foto/'))
+            detalhe = self.client.get(self._atendimento_url())
             self.assertEqual(upload.status_code, status.HTTP_200_OK)
             self.assertEqual(preview.status_code, status.HTTP_200_OK)
             self.assertEqual(preview['Cache-Control'], 'private, no-store')
             self.assertNotIn('/media/', str(preview.headers))
+            self.assertTrue(detalhe.data['capabilities']['visualizar_foto'])
+            self.assertTrue(detalhe.data['capabilities']['alterar_foto'])
         foto = FotoTemporariaPreEncontro.objects.get(atendimento=self.atendimento)
         self.assertNotIn(foto.arquivo.name, str(upload.data))
 

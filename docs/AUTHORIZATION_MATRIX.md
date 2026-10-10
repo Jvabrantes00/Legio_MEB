@@ -108,6 +108,9 @@ comandos explícitos sobre o domínio canônico de Encontros.
   bypass técnico separado.
 - Todos os subrecursos são escopados pelo Encontro; vínculo com outro Encontro
   resulta em `404`. Ausência de papel ou vínculo explícito permanece negada.
+- A UI recebe apenas capabilities operacionais calculadas pelas mesmas
+  policies do backend; roles, grupos e vínculo contextual não são projetados
+  como substitutos de autorização.
 
 ### Equipes e trabalho em Encontro
 

@@ -31,6 +31,7 @@ from .views import (
     FotoPreEncontroAPIView,
     DecisaoVagaPreEncontroAPIView,
     CapacidadePreEncontroAPIView,
+    CapabilitiesContextoPreEncontroAPIView,
 )
 from .views import dashboard_stats
 from .views import current_user
@@ -127,6 +128,11 @@ router.register(r'entregas-materiais', EntregaMaterialViewSet)
 
 # Exporta as rotas 
 urlpatterns = [
+    path(
+        'encontros/<int:encontro_id>/pre-encontro/capabilities/',
+        CapabilitiesContextoPreEncontroAPIView.as_view(),
+        name='pre-encontro-capabilities',
+    ),
     path(
         'encontros/<int:encontro_id>/pre-encontro/atendimentos/',
         AtendimentoPreEncontroListaAPIView.as_view(),

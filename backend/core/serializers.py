@@ -24,6 +24,7 @@ from .models import (
     VinculoEncontroLegado as ParticipacaoEncontro,
 )
 from .services import participacoes as participacao_services
+from .services import pre_encontro as pre_encontro_services
 from .services import reunioes_preparatorias as reuniao_services
 from .services import trabalhos as trabalho_services
 from .services import formacoes as formacao_services
@@ -136,6 +137,34 @@ class AtendimentoPreEncontroDetalheSerializer(
 ):
     pessoa_id = serializers.IntegerField(read_only=True, allow_null=True)
     inscricao_id = serializers.IntegerField(read_only=True, allow_null=True)
+    capabilities = serializers.SerializerMethodField()
+
+    def get_capabilities(self, atendimento):
+        usuario = self.context.get('usuario')
+        if usuario is None:
+            return pre_encontro_services.CapabilitiesAtendimentoPreEncontro(
+                regularizar=False,
+                registrar_pagamento=False,
+                consultar_cuidados=False,
+                conferir_cuidados=False,
+                visualizar_foto=False,
+                alterar_foto=False,
+                decidir_vaga=False,
+            ).as_dict()
+        return (
+            pre_encontro_services
+            .projetar_capabilities_atendimento_pre_encontro(
+                usuario=usuario,
+                atendimento=atendimento,
+            )
+            .as_dict()
+        )
+
+
+class CapabilitiesContextoPreEncontroSerializer(serializers.Serializer):
+    consultar_operacao = serializers.BooleanField(read_only=True)
+    registrar_checkin = serializers.BooleanField(read_only=True)
+    aumentar_capacidade = serializers.BooleanField(read_only=True)
 
 
 class CheckinPreEncontroCommandSerializer(StrictCommandSerializer):
