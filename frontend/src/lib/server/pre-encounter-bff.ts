@@ -16,6 +16,11 @@ export function isAllowedPreEncounterRequest(
   if (method === "GET") {
     return (
       (tail.length === 1 && (tail[0] === "atendimentos" || tail[0] === "capabilities"))
+      || (
+        tail.length === 2
+        && tail[0] === "lookups"
+        && (tail[1] === "inscricoes" || tail[1] === "pessoas")
+      )
       || (tail.length === 2 && tail[0] === "atendimentos" && tail[1] === "busca")
       || (tail.length === 2 && tail[0] === "atendimentos" && isId(tail[1]))
       || (
@@ -23,6 +28,13 @@ export function isAllowedPreEncounterRequest(
         && tail[0] === "atendimentos"
         && isId(tail[1])
         && (tail[2] === "cuidados" || tail[2] === "foto")
+      )
+      || (
+        tail.length === 4
+        && tail[0] === "atendimentos"
+        && isId(tail[1])
+        && tail[2] === "regularizacao"
+        && (tail[3] === "inscricoes" || tail[3] === "pessoas")
       )
     );
   }

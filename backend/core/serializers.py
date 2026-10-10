@@ -167,6 +167,83 @@ class CapabilitiesContextoPreEncontroSerializer(serializers.Serializer):
     aumentar_capacidade = serializers.BooleanField(read_only=True)
 
 
+def _mascarar_cpf(cpf):
+    if not cpf:
+        return None
+    digitos = ''.join(caractere for caractere in str(cpf) if caractere.isdigit())
+    return f'***.***.***-{digitos[-2:]}' if len(digitos) == 11 else None
+
+
+def _mascarar_telefone(telefone):
+    if not telefone:
+        return None
+    digitos = ''.join(
+        caractere for caractere in str(telefone) if caractere.isdigit()
+    )
+    return f'*******{digitos[-4:]}' if len(digitos) >= 4 else None
+
+
+class InscricaoLookupPreEncontroSerializer(serializers.Serializer):
+    inscricao_id = serializers.IntegerField(source='pk', read_only=True)
+    identificador = serializers.UUIDField(read_only=True)
+    nome = serializers.SerializerMethodField()
+    data_nascimento = serializers.SerializerMethodField()
+    cpf_mascarado = serializers.SerializerMethodField()
+    telefone_mascarado = serializers.SerializerMethodField()
+
+    def _dados(self, inscricao):
+        try:
+            return inscricao.dados_declarados
+        except DadosDeclaradosInscricao.DoesNotExist:
+            return None
+
+    def get_nome(self, inscricao):
+        dados = self._dados(inscricao)
+        if dados is not None:
+            return dados.nome_completo
+        return inscricao.pessoa.nome if inscricao.pessoa_id else ''
+
+    def get_data_nascimento(self, inscricao):
+        dados = self._dados(inscricao)
+        if dados is not None:
+            return dados.data_nascimento
+        return inscricao.pessoa.data_nascimento if inscricao.pessoa_id else None
+
+    def get_cpf_mascarado(self, inscricao):
+        dados = self._dados(inscricao)
+        cpf = dados.cpf if dados is not None else (
+            inscricao.pessoa.cpf if inscricao.pessoa_id else None
+        )
+        return _mascarar_cpf(cpf)
+
+    def get_telefone_mascarado(self, inscricao):
+        dados = self._dados(inscricao)
+        telefone = dados.telefone_whatsapp if dados is not None else None
+        if not telefone and inscricao.pessoa_id:
+            telefones = list(inscricao.pessoa.telefones.all())
+            telefone = telefones[0].numero if telefones else None
+        return _mascarar_telefone(telefone)
+
+
+class PessoaLookupPreEncontroSerializer(serializers.Serializer):
+    pessoa_id = serializers.IntegerField(source='pk', read_only=True)
+    nome = serializers.CharField(read_only=True)
+    data_nascimento = serializers.DateField(read_only=True, allow_null=True)
+    cpf_mascarado = serializers.SerializerMethodField()
+    telefone_mascarado = serializers.SerializerMethodField()
+
+    def get_cpf_mascarado(self, pessoa):
+        return _mascarar_cpf(pessoa.cpf)
+
+    def get_telefone_mascarado(self, pessoa):
+        telefones = list(pessoa.telefones.all())
+        telefone = next(
+            (item.numero for item in telefones if item.whatsapp),
+            telefones[0].numero if telefones else None,
+        )
+        return _mascarar_telefone(telefone)
+
+
 class CheckinPreEncontroCommandSerializer(StrictCommandSerializer):
     inscricao_id = serializers.IntegerField(required=False, allow_null=True)
     pessoa_id = serializers.IntegerField(required=False, allow_null=True)

@@ -14,6 +14,7 @@ from core.models import (
     ConfiguracaoEncontristasEncontro,
     ConviteEncontro,
     DadosCuidadoInscricao,
+    DadosDeclaradosInscricao,
     DecisaoVagaPreEncontro,
     Encontro,
     EquipeEncontro,
@@ -25,6 +26,7 @@ from core.models import (
     RoleEquipeEncontro,
     TemplateEquipeEncontro,
     TemplateRoleEquipe,
+    TelefonePessoa,
     TrabalhoEncontro,
     VinculoUsuarioPessoa,
 )
@@ -135,6 +137,37 @@ class PreEncontroApiTests(TestCase):
             pessoa=pessoa,
         )
         return encontro, atendimento
+
+    def _inscricao_candidata(
+        self,
+        *,
+        encontro=None,
+        nome='Candidata Lookup',
+        cpf='11144477735',
+        telefone='61988887777',
+        pessoa=None,
+    ):
+        inscricao = InscricaoEncontro.objects.create(
+            encontro=encontro or self.encontro,
+            pessoa=pessoa,
+            origem=InscricaoEncontro.Origem.PUBLICA,
+        )
+        DadosDeclaradosInscricao.objects.create(
+            inscricao=inscricao,
+            nome_completo=nome,
+            data_nascimento=date(2010, 1, 1),
+            cpf=cpf,
+            email='lookup@example.test',
+            telefone_whatsapp=telefone,
+            cep='71900-000',
+            logradouro='Rua Lookup',
+            numero='1',
+            bairro='Centro',
+            cidade='Brasília',
+            uf='DF',
+            como_conheceu=DadosDeclaradosInscricao.ComoConheceu.INDICACAO,
+        )
+        return inscricao
 
     def _coordenacao(self, username='coordenacao-api', encontro=None):
         encontro = encontro or self.encontro
@@ -368,6 +401,176 @@ class PreEncontroApiTests(TestCase):
         )
         self.assertEqual(externa.data['count'], 0)
         self.assertNotEqual(outro_encontro.pk, self.encontro.pk)
+
+    def test_lookup_inscricoes_e_contextual_minimo_e_paginado(self):
+        candidata = self._inscricao_candidata()
+        outro_encontro, _ = self._outro_contexto()
+        externa = self._inscricao_candidata(
+            encontro=outro_encontro,
+            nome='Inscrição externa',
+            cpf='12345678909',
+        )
+        for indice in range(10):
+            self._inscricao_candidata(
+                nome=f'Candidata paginada {indice}',
+                cpf=None,
+                telefone=f'6190000{indice:04d}',
+            )
+        self._autenticar(self.fichas)
+
+        primeira = self.client.get(f'{self._base()}/lookups/inscricoes/')
+        segunda = self.client.get(
+            f'{self._base()}/lookups/inscricoes/',
+            {'page': 2},
+        )
+
+        self.assertEqual(primeira.status_code, status.HTTP_200_OK)
+        self.assertEqual(primeira.data['count'], 11)
+        self.assertEqual(len(primeira.data['results']), 10)
+        self.assertEqual(len(segunda.data['results']), 1)
+        itens = primeira.data['results'] + segunda.data['results']
+        ids = {item['inscricao_id'] for item in itens}
+        self.assertIn(candidata.pk, ids)
+        self.assertNotIn(self.inscricao.pk, ids)
+        self.assertNotIn(externa.pk, ids)
+        item = next(item for item in itens if item['inscricao_id'] == candidata.pk)
+        self.assertEqual(str(item['identificador']), str(candidata.identificador))
+        self.assertEqual(item['cpf_mascarado'], '***.***.***-35')
+        self.assertEqual(item['telefone_mascarado'], '*******7777')
+        self.assertNotIn('dados_cuidado', item)
+        self.assertNotIn('endereco', item)
+
+    def test_lookup_inscricoes_busca_nome_cpf_telefone_identificador(self):
+        candidata = self._inscricao_candidata()
+        self._autenticar(self.fichas)
+        for termo in (
+            'Candidata Lookup',
+            '11144477735',
+            '61988887777',
+            str(candidata.identificador),
+        ):
+            resposta = self.client.get(
+                f'{self._base()}/lookups/inscricoes/',
+                {'q': termo},
+            )
+            self.assertEqual(resposta.status_code, status.HTTP_200_OK)
+            self.assertEqual(resposta.data['count'], 1)
+            self.assertEqual(
+                resposta.data['results'][0]['inscricao_id'],
+                candidata.pk,
+            )
+
+    def test_lookup_pessoas_exige_busca_e_retorna_pessoa_canonica(self):
+        pessoa = Pessoa.objects.create(
+            nome='Pessoa Canônica Lookup',
+            data_nascimento=date(1990, 2, 3),
+            cpf='12345678909',
+        )
+        TelefonePessoa.objects.create(
+            pessoa=pessoa,
+            numero='61977776666',
+            whatsapp=True,
+        )
+        self._autenticar(self.fichas)
+        sem_termo = self.client.get(f'{self._base()}/lookups/pessoas/')
+        self.assertEqual(sem_termo.status_code, status.HTTP_400_BAD_REQUEST)
+
+        for termo in ('Canônica', '12345678909', '61977776666'):
+            resposta = self.client.get(
+                f'{self._base()}/lookups/pessoas/',
+                {'q': termo},
+            )
+            self.assertEqual(resposta.status_code, status.HTTP_200_OK)
+            self.assertEqual(resposta.data['count'], 1)
+            item = resposta.data['results'][0]
+            self.assertEqual(item['pessoa_id'], pessoa.pk)
+            self.assertNotIn('alpinista_id', item)
+            self.assertNotIn('foto', item)
+            self.assertNotIn('historico', item)
+
+        atendida = self.client.get(
+            f'{self._base()}/lookups/pessoas/',
+            {'q': self.pessoa.nome},
+        )
+        self.assertEqual(atendida.data['count'], 0)
+
+    def test_lookups_novo_atendimento_reutilizam_capability_checkin(self):
+        for usuario in (
+            self.comunicacao,
+            self.sem_papel,
+            self._coordenacao('coord-sem-lookup-checkin'),
+        ):
+            self._autenticar(usuario)
+            inscricoes = self.client.get(
+                f'{self._base()}/lookups/inscricoes/',
+            )
+            pessoas = self.client.get(
+                f'{self._base()}/lookups/pessoas/',
+                {'q': 'Pessoa'},
+            )
+            self.assertEqual(inscricoes.status_code, status.HTTP_403_FORBIDDEN)
+            self.assertEqual(pessoas.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_lookups_regularizacao_filtram_conflitos_e_usam_atendimento(self):
+        avulso = registrar_checkin_pre_encontro(
+            usuario=self.fichas,
+            pre_encontro=self.pre,
+            nome_informado='Avulso lookup',
+            data_nascimento_informada=date(2010, 1, 1),
+            telefone_informado='61955554444',
+        )
+        candidata = self._inscricao_candidata()
+        pessoa = Pessoa.objects.create(nome='Pessoa regularização lookup')
+        self._autenticar(self.fichas)
+
+        inscricoes = self.client.get(
+            self._atendimento_url(
+                'regularizacao/inscricoes/', atendimento=avulso,
+            ),
+            {'q': 'Candidata Lookup'},
+        )
+        pessoas = self.client.get(
+            self._atendimento_url(
+                'regularizacao/pessoas/', atendimento=avulso,
+            ),
+            {'q': 'Pessoa regularização'},
+        )
+        self.assertEqual(inscricoes.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            inscricoes.data['results'][0]['inscricao_id'],
+            candidata.pk,
+        )
+        self.assertEqual(pessoas.status_code, status.HTTP_200_OK)
+        self.assertEqual(pessoas.data['results'][0]['pessoa_id'], pessoa.pk)
+
+        sem_regularizacao = self.client.get(
+            self._atendimento_url('regularizacao/inscricoes/'),
+        )
+        self.assertEqual(
+            sem_regularizacao.status_code,
+            status.HTTP_403_FORBIDDEN,
+        )
+
+    def test_lookup_regularizacao_nested_mismatch_retorna_404(self):
+        avulso = registrar_checkin_pre_encontro(
+            usuario=self.fichas,
+            pre_encontro=self.pre,
+            nome_informado='Avulso nested lookup',
+            data_nascimento_informada=date(2010, 1, 1),
+            telefone_informado='61944443333',
+        )
+        outro_encontro, _ = self._outro_contexto()
+        self._autenticar(self.fichas)
+        for recurso in ('pessoas', 'inscricoes'):
+            resposta = self.client.get(
+                self._atendimento_url(
+                    f'regularizacao/{recurso}/',
+                    encontro=outro_encontro,
+                    atendimento=avulso,
+                ),
+                {'q': 'Pessoa'},
+            )
+            self.assertEqual(resposta.status_code, status.HTTP_404_NOT_FOUND)
 
     def test_detalhe_minimo_indicadores_e_nested_mismatch(self):
         outro_encontro, _ = self._outro_contexto()

@@ -112,6 +112,8 @@ from .serializers import (
     FotoPreEncontroCommandSerializer,
     CapacidadePreEncontroCommandSerializer,
     CapabilitiesContextoPreEncontroSerializer,
+    InscricaoLookupPreEncontroSerializer,
+    PessoaLookupPreEncontroSerializer,
     )
 from .permissions import (
     AlpinistaQueryPolicy,
@@ -1457,6 +1459,241 @@ class CapabilitiesContextoPreEncontroAPIView(APIView):
         return Response(CapabilitiesContextoPreEncontroSerializer(
             capabilities,
         ).data)
+
+
+def _ids_pessoas_atendidas(pre_encontro, *, excluir_atendimento_id=None):
+    atendimentos = AtendimentoPreEncontro.objects.filter(
+        pre_encontro=pre_encontro,
+    )
+    if excluir_atendimento_id is not None:
+        atendimentos = atendimentos.exclude(pk=excluir_atendimento_id)
+    diretas = atendimentos.exclude(pessoa_id__isnull=True).values_list(
+        'pessoa_id',
+        flat=True,
+    )
+    por_inscricao = atendimentos.exclude(
+        inscricao__pessoa_id__isnull=True,
+    ).values_list('inscricao__pessoa_id', flat=True)
+    return set(diretas).union(por_inscricao)
+
+
+def _inscricoes_lookup_queryset(
+    *,
+    encontro,
+    pre_encontro,
+    atendimento=None,
+):
+    atendimentos_conflitantes = AtendimentoPreEncontro.objects.filter(
+        pre_encontro=pre_encontro,
+        inscricao_id__isnull=False,
+    )
+    if atendimento is not None:
+        atendimentos_conflitantes = atendimentos_conflitantes.exclude(
+            pk=atendimento.pk,
+        )
+    ids_inscricoes_usadas = atendimentos_conflitantes.values_list(
+        'inscricao_id',
+        flat=True,
+    )
+    ids_pessoas_usadas = _ids_pessoas_atendidas(
+        pre_encontro,
+        excluir_atendimento_id=atendimento.pk if atendimento else None,
+    )
+    queryset = (
+        InscricaoEncontro.objects
+        .filter(
+            encontro=encontro,
+            status=InscricaoEncontro.Status.ENVIADA,
+        )
+        .exclude(pk__in=ids_inscricoes_usadas)
+        .exclude(pessoa_id__in=ids_pessoas_usadas)
+        .select_related('pessoa', 'dados_declarados')
+        .prefetch_related('pessoa__telefones')
+        .order_by('enviada_em', 'pk')
+    )
+    if atendimento is not None and atendimento.pessoa_id is not None:
+        queryset = queryset.filter(
+            Q(pessoa_id__isnull=True) | Q(pessoa_id=atendimento.pessoa_id),
+        )
+    return queryset
+
+
+def _pessoas_lookup_queryset(*, pre_encontro, atendimento=None):
+    ids_pessoas_usadas = _ids_pessoas_atendidas(
+        pre_encontro,
+        excluir_atendimento_id=atendimento.pk if atendimento else None,
+    )
+    queryset = (
+        Pessoa.objects
+        .exclude(pk__in=ids_pessoas_usadas)
+        .prefetch_related('telefones')
+        .order_by('nome', 'pk')
+    )
+    if (
+        atendimento is not None
+        and atendimento.inscricao_id is not None
+        and atendimento.inscricao.pessoa_id is not None
+    ):
+        queryset = queryset.filter(pk=atendimento.inscricao.pessoa_id)
+    return queryset
+
+
+def _filtrar_lookup_inscricoes(queryset, termo):
+    if not termo:
+        return queryset
+    digitos = ''.join(caractere for caractere in termo if caractere.isdigit())
+    criterio = (
+        Q(dados_declarados__nome_completo__icontains=termo)
+        | Q(pessoa__nome__icontains=termo)
+        | Q(dados_declarados__telefone_whatsapp__icontains=termo)
+        | Q(identificador__icontains=termo)
+    )
+    if digitos:
+        criterio |= (
+            Q(dados_declarados__cpf__icontains=digitos)
+            | Q(pessoa__cpf__icontains=digitos)
+            | Q(pessoa__telefones__numero__icontains=digitos)
+        )
+    return queryset.filter(criterio).distinct()
+
+
+def _filtrar_lookup_pessoas(queryset, termo):
+    digitos = ''.join(caractere for caractere in termo if caractere.isdigit())
+    criterio = Q(nome__icontains=termo)
+    if digitos:
+        criterio |= (
+            Q(cpf__icontains=digitos)
+            | Q(telefones__numero__icontains=digitos)
+        )
+    return queryset.filter(criterio).distinct()
+
+
+def _resposta_lookup_paginada(request, view, queryset, serializer_class):
+    paginator = PageNumberPagination()
+    pagina = paginator.paginate_queryset(queryset, request, view=view)
+    return paginator.get_paginated_response(
+        serializer_class(pagina, many=True).data,
+    )
+
+
+class InscricoesLookupPreEncontroAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, encontro_id):
+        encontro, pre_encontro = _pre_encontro_do_contexto(encontro_id)
+        capabilities = (
+            pre_encontro_services.projetar_capabilities_contexto_pre_encontro(
+                usuario=request.user,
+                encontro=encontro,
+            )
+        )
+        _exigir_policy(capabilities.registrar_checkin)
+        queryset = _inscricoes_lookup_queryset(
+            encontro=encontro,
+            pre_encontro=pre_encontro,
+        )
+        queryset = _filtrar_lookup_inscricoes(
+            queryset,
+            request.query_params.get('q', '').strip(),
+        )
+        return _resposta_lookup_paginada(
+            request,
+            self,
+            queryset,
+            InscricaoLookupPreEncontroSerializer,
+        )
+
+
+class PessoasLookupPreEncontroAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, encontro_id):
+        encontro, pre_encontro = _pre_encontro_do_contexto(encontro_id)
+        capabilities = (
+            pre_encontro_services.projetar_capabilities_contexto_pre_encontro(
+                usuario=request.user,
+                encontro=encontro,
+            )
+        )
+        _exigir_policy(capabilities.registrar_checkin)
+        termo = request.query_params.get('q', '').strip()
+        if len(termo) < 2:
+            raise ValidationError({'q': ['Informe ao menos 2 caracteres.']})
+        queryset = _filtrar_lookup_pessoas(
+            _pessoas_lookup_queryset(pre_encontro=pre_encontro),
+            termo,
+        )
+        return _resposta_lookup_paginada(
+            request,
+            self,
+            queryset,
+            PessoaLookupPreEncontroSerializer,
+        )
+
+
+class RegularizacaoInscricoesLookupPreEncontroAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, encontro_id, atendimento_id):
+        encontro, atendimento = _atendimento_pre_encontro_do_contexto(
+            encontro_id,
+            atendimento_id,
+        )
+        capabilities = (
+            pre_encontro_services.projetar_capabilities_atendimento_pre_encontro(
+                usuario=request.user,
+                atendimento=atendimento,
+            )
+        )
+        _exigir_policy(capabilities.regularizar)
+        queryset = _inscricoes_lookup_queryset(
+            encontro=encontro,
+            pre_encontro=atendimento.pre_encontro,
+            atendimento=atendimento,
+        )
+        queryset = _filtrar_lookup_inscricoes(
+            queryset,
+            request.query_params.get('q', '').strip(),
+        )
+        return _resposta_lookup_paginada(
+            request,
+            self,
+            queryset,
+            InscricaoLookupPreEncontroSerializer,
+        )
+
+
+class RegularizacaoPessoasLookupPreEncontroAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, encontro_id, atendimento_id):
+        _, atendimento = _atendimento_pre_encontro_do_contexto(
+            encontro_id,
+            atendimento_id,
+        )
+        capabilities = (
+            pre_encontro_services.projetar_capabilities_atendimento_pre_encontro(
+                usuario=request.user,
+                atendimento=atendimento,
+            )
+        )
+        _exigir_policy(capabilities.regularizar)
+        termo = request.query_params.get('q', '').strip()
+        if len(termo) < 2:
+            raise ValidationError({'q': ['Informe ao menos 2 caracteres.']})
+        queryset = _filtrar_lookup_pessoas(
+            _pessoas_lookup_queryset(
+                pre_encontro=atendimento.pre_encontro,
+                atendimento=atendimento,
+            ),
+            termo,
+        )
+        return _resposta_lookup_paginada(
+            request,
+            self,
+            queryset,
+            PessoaLookupPreEncontroSerializer,
+        )
 
 
 class AtendimentoPreEncontroListaAPIView(APIView):

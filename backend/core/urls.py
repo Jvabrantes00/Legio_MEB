@@ -32,6 +32,10 @@ from .views import (
     DecisaoVagaPreEncontroAPIView,
     CapacidadePreEncontroAPIView,
     CapabilitiesContextoPreEncontroAPIView,
+    InscricoesLookupPreEncontroAPIView,
+    PessoasLookupPreEncontroAPIView,
+    RegularizacaoInscricoesLookupPreEncontroAPIView,
+    RegularizacaoPessoasLookupPreEncontroAPIView,
 )
 from .views import dashboard_stats
 from .views import current_user
@@ -128,6 +132,26 @@ router.register(r'entregas-materiais', EntregaMaterialViewSet)
 
 # Exporta as rotas 
 urlpatterns = [
+    path(
+        'encontros/<int:encontro_id>/pre-encontro/lookups/inscricoes/',
+        InscricoesLookupPreEncontroAPIView.as_view(),
+        name='pre-encontro-lookup-inscricoes',
+    ),
+    path(
+        'encontros/<int:encontro_id>/pre-encontro/lookups/pessoas/',
+        PessoasLookupPreEncontroAPIView.as_view(),
+        name='pre-encontro-lookup-pessoas',
+    ),
+    path(
+        'encontros/<int:encontro_id>/pre-encontro/atendimentos/<int:atendimento_id>/regularizacao/inscricoes/',
+        RegularizacaoInscricoesLookupPreEncontroAPIView.as_view(),
+        name='pre-encontro-regularizacao-lookup-inscricoes',
+    ),
+    path(
+        'encontros/<int:encontro_id>/pre-encontro/atendimentos/<int:atendimento_id>/regularizacao/pessoas/',
+        RegularizacaoPessoasLookupPreEncontroAPIView.as_view(),
+        name='pre-encontro-regularizacao-lookup-pessoas',
+    ),
     path(
         'encontros/<int:encontro_id>/pre-encontro/capabilities/',
         CapabilitiesContextoPreEncontroAPIView.as_view(),

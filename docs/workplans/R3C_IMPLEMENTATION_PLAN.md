@@ -1085,7 +1085,15 @@ de vaga no nível do atendimento. Todas as flags reutilizam as policies
 canônicas e incorporam a disponibilidade pelo lifecycle atual; lista e busca
 permanecem leves. O client não precisa conhecer role nem vínculo contextual.
 
-**Validação executada:** 20 testes focados de API backend e 26 casos focados
+O fluxo guiado também recebeu lookups paginados e contextuais para inscrições
+e Pessoas no novo atendimento, além de lookups aninhados no atendimento para
+regularização. Os contratos retornam `inscricao_id` e `pessoa_id` canônicos,
+nunca usam `Alpinista.id` como Pessoa, mascaram CPF/telefone e não expõem
+cuidado ou perfil completo. A busca global de Pessoa não foi aberta: exige
+termo e passa exclusivamente pela rota do Pré. O BFF permite somente os GETs
+com shapes explícitos.
+
+**Validação executada:** 26 testes focados de API backend e 35 casos focados
 da allowlist BFF passaram. `manage.py check`, `compileall`, TypeScript e
 `makemigrations --check --dry-run` também foram executados; nenhuma migration
 foi gerada. A advertência do migration check corresponde apenas à
