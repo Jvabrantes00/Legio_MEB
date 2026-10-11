@@ -160,6 +160,12 @@ export function CalendarEncounterForm({ open, initialDate = "", onClose, onCreat
               <button type="button" onClick={addDay} className="inline-flex items-center gap-2 rounded-lg border border-blue-200 px-3 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-50"><Plus size={16} />Adicionar data</button>
             </fieldset>
 
+            <fieldset>
+              <legend className="text-sm font-bold uppercase tracking-[0.16em] text-slate-500">Pré-Encontro</legend>
+              <label className="mt-3 block text-sm font-semibold text-slate-700">Data do Pré-Encontro (opcional)<input aria-label="Data do Pré-Encontro" type="date" value={values.preEncontroData} onChange={(event) => setValues({ ...values, preEncontroData: event.target.value })} className={`${fieldClass} mt-1 max-w-xs`} /></label>
+              <p className="mt-2 text-sm text-slate-500">Item próprio da Agenda, diferente das Preparatórias e dos dias do Encontro.</p>
+            </fieldset>
+
             <fieldset className="space-y-3">
               <legend className="text-sm font-bold uppercase tracking-[0.16em] text-slate-500">Preparatórias</legend>
               {values.reunioes.length === 0 ? <p className="text-sm text-slate-500">Nenhuma preparatória.</p> : null}

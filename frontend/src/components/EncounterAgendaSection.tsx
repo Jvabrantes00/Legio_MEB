@@ -14,7 +14,7 @@ import {
 } from "../lib/institutional-calendar";
 import { EncounterCategoryIcon } from "./icons/EncounterCategoryIcon";
 
-const GROUPS = ["Dias do Encontro", "Preparação", "Pós-Encontro"] as const;
+const GROUPS = ["Pré-Encontro", "Dias do Encontro", "Preparação", "Pós-Encontro"] as const;
 
 export function AgendaItems({ items }: { items: EncounterAgendaItem[] }) {
   return (

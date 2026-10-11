@@ -10,6 +10,7 @@ from rest_framework.exceptions import PermissionDenied
 
 from core.models import (
     AtendimentoPreEncontro,
+    CalendarioEncontro,
     ConferenciaCuidadoPreEncontro,
     ConfiguracaoEncontristasEncontro,
     ConviteEncontro,
@@ -24,6 +25,7 @@ from core.models import (
 )
 from core.permissions import (
     pode_aumentar_capacidade_pre_encontro,
+    pode_configurar_pre_encontro,
     pode_conferir_cuidados_pre_encontro,
     pode_consultar_cuidados_pre_encontro,
     pode_consultar_operacao_pre_encontro,
@@ -60,15 +62,19 @@ class AptidaoPreEncontro:
 
 @dataclass(frozen=True)
 class CapabilitiesContextoPreEncontro:
+    pre_encontro_configurado: bool
     consultar_operacao: bool
     registrar_checkin: bool
     aumentar_capacidade: bool
+    configurar_pre_encontro: bool
 
     def as_dict(self):
         return {
+            'pre_encontro_configurado': self.pre_encontro_configurado,
             'consultar_operacao': self.consultar_operacao,
             'registrar_checkin': self.registrar_checkin,
             'aumentar_capacidade': self.aumentar_capacidade,
+            'configurar_pre_encontro': self.configurar_pre_encontro,
         }
 
 
@@ -107,25 +113,103 @@ def _lifecycle_permite_operacao(encontro, *, depende_data=False):
 
 
 def projetar_capabilities_contexto_pre_encontro(*, usuario, encontro):
+    pre_encontro_configurado = PreEncontro.objects.filter(
+        encontro=encontro,
+    ).exists()
     mutavel = _lifecycle_permite_operacao(encontro)
     permite_operacao_datada = _lifecycle_permite_operacao(
         encontro,
         depende_data=True,
     )
     return CapabilitiesContextoPreEncontro(
+        pre_encontro_configurado=pre_encontro_configurado,
         consultar_operacao=pode_consultar_operacao_pre_encontro(
             usuario,
             encontro,
         ),
         registrar_checkin=(
+            pre_encontro_configurado
+            and
             permite_operacao_datada
             and pode_operar_checkin_pre_encontro(usuario, encontro)
         ),
         aumentar_capacidade=(
+            pre_encontro_configurado
+            and
             mutavel
             and pode_aumentar_capacidade_pre_encontro(usuario, encontro)
         ),
+        configurar_pre_encontro=(
+            not pre_encontro_configurado
+            and permite_operacao_datada
+            and pode_configurar_pre_encontro(usuario, encontro)
+        ),
     )
+
+
+class PreEncontroJaConfigurado(ValidationError):
+    pass
+
+
+@transaction.atomic
+def configurar_pre_encontro(
+    *,
+    usuario,
+    encontro,
+    horario,
+    local,
+    observacoes='',
+):
+    _exigir_permissao(
+        pode_configurar_pre_encontro(usuario, encontro),
+        'Seu usuário não pode configurar o Pré-Encontro.',
+    )
+    encontro = _bloquear_encontro(encontro)
+    _exigir_lifecycle(encontro, depende_data=True)
+    if PreEncontro.objects.filter(encontro=encontro).exists():
+        raise PreEncontroJaConfigurado(
+            'O Encontro já possui Pré-Encontro configurado.',
+        )
+    calendario = (
+        CalendarioEncontro.objects
+        .filter(encontro=encontro, vigente=True)
+        .only('pre_encontro_data')
+        .first()
+    )
+    if calendario is None or calendario.pre_encontro_data is None:
+        raise ValidationError(
+            'A data do Pré-Encontro ainda não foi definida no Calendário.'
+        )
+    pre_encontro = PreEncontro(
+        encontro=encontro,
+        data=calendario.pre_encontro_data,
+        horario=horario,
+        local=local,
+        observacoes=observacoes,
+    )
+    pre_encontro.full_clean()
+    try:
+        pre_encontro.save()
+    except IntegrityError as error:
+        raise PreEncontroJaConfigurado(
+            'O Encontro já possui Pré-Encontro configurado.',
+        ) from error
+    _auditar(
+        encontro=encontro,
+        usuario=usuario,
+        fato='pre_encontro.configurado',
+        entidade='pre_encontro',
+        objeto_id=pre_encontro.pk,
+        anterior={},
+        novo={
+            'data': pre_encontro.data.isoformat(),
+            'horario': pre_encontro.horario.isoformat(),
+            'local': pre_encontro.local,
+            'observacoes_informadas': bool(pre_encontro.observacoes),
+        },
+        campos={'data', 'horario', 'local', 'observacoes_informadas'},
+    )
+    return pre_encontro
 
 
 def projetar_capabilities_atendimento_pre_encontro(

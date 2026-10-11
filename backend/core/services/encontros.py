@@ -6,7 +6,10 @@ from django.db import transaction
 from django.db.models import Max
 from django.utils import timezone
 
-from core.models import CalendarioEncontro, DiaEncontro, Encontro
+from core.models import CalendarioEncontro, DiaEncontro, Encontro, PreEncontro
+
+
+PRE_ENCONTRO_DATA_NAO_INFORMADA = object()
 
 
 TRANSICOES_STATUS = {
@@ -100,6 +103,25 @@ def _criar_dias(calendario, dias):
     ])
 
 
+def _validar_data_pre_encontro(encontro, data_pre_encontro):
+    if (
+        data_pre_encontro is None
+        and PreEncontro.objects.filter(encontro=encontro).exists()
+    ):
+        raise ValidationError(
+            'A data canônica do Pré-Encontro não pode ser removida enquanto '
+            'o Pré-Encontro estiver configurado.'
+        )
+
+
+def _sincronizar_data_pre_encontro(encontro, data_pre_encontro):
+    if data_pre_encontro is None:
+        return
+    PreEncontro.objects.filter(encontro=encontro).update(
+        data=data_pre_encontro,
+    )
+
+
 def _bloquear_encontro(encontro):
     return Encontro.objects.select_for_update().get(pk=encontro.pk)
 
@@ -167,6 +189,7 @@ def criar_encontro_com_agenda(
     data_exato,
     local,
     dias,
+    pre_encontro_data=None,
 ):
     dias_normalizados = _normalizar_dias(dias)
     if tipo not in Encontro.Tipo.values:
@@ -184,13 +207,19 @@ def criar_encontro_com_agenda(
         encontro=novo_encontro,
         versao=1,
         vigente=True,
+        pre_encontro_data=pre_encontro_data,
     )
     _criar_dias(calendario, dias_normalizados)
     return novo_encontro
 
 
 @transaction.atomic
-def editar_planejamento(encontro, *, dias):
+def editar_planejamento(
+    encontro,
+    *,
+    dias,
+    pre_encontro_data=PRE_ENCONTRO_DATA_NAO_INFORMADA,
+):
     dias_normalizados = _normalizar_dias(dias)
     encontro_bloqueado = _bloquear_encontro(encontro)
     if encontro_bloqueado.status != Encontro.Status.EM_AGENDAMENTO:
@@ -202,6 +231,15 @@ def editar_planejamento(encontro, *, dias):
     if calendario.oficializado_em is not None:
         raise ValidationError(
             'Uma agenda oficial não pode ser editada no próprio calendário.'
+        )
+
+    if pre_encontro_data is not PRE_ENCONTRO_DATA_NAO_INFORMADA:
+        _validar_data_pre_encontro(encontro_bloqueado, pre_encontro_data)
+        calendario.pre_encontro_data = pre_encontro_data
+        calendario.save(update_fields=['pre_encontro_data'])
+        _sincronizar_data_pre_encontro(
+            encontro_bloqueado,
+            pre_encontro_data,
         )
 
     calendario.dias.all().delete()
@@ -263,7 +301,13 @@ def oficializar_agenda(encontro, *, momento=None):
 
 
 @transaction.atomic
-def reprogramar_agenda(encontro, *, dias, momento=None):
+def reprogramar_agenda(
+    encontro,
+    *,
+    dias,
+    pre_encontro_data=PRE_ENCONTRO_DATA_NAO_INFORMADA,
+    momento=None,
+):
     dias_normalizados = _normalizar_dias(dias)
     encontro_bloqueado = _bloquear_encontro(encontro)
     if encontro_bloqueado.status not in {
@@ -293,13 +337,30 @@ def reprogramar_agenda(encontro, *, dias, momento=None):
             'Encontro adiado não pode possuir calendário vigente.'
         )
 
+    if pre_encontro_data is PRE_ENCONTRO_DATA_NAO_INFORMADA:
+        referencia = calendario_anterior or (
+            CalendarioEncontro.objects
+            .filter(encontro=encontro_bloqueado)
+            .order_by('-versao', '-pk')
+            .first()
+        )
+        pre_encontro_data = (
+            referencia.pre_encontro_data if referencia is not None else None
+        )
+    _validar_data_pre_encontro(encontro_bloqueado, pre_encontro_data)
+
     novo_calendario = CalendarioEncontro.objects.create(
         encontro=encontro_bloqueado,
         versao=_proxima_versao(encontro_bloqueado),
         vigente=True,
         oficializado_em=instante,
+        pre_encontro_data=pre_encontro_data,
     )
     _criar_dias(novo_calendario, dias_normalizados)
+    _sincronizar_data_pre_encontro(
+        encontro_bloqueado,
+        pre_encontro_data,
+    )
 
     if encontro_bloqueado.status == Encontro.Status.ADIADO:
         _aplicar_transicao(encontro_bloqueado, Encontro.Status.AGENDADO)
@@ -326,7 +387,12 @@ def adiar_encontro(encontro, *, momento=None):
 
 
 @transaction.atomic
-def iniciar_novo_planejamento(encontro, *, dias):
+def iniciar_novo_planejamento(
+    encontro,
+    *,
+    dias,
+    pre_encontro_data=PRE_ENCONTRO_DATA_NAO_INFORMADA,
+):
     dias_normalizados = _normalizar_dias(dias)
     encontro_bloqueado = _bloquear_encontro(encontro)
     if encontro_bloqueado.status != Encontro.Status.ADIADO:
@@ -341,12 +407,29 @@ def iniciar_novo_planejamento(encontro, *, dias):
             'Encontro adiado não pode possuir calendário vigente.'
         )
 
+    if pre_encontro_data is PRE_ENCONTRO_DATA_NAO_INFORMADA:
+        anterior = (
+            CalendarioEncontro.objects
+            .filter(encontro=encontro_bloqueado)
+            .order_by('-versao', '-pk')
+            .first()
+        )
+        pre_encontro_data = (
+            anterior.pre_encontro_data if anterior is not None else None
+        )
+    _validar_data_pre_encontro(encontro_bloqueado, pre_encontro_data)
+
     calendario = CalendarioEncontro.objects.create(
         encontro=encontro_bloqueado,
         versao=_proxima_versao(encontro_bloqueado),
         vigente=True,
+        pre_encontro_data=pre_encontro_data,
     )
     _criar_dias(calendario, dias_normalizados)
+    _sincronizar_data_pre_encontro(
+        encontro_bloqueado,
+        pre_encontro_data,
+    )
     _aplicar_transicao(
         encontro_bloqueado,
         Encontro.Status.EM_AGENDAMENTO,

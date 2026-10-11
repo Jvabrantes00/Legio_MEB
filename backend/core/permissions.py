@@ -127,6 +127,17 @@ def pode_operar_checkin_pre_encontro(user, encontro):
     )
 
 
+def pode_configurar_pre_encontro(user, encontro):
+    del encontro
+    return bool(
+        _usuario_ativo(user)
+        and (
+            user.is_superuser
+            or user_has_any_role(user, SiaRole.FICHAS, SiaRole.DIRETORIA)
+        )
+    )
+
+
 def pode_regularizar_pre_encontro(user, encontro):
     del encontro
     return pode_resolver_cadastro_inscricao(user)

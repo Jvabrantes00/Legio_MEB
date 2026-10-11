@@ -18,14 +18,16 @@ CONFIRMACAO_PROVISORIA = 'PROVISORIA'
 CONFIRMACAO_OFICIAL = 'OFICIAL'
 CONFIRMACAO_INDETERMINADA = 'INDETERMINADA'
 TIPO_DIA_ENCONTRO = 'DIA_ENCONTRO'
+TIPO_PRE_ENCONTRO = 'PRE_ENCONTRO'
 TIPO_REUNIAO_PREPARATORIA = 'REUNIAO_PREPARATORIA'
 TIPO_AVALIACAO = 'AVALIACAO'
 MAXIMO_DIAS_INTERVALO = 366
 
 _ORDEM_TIPO_AGENDA = {
-    TIPO_DIA_ENCONTRO: 0,
-    TIPO_REUNIAO_PREPARATORIA: 1,
-    TIPO_AVALIACAO: 2,
+    TIPO_PRE_ENCONTRO: 0,
+    TIPO_DIA_ENCONTRO: 1,
+    TIPO_REUNIAO_PREPARATORIA: 2,
+    TIPO_AVALIACAO: 3,
 }
 
 
@@ -126,6 +128,20 @@ def _item_dia(dia, encontro, confirmacao):
     )
 
 
+def _item_pre_encontro(calendario):
+    return ItemAgendaEncontroDTO(
+        id=f'{TIPO_PRE_ENCONTRO}:{calendario.pk}',
+        origem_id=calendario.pk,
+        origem=TIPO_PRE_ENCONTRO,
+        data=calendario.pre_encontro_data,
+        titulo='Pré-Encontro',
+        subtitulo=None,
+        confirmacao=_confirmacao(calendario),
+        publicavel_externamente=False,
+        encontro_id=calendario.encontro_id,
+    )
+
+
 def _item_reuniao(reuniao):
     return ItemAgendaEncontroDTO(
         id=f'{TIPO_REUNIAO_PREPARATORIA}:{reuniao.pk}',
@@ -218,6 +234,28 @@ def _itens_canonicos(inicio, fim):
                 ordem=dia.ordem,
                 rotulo=dia.rotulo,
             ),
+        )
+
+    calendarios_com_pre = (
+        CalendarioEncontro.objects.filter(
+            pre_encontro_data__gte=inicio,
+            pre_encontro_data__lte=fim,
+            vigente=True,
+        )
+        .select_related('encontro')
+        .order_by('pre_encontro_data', 'encontro_id', 'id')
+    )
+    for calendario in calendarios_com_pre:
+        encontro = calendario.encontro
+        if encontro.pk not in agrupados:
+            agrupados[encontro.pk] = _novo_item_encontro(
+                encontro,
+                calendario=calendario,
+            )
+        _adicionar_agenda(
+            agrupados,
+            encontro,
+            _item_pre_encontro(calendario),
         )
 
     reunioes = (
@@ -367,6 +405,12 @@ def detectar_conflitos_para_encontro(encontro_id, datas):
         AvaliacaoEncontro.objects.filter(data__in=datas).exclude(
             encontro_id=encontro_id
         ).values_list('data', 'encontro_id'),
+        CalendarioEncontro.objects.filter(
+            pre_encontro_data__in=datas,
+            vigente=True,
+        ).exclude(encontro_id=encontro_id).values_list(
+            'pre_encontro_data', 'encontro_id'
+        ),
         Encontro.objects.filter(
             calendarios__isnull=True,
             data_referencia__in=datas,
@@ -417,6 +461,8 @@ def consultar_agenda_encontro(encontro):
     itens = []
     if calendario is not None:
         confirmacao = _confirmacao(calendario)
+        if calendario.pre_encontro_data is not None:
+            itens.append(_item_pre_encontro(calendario))
         itens.extend(
             _item_dia(dia, encontro, confirmacao)
             for dia in calendario.dias.order_by('ordem', 'id')

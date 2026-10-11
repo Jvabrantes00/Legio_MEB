@@ -1336,6 +1336,7 @@ class CalendarioEncontro(models.Model):
     versao = models.PositiveIntegerField()
     vigente = models.BooleanField(default=True)
     oficializado_em = models.DateTimeField(null=True, blank=True)
+    pre_encontro_data = models.DateField(null=True, blank=True)
     criado_em = models.DateTimeField(auto_now_add=True)
     substituido_em = models.DateTimeField(null=True, blank=True)
 

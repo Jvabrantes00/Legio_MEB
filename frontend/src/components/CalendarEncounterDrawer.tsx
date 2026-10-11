@@ -160,7 +160,7 @@ export function CalendarEncounterDrawer({ encounter, canManage, onClose, onChang
           </div>
         </div>
 
-        {editing && canManage ? <CalendarEncounterEditor key={agenda.map((item) => `${item.id}:${item.data}:${item.subtitulo ?? ""}`).join("|")} encounter={encounter} agenda={agenda} onChanged={changed} /> : null}
+        {editing && canManage ? <CalendarEncounterEditor key={`${encounter.titulo}:${encounter.status}:${agenda.map((item) => `${item.id}:${item.data}:${item.subtitulo ?? ""}`).join("|")}`} encounter={encounter} agenda={agenda} onChanged={changed} onCancel={() => setEditing(false)} /> : null}
       </aside>
     </div>
   );

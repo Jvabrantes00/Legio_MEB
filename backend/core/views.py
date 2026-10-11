@@ -75,6 +75,7 @@ from .serializers import (
     ReuniaoAgendaCriacaoCommandSerializer,
     ReuniaoAgendaEdicaoCommandSerializer,
     RotuloDiaCalendarioCommandSerializer,
+    SalvamentoEdicaoCalendarioCommandSerializer,
     ResultadoComandoCalendarioSerializer,
     RealizacaoSessaoCommandSerializer,
     RemocaoPalestranteCommandSerializer,
@@ -112,6 +113,7 @@ from .serializers import (
     FotoPreEncontroCommandSerializer,
     CapacidadePreEncontroCommandSerializer,
     CapabilitiesContextoPreEncontroSerializer,
+    ConfiguracaoInicialPreEncontroCommandSerializer,
     InscricaoLookupPreEncontroSerializer,
     PessoaLookupPreEncontroSerializer,
     )
@@ -121,6 +123,7 @@ from .permissions import (
     HasAnySiaRole,
     require_sia_roles,
     pode_aumentar_capacidade_pre_encontro,
+    pode_configurar_pre_encontro,
     pode_conferir_cuidados_pre_encontro,
     pode_consultar_cuidados_pre_encontro,
     pode_consultar_operacao_pre_encontro,
@@ -402,6 +405,7 @@ class CalendarioEncontroCommandViewSet(viewsets.GenericViewSet):
         'reunioes': ReuniaoAgendaCriacaoCommandSerializer,
         'reuniao': ReuniaoAgendaEdicaoCommandSerializer,
         'avaliacao': AvaliacaoAgendaCommandSerializer,
+        'salvar_edicao': SalvamentoEdicaoCalendarioCommandSerializer,
     }
 
     def get_serializer_class(self):
@@ -472,6 +476,9 @@ class CalendarioEncontroCommandViewSet(viewsets.GenericViewSet):
                     dias=serializer.validated_data['dias'],
                     reunioes=serializer.validated_data.get('reunioes', ()),
                     avaliacao=serializer.validated_data.get('avaliacao'),
+                    pre_encontro_data=serializer.validated_data.get(
+                        'pre_encontro_data'
+                    ),
                 )
                 self._auditar(
                     request,
@@ -500,6 +507,38 @@ class CalendarioEncontroCommandViewSet(viewsets.GenericViewSet):
             _erro_de_dominio(error)
         return self._resposta(encontro)
 
+    @action(detail=True, methods=['patch'], url_path='salvar-edicao')
+    def salvar_edicao(self, request, pk=None):
+        encontro = self.get_object()
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            with transaction.atomic():
+                calendario_command_services.salvar_edicao(
+                    encontro,
+                    titulo=serializer.validated_data['encontro'],
+                    dias=serializer.validated_data['dias'],
+                    pre_encontro_data=serializer.validated_data[
+                        'pre_encontro_data'
+                    ],
+                    reunioes=serializer.validated_data['reunioes'],
+                    avaliacao=serializer.validated_data['avaliacao'],
+                    ator=request.user,
+                    **(
+                        {'local': serializer.validated_data['local']}
+                        if 'local' in serializer.validated_data
+                        else {}
+                    ),
+                )
+                self._auditar(
+                    request,
+                    encontro,
+                    'edição agregada do calendário salva',
+                )
+        except django_core_validation_error as error:
+            _erro_de_dominio(error)
+        return self._resposta(encontro)
+
     @action(detail=True, methods=['patch'], url_path='planejamento')
     def planejamento(self, request, pk=None):
         encontro = self.get_object()
@@ -510,6 +549,13 @@ class CalendarioEncontroCommandViewSet(viewsets.GenericViewSet):
                 calendario_command_services.editar_planejamento(
                     encontro,
                     dias=serializer.validated_data['dias'],
+                    **(
+                        {'pre_encontro_data': serializer.validated_data[
+                            'pre_encontro_data'
+                        ]}
+                        if 'pre_encontro_data' in serializer.validated_data
+                        else {}
+                    ),
                 )
                 self._auditar(request, encontro, 'planejamento alterado')
         except django_core_validation_error as error:
@@ -567,6 +613,13 @@ class CalendarioEncontroCommandViewSet(viewsets.GenericViewSet):
                     encontro,
                     dias=serializer.validated_data['dias'],
                     ator=request.user,
+                    **(
+                        {'pre_encontro_data': serializer.validated_data[
+                            'pre_encontro_data'
+                        ]}
+                        if 'pre_encontro_data' in serializer.validated_data
+                        else {}
+                    ),
                 )
                 self._auditar(request, encontro, 'agenda reprogramada')
         except django_core_validation_error as error:
@@ -596,6 +649,13 @@ class CalendarioEncontroCommandViewSet(viewsets.GenericViewSet):
                 calendario_command_services.iniciar_novo_planejamento(
                     encontro,
                     dias=serializer.validated_data['dias'],
+                    **(
+                        {'pre_encontro_data': serializer.validated_data[
+                            'pre_encontro_data'
+                        ]}
+                        if 'pre_encontro_data' in serializer.validated_data
+                        else {}
+                    ),
                 )
                 self._auditar(request, encontro, 'novo planejamento iniciado')
         except django_core_validation_error as error:
@@ -1449,7 +1509,7 @@ class CapabilitiesContextoPreEncontroAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, encontro_id):
-        encontro, _ = _pre_encontro_do_contexto(encontro_id)
+        encontro = get_object_or_404(Encontro, pk=encontro_id)
         capabilities = (
             pre_encontro_services.projetar_capabilities_contexto_pre_encontro(
                 usuario=request.user,
@@ -1459,6 +1519,35 @@ class CapabilitiesContextoPreEncontroAPIView(APIView):
         return Response(CapabilitiesContextoPreEncontroSerializer(
             capabilities,
         ).data)
+
+
+class ConfiguracaoInicialPreEncontroAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, encontro_id):
+        encontro = get_object_or_404(Encontro, pk=encontro_id)
+        _exigir_policy(pode_configurar_pre_encontro(request.user, encontro))
+        comando = ConfiguracaoInicialPreEncontroCommandSerializer(
+            data=request.data,
+        )
+        comando.is_valid(raise_exception=True)
+        try:
+            pre_encontro = pre_encontro_services.configurar_pre_encontro(
+                usuario=request.user,
+                encontro=encontro,
+                **comando.validated_data,
+            )
+        except pre_encontro_services.PreEncontroJaConfigurado as error:
+            return Response(
+                {'detail': error.messages[0]},
+                status=status.HTTP_409_CONFLICT,
+            )
+        except django_core_validation_error as error:
+            _erro_de_dominio(error)
+        return Response(
+            {'id': pre_encontro.pk},
+            status=status.HTTP_201_CREATED,
+        )
 
 
 def _ids_pessoas_atendidas(pre_encontro, *, excluir_atendimento_id=None):

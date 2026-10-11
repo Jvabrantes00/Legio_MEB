@@ -1,6 +1,6 @@
 export type CalendarView = "month" | "year";
 export type CalendarFilter = "all" | "encounter";
-export type AgendaOrigin = "DIA_ENCONTRO" | "REUNIAO_PREPARATORIA" | "AVALIACAO";
+export type AgendaOrigin = "DIA_ENCONTRO" | "PRE_ENCONTRO" | "REUNIAO_PREPARATORIA" | "AVALIACAO";
 export type AgendaConfirmation = "PROVISORIA" | "OFICIAL" | "INDETERMINADA" | null;
 
 export interface CalendarConflict {
@@ -96,6 +96,7 @@ export interface EncounterAgendaFormValues {
   tipo: "Escalada" | "AVC" | "Esppa" | "Acampamento";
   local: string;
   dias: EncounterDayInput[];
+  preEncontroData: string;
   reunioes: PreparatoryMeetingInput[];
   avaliacaoData: string;
 }
@@ -202,7 +203,8 @@ export function occurrencesByDate(items: CalendarOccurrence[]): Map<string, Cale
   return grouped;
 }
 
-export function agendaGroup(origin: AgendaOrigin): "Dias do Encontro" | "Preparação" | "Pós-Encontro" {
+export function agendaGroup(origin: AgendaOrigin): "Pré-Encontro" | "Dias do Encontro" | "Preparação" | "Pós-Encontro" {
+  if (origin === "PRE_ENCONTRO") return "Pré-Encontro";
   if (origin === "DIA_ENCONTRO") return "Dias do Encontro";
   if (origin === "REUNIAO_PREPARATORIA") return "Preparação";
   return "Pós-Encontro";
@@ -227,6 +229,7 @@ export function buildEncounterAgendaPayload(values: EncounterAgendaFormValues) {
       data: item.data,
       rotulo: item.rotulo.trim(),
     })),
+    ...(values.preEncontroData ? { pre_encontro_data: values.preEncontroData } : {}),
     reunioes: values.reunioes.map((item, index) => ({
       ordem: index + 1,
       data: item.data,
@@ -244,6 +247,7 @@ export function emptyEncounterAgendaForm(initialDate = ""): EncounterAgendaFormV
     tipo: "Escalada",
     local: "Nova Betânia",
     dias: [{ data: initialDate, rotulo: initialDate ? ESCALADA_DAY_SUGGESTIONS[0] : "" }],
+    preEncontroData: "",
     reunioes: [],
     avaliacaoData: "",
   };

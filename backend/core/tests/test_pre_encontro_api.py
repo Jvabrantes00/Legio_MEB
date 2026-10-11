@@ -11,6 +11,7 @@ from rest_framework.test import APIClient
 
 from core.models import (
     AtendimentoPreEncontro,
+    CalendarioEncontro,
     ConfiguracaoEncontristasEncontro,
     ConviteEncontro,
     DadosCuidadoInscricao,
@@ -29,10 +30,13 @@ from core.models import (
     TelefonePessoa,
     TrabalhoEncontro,
     VinculoUsuarioPessoa,
+    EventoAuditoriaEncontro,
+    ReuniaoPreparatoriaEncontro,
 )
 from core.roles import SiaRole
 from core.permissions import (
     pode_aumentar_capacidade_pre_encontro,
+    pode_configurar_pre_encontro,
     pode_consultar_operacao_pre_encontro,
     pode_operar_checkin_pre_encontro,
     pode_registrar_pagamento_pre_encontro,
@@ -108,6 +112,33 @@ class PreEncontroApiTests(TestCase):
 
     def _capabilities_url(self, encontro=None):
         return f'{self._base(encontro)}/capabilities/'
+
+    def _configurar_url(self, encontro=None):
+        return f'{self._base(encontro)}/configurar/'
+
+    def _novo_sem_pre(
+        self,
+        *,
+        estado=Encontro.Status.EM_PREPARACAO,
+        data_pre=date(2030, 1, 15),
+    ):
+        encontro = make_encontro(status=estado)
+        if data_pre is not None:
+            CalendarioEncontro.objects.create(
+                encontro=encontro,
+                versao=1,
+                vigente=True,
+                pre_encontro_data=data_pre,
+            )
+        configuracao = ConfiguracaoEncontristasEncontro.objects.create(
+            encontro=encontro,
+            capacidade=8,
+            idade_minima=15,
+            idade_maxima=17,
+            inscricoes_abrem_em=timezone.now() - timedelta(days=1),
+            inscricoes_encerram_em=timezone.now() + timedelta(days=1),
+        )
+        return encontro, configuracao
 
     def _foto(self, nome='foto.png'):
         arquivo = BytesIO()
@@ -248,9 +279,11 @@ class PreEncontroApiTests(TestCase):
             resposta = self.client.get(self._capabilities_url())
             self.assertEqual(resposta.status_code, status.HTTP_200_OK)
             self.assertEqual(resposta.data, {
+                'pre_encontro_configurado': True,
                 'consultar_operacao': consultar,
                 'registrar_checkin': checkin,
                 'aumentar_capacidade': capacidade,
+                'configurar_pre_encontro': False,
             })
             self.assertEqual(
                 resposta.data['consultar_operacao'],
@@ -305,9 +338,11 @@ class PreEncontroApiTests(TestCase):
         )
         self.assertEqual(contexto.status_code, status.HTTP_200_OK)
         self.assertEqual(contexto.data, {
+            'pre_encontro_configurado': True,
             'consultar_operacao': False,
             'registrar_checkin': False,
             'aumentar_capacidade': False,
+            'configurar_pre_encontro': False,
         })
         self.assertEqual(detalhe.status_code, status.HTTP_403_FORBIDDEN)
         self.assertEqual(mismatch.status_code, status.HTTP_404_NOT_FOUND)
@@ -374,6 +409,176 @@ class PreEncontroApiTests(TestCase):
         self._autenticar(superuser)
         resposta = self.client.get(self._atendimento_url(atendimento=segundo))
         self.assertTrue(resposta.data['capabilities']['decidir_vaga'])
+
+    def test_capabilities_sem_pre_retorna_200_sem_criar_e_projeta_configuracao(self):
+        encontro, _ = self._novo_sem_pre()
+        coordenacao = self._coordenacao('coord-sem-configurar', encontro=encontro)
+        superuser = User.objects.create_superuser('super-configurar')
+        casos = (
+            (self.fichas, True, True),
+            (self.diretoria, True, True),
+            (self.comunicacao, True, False),
+            (coordenacao, True, False),
+            (self.suporte, True, False),
+            (self.sem_papel, False, False),
+            (superuser, True, True),
+        )
+        for usuario, consultar, configurar in casos:
+            with self.subTest(usuario=usuario.username):
+                self._autenticar(usuario)
+                resposta = self.client.get(self._capabilities_url(encontro))
+                self.assertEqual(resposta.status_code, status.HTTP_200_OK)
+                self.assertEqual(resposta.data, {
+                    'pre_encontro_configurado': False,
+                    'consultar_operacao': consultar,
+                    'registrar_checkin': False,
+                    'aumentar_capacidade': False,
+                    'configurar_pre_encontro': configurar,
+                })
+                self.assertEqual(
+                    configurar,
+                    pode_configurar_pre_encontro(usuario, encontro),
+                )
+                self.assertFalse(
+                    PreEncontro.objects.filter(encontro=encontro).exists(),
+                )
+
+    def test_capabilities_de_encontro_inexistente_permanece_404(self):
+        self._autenticar(self.fichas)
+        resposta = self.client.get(
+            '/api/encontros/999999/pre-encontro/capabilities/',
+        )
+        self.assertEqual(resposta.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_fichas_e_diretoria_configuram_pre_sem_efeitos_colaterais(self):
+        for usuario in (self.fichas, self.diretoria):
+            encontro, configuracao = self._novo_sem_pre()
+            capacidade_anterior = configuracao.capacidade
+            self._autenticar(usuario)
+            resposta = self.client.post(self._configurar_url(encontro), {
+                'horario': '14:30',
+                'local': 'Local do Pré',
+                'observacoes': 'Organização inicial',
+            }, format='json')
+            self.assertEqual(resposta.status_code, status.HTTP_201_CREATED)
+            pre = PreEncontro.objects.get(encontro=encontro)
+            configuracao.refresh_from_db()
+            self.assertEqual(pre.local, 'Local do Pré')
+            self.assertEqual(pre.data, date(2030, 1, 15))
+            self.assertEqual(pre.horario, time(14, 30))
+            self.assertEqual(pre.observacoes, 'Organização inicial')
+            self.assertEqual(configuracao.capacidade, capacidade_anterior)
+            self.assertFalse(pre.atendimentos.exists())
+            self.assertTrue(EventoAuditoriaEncontro.objects.filter(
+                encontro=encontro,
+                ator=usuario,
+                fato='pre_encontro.configurado',
+                entidade='pre_encontro',
+                objeto_id=str(pre.pk),
+            ).exists())
+            capabilities = self.client.get(
+                self._capabilities_url(encontro),
+            ).data
+            self.assertTrue(capabilities['pre_encontro_configurado'])
+            self.assertFalse(capabilities['configurar_pre_encontro'])
+            self.assertTrue(capabilities['registrar_checkin'])
+
+    def test_configuracao_nega_nao_autorizados_e_segundo_create_conflita(self):
+        encontro, _ = self._novo_sem_pre()
+        payload = {
+            'horario': '14:30',
+            'local': 'Local do Pré',
+        }
+        coordenacao = self._coordenacao('coord-sem-command', encontro=encontro)
+        for usuario in (
+            self.suporte,
+            self.comunicacao,
+            self.sem_papel,
+            coordenacao,
+        ):
+            self._autenticar(usuario)
+            resposta = self.client.post(
+                self._configurar_url(encontro), payload, format='json',
+            )
+            self.assertEqual(resposta.status_code, status.HTTP_403_FORBIDDEN)
+        self._autenticar(self.fichas)
+        primeira = self.client.post(
+            self._configurar_url(encontro), payload, format='json',
+        )
+        segunda = self.client.post(
+            self._configurar_url(encontro), payload, format='json',
+        )
+        self.assertEqual(primeira.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(segunda.status_code, status.HTTP_409_CONFLICT)
+        self.assertEqual(PreEncontro.objects.filter(encontro=encontro).count(), 1)
+
+    def test_lifecycle_bloqueia_configuracao_datada(self):
+        payload = {
+            'horario': '14:30',
+            'local': 'Local do Pré',
+        }
+        for estado in (
+            Encontro.Status.CANCELADO,
+            Encontro.Status.FINALIZADO,
+            Encontro.Status.ADIADO,
+        ):
+            encontro, _ = self._novo_sem_pre(estado=estado)
+            self._autenticar(self.fichas)
+            capabilities = self.client.get(
+                self._capabilities_url(encontro),
+            ).data
+            self.assertFalse(capabilities['configurar_pre_encontro'])
+            resposta = self.client.post(
+                self._configurar_url(encontro), payload, format='json',
+            )
+            self.assertEqual(resposta.status_code, status.HTTP_400_BAD_REQUEST)
+            self.assertFalse(PreEncontro.objects.filter(encontro=encontro).exists())
+
+    def test_configuracao_exige_item_canonico_sem_fallbacks(self):
+        encontro, _ = self._novo_sem_pre(data_pre=None)
+        calendario = CalendarioEncontro.objects.create(
+            encontro=encontro,
+            versao=1,
+            vigente=True,
+        )
+        calendario.dias.create(
+            ordem=1,
+            data=date(2030, 1, 20),
+            rotulo='Pré-Encontro escrito livremente',
+        )
+        ReuniaoPreparatoriaEncontro.objects.create(
+            encontro=encontro,
+            ordem=1,
+            data=date(2030, 1, 10),
+            horario=time(19),
+            local='Sede',
+        )
+        encontro.data_referencia = date(2030, 1, 5)
+        encontro.save(update_fields=['data_referencia'])
+        self._autenticar(self.fichas)
+
+        resposta = self.client.post(self._configurar_url(encontro), {
+            'horario': '14:30',
+            'local': 'Local do Pré',
+        }, format='json')
+
+        self.assertEqual(resposta.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('ainda não foi definida no Calendário', repr(resposta.data))
+        self.assertFalse(PreEncontro.objects.filter(encontro=encontro).exists())
+
+    def test_configuracao_rejeita_data_manual(self):
+        encontro, _ = self._novo_sem_pre(data_pre=date(2030, 2, 10))
+        self._autenticar(self.fichas)
+
+        resposta = self.client.post(self._configurar_url(encontro), {
+            'data': '2040-12-31',
+            'horario': '14:30',
+            'local': 'Local do Pré',
+        }, format='json')
+
+        self.assertEqual(resposta.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('data', repr(resposta.data['campos_extras']))
+        self.assertFalse(PreEncontro.objects.filter(encontro=encontro).exists())
 
     def test_busca_por_nome_cpf_telefone_e_inscricao_e_escopada(self):
         outro_encontro, outro_atendimento = self._outro_contexto()

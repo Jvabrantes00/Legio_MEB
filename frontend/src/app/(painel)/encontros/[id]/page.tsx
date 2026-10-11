@@ -3,14 +3,19 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import toast from "react-hot-toast";
-import { ArrowLeft, Users, Briefcase } from "lucide-react";
+import { ArrowLeft, Users, Briefcase, ShieldCheck } from "lucide-react";
 import { useParams } from "next/navigation";
 import { siaFetch } from "../../../../lib/sia-api";
 import { useSiaSession } from "../../../../components/SiaSessionProvider";
 import { EncontroSummaryPanel } from "../../../../components/EncontroSummaryPanel";
 import { ConfirmedAlpinistasTable } from "../../../../components/ConfirmedAlpinistasTable";
 import { EncounterAgendaSection } from "../../../../components/EncounterAgendaSection";
+import { PreEncounterCheckin } from "../../../../components/PreEncounterCheckin";
 import { canManageEncontros, canViewEncontros } from "../../../../lib/sia-capabilities";
+import {
+    parsePreEncounterContextCapabilities,
+    type PreEncounterContextCapabilities,
+} from "../../../../lib/pre-encounter-contract";
 import {
     confirmedAlpinistas, isEncontroFull,
     type AlpinistaFull, type ConfirmedAlpinista, type EncounterParticipation,
@@ -28,18 +33,62 @@ import { errorMessage, readApiError } from "../../../../lib/form-api-error";
 
 export default function DetalhesEncontro() {
     const { session, loading, error } = useSiaSession();
+    const params = useParams<{ id: string }>();
+    const [preCapabilities, setPreCapabilities] = useState<PreEncounterContextCapabilities | null>(null);
+    const [preCapabilitiesLoading, setPreCapabilitiesLoading] = useState(true);
+    const [preCapabilitiesError, setPreCapabilitiesError] = useState<string | null>(null);
+
+    const loadPreCapabilities = useCallback(async () => {
+        setPreCapabilitiesLoading(true);
+        setPreCapabilitiesError(null);
+        try {
+            const response = await siaFetch(`/encontros/${params.id}/pre-encontro/capabilities/`);
+            if (!response.ok) throw new Error(await readApiError(response, "Não foi possível carregar o acesso ao Pré-Encontro."));
+            setPreCapabilities(parsePreEncounterContextCapabilities(await response.json()));
+        } catch (caught: unknown) {
+            setPreCapabilities(null);
+            setPreCapabilitiesError(errorMessage(caught, "Não foi possível carregar o acesso ao Pré-Encontro."));
+        } finally {
+            setPreCapabilitiesLoading(false);
+        }
+    }, [params.id]);
+
+    useEffect(() => {
+        const timer = window.setTimeout(() => {
+            if (!loading && session && params.id) void loadPreCapabilities();
+            else if (!loading) setPreCapabilitiesLoading(false);
+        }, 0);
+        return () => window.clearTimeout(timer);
+    }, [loadPreCapabilities, loading, params.id, session]);
+
     if (loading) return <p className="p-10 text-gray-500">Carregando sessão...</p>;
     if (error) return <p className="p-10 text-red-600">{error}</p>;
-    if (!canViewEncontros(session)) return <p className="p-10 text-gray-600">Seu papel não permite acessar Encontros.</p>;
-    return canManageEncontros(session) ? <ManagedEncounterDetails /> : <EncounterSummaryDetails />;
+    if (preCapabilitiesLoading) return <p className="p-10 text-gray-500">Carregando acesso ao Encontro...</p>;
+    if (
+        !canViewEncontros(session)
+        && !preCapabilities?.consultar_operacao
+        && !preCapabilities?.configurar_pre_encontro
+        && !preCapabilitiesError
+    ) return <p className="p-10 text-gray-600">Acesso ao Encontro indisponível.</p>;
+    if (!canViewEncontros(session)) return <div className="space-y-4"><Link href="/encontros" className="text-escalada-azul hover:underline">← Voltar aos encontros</Link><PreEncounterCheckin encontroId={params.id} initialCapabilities={preCapabilities} capabilitiesError={preCapabilitiesError} onReloadCapabilities={loadPreCapabilities} /></div>;
+    return canManageEncontros(session)
+        ? <ManagedEncounterDetails preCapabilities={preCapabilities} preCapabilitiesError={preCapabilitiesError} onReloadPreCapabilities={loadPreCapabilities} />
+        : <EncounterSummaryDetails preCapabilities={preCapabilities} preCapabilitiesError={preCapabilitiesError} onReloadPreCapabilities={loadPreCapabilities} />;
 }
 
-function EncounterSummaryDetails() {
+type PreEncounterAccessProps = {
+    preCapabilities: PreEncounterContextCapabilities | null;
+    preCapabilitiesError: string | null;
+    onReloadPreCapabilities: () => Promise<void>;
+};
+
+function EncounterSummaryDetails({ preCapabilities, preCapabilitiesError, onReloadPreCapabilities }: PreEncounterAccessProps) {
     const params = useParams<{ id: string }>();
     const encontroId = params.id;
     const [encontro, setEncontro] = useState<EncontroSummary | null>(null);
     const [loading, setLoading] = useState(true);
     const [loadError, setLoadError] = useState<string | null>(null);
+    const [section, setSection] = useState<"resumo" | "pre-encontro">("resumo");
 
     useEffect(() => {
         const controller = new AbortController();
@@ -66,19 +115,19 @@ function EncounterSummaryDetails() {
     if (loadError || !encontro) return <p className="p-10 text-red-600">{loadError || "Encontro indisponível."}</p>;
     return <div className="space-y-4">
         <Link href="/encontros" className="text-escalada-azul hover:underline">← Voltar aos encontros</Link>
-        <EncontroSummaryPanel encontro={encontro} />
-        <EncounterAgendaSection encontroId={encontroId} />
+        {(preCapabilities?.consultar_operacao || preCapabilities?.configurar_pre_encontro || preCapabilitiesError) && <div className="flex rounded-xl border bg-white p-1"><button onClick={() => setSection("resumo")} className={`flex-1 rounded-lg px-3 py-2 font-semibold ${section === "resumo" ? "bg-escalada-azul text-white" : "text-gray-600"}`}>Resumo</button><button onClick={() => setSection("pre-encontro")} className={`flex-1 rounded-lg px-3 py-2 font-semibold ${section === "pre-encontro" ? "bg-escalada-azul text-white" : "text-gray-600"}`}>Pré-Encontro</button></div>}
+        {section === "resumo" ? <><EncontroSummaryPanel encontro={encontro} /><EncounterAgendaSection encontroId={encontroId} /></> : <PreEncounterCheckin encontroId={encontroId} initialCapabilities={preCapabilities} capabilitiesError={preCapabilitiesError} onReloadCapabilities={onReloadPreCapabilities} />}
     </div>;
 }
 
-function ManagedEncounterDetails() {
+function ManagedEncounterDetails({ preCapabilities, preCapabilitiesError, onReloadPreCapabilities }: PreEncounterAccessProps) {
     const params = useParams<{ id: string }>();
     const encontroId = params.id;
 
     const [encontro, setEncontro] = useState<EncontroFull | null>(null);
     const [carregando, setCarregando] = useState(true);
 
-    const [abaAtiva, setAbaAtiva] = useState<"equipes" | "encontristas">("encontristas");
+    const [abaAtiva, setAbaAtiva] = useState<"equipes" | "encontristas" | "pre-encontro">("encontristas");
 
     const [modoLista, setModoLista] = useState<"pendentes" | "confirmados">("pendentes");
 
@@ -424,9 +473,17 @@ function ManagedEncounterDetails() {
                     <Briefcase size={18} /> Equipes de Trabalho
                 </button>
 
+                {(preCapabilities?.consultar_operacao || preCapabilities?.configurar_pre_encontro || preCapabilitiesError) && <button
+                    onClick={() => setAbaAtiva("pre-encontro")}
+                    className={`flex-1 py-4 flex items-center justify-center gap-2 border-l border-gray-100 font-semibold transition-colors ${abaAtiva === "pre-encontro" ? "bg-escalada-azul text-white" : "text-gray-600 hover:bg-gray-50"}`}
+                >
+                    <ShieldCheck size={18} /> Pré-Encontro
+                </button>}
+
             </div>
 
-            <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 min-h-[400px]">
+            {abaAtiva === "pre-encontro" && <PreEncounterCheckin encontroId={encontroId} initialCapabilities={preCapabilities} capabilitiesError={preCapabilitiesError} onReloadCapabilities={onReloadPreCapabilities} />}
+            {abaAtiva !== "pre-encontro" && <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 min-h-[400px]">
                 {abaAtiva === "equipes" && (
                     <div className="animate-in fade-in duration-300 relative">
                         
@@ -709,6 +766,6 @@ function ManagedEncounterDetails() {
                         )}
                     </div>
                 )}
-            </div>
+            </div>}
         </div>
     )}

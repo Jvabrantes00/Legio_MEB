@@ -92,6 +92,9 @@ comandos explícitos sobre o domínio canônico de Encontros.
 
 ### Pré-Encontro operacional
 
+- A configuração inicial do `PreEncontro` é um command explícito de Fichas ou
+  Diretoria; o superuser permanece bypass técnico. Suporte empresarial,
+  Comunicação e Coordenação Geral contextual não recebem essa ação.
 - Suporte, Diretoria e Fichas consultam a lista, a busca e o detalhe
   operacional. A Coordenação Geral alocada consulta somente no próprio
   Encontro; Comunicação recebe a mesma projeção mínima para localizar o

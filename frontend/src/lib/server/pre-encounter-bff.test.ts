@@ -20,6 +20,7 @@ describe("allowlist BFF do Pré-Encontro", () => {
     ["GET", [...base, "atendimentos", "busca"]],
     ["GET", [...base, "atendimentos", "34"]],
     ["POST", [...base, "check-in"]],
+    ["POST", [...base, "configurar"]],
     ["POST", [...base, "atendimentos", "34", "regularizar"]],
     ["PUT", [...base, "atendimentos", "34", "pagamento"]],
     ["GET", [...base, "atendimentos", "34", "cuidados"]],
@@ -61,11 +62,26 @@ describe("allowlist BFF do Pré-Encontro", () => {
     },
   );
 
+  it.each(["GET", "PUT", "PATCH", "DELETE"])(
+    "nega %s no command de configuração inicial",
+    (method) => {
+      const path = [...base, "configurar"];
+      expect(isAllowedPreEncounterRequest(method, path)).toBe(false);
+      expect(() => validateProxyPath(path, new URLSearchParams(), method)).toThrow();
+    },
+  );
+
+  it("nega segmentos extras no command de configuração", () => {
+    expect(isAllowedPreEncounterRequest("POST", [...base, "configurar", "extra"])).toBe(false);
+  });
+
   it("valida os dois contratos de capabilities sem expor identidade", () => {
     const contexto = parsePreEncounterContextCapabilities({
+      pre_encontro_configurado: false,
       consultar_operacao: true,
       registrar_checkin: false,
       aumentar_capacidade: false,
+      configurar_pre_encontro: true,
     });
     const atendimento = parsePreEncounterItemCapabilities({
       regularizar: true,
@@ -78,15 +94,18 @@ describe("allowlist BFF do Pré-Encontro", () => {
     });
 
     expect(contexto.consultar_operacao).toBe(true);
+    expect(contexto.configurar_pre_encontro).toBe(true);
     expect(atendimento.alterar_foto).toBe(true);
     expect("roles" in contexto).toBe(false);
   });
 
   it("rejeita capability ausente ou não booleana", () => {
     expect(() => parsePreEncounterContextCapabilities({
+      pre_encontro_configurado: false,
       consultar_operacao: true,
       registrar_checkin: "sim",
       aumentar_capacidade: false,
+      configurar_pre_encontro: true,
     })).toThrow();
     expect(() => parsePreEncounterItemCapabilities({})).toThrow();
   });

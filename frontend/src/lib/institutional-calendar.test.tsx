@@ -188,11 +188,13 @@ describe("contratos e apresentação do Calendário", () => {
     expect(buildEncounterAgendaPayload({
       encontro: " Escalada 2027 ", tipo: "Escalada", local: " Sede ",
       dias: [{ data: "2027-03-21", rotulo: " Pré-Escalada " }, { data: "2027-03-25", rotulo: "Sexta-feira" }],
+      preEncontroData: "2027-03-18",
       reunioes: [{ data: "2027-03-17", horario: "19:30", local: " Sede ", complemento: " Missa de Entrega " }],
       avaliacaoData: "2027-03-30",
     })).toEqual({
       encontro: "Escalada 2027", tipo: "Escalada", local: "Sede",
       dias: [{ ordem: 1, data: "2027-03-21", rotulo: "Pré-Escalada" }, { ordem: 2, data: "2027-03-25", rotulo: "Sexta-feira" }],
+      pre_encontro_data: "2027-03-18",
       reunioes: [{ ordem: 1, data: "2027-03-17", horario: "19:30", local: "Sede", complemento: "Missa de Entrega" }],
       avaliacao: { data: "2027-03-30" },
     });
@@ -245,14 +247,16 @@ describe("contratos e apresentação do Calendário", () => {
     expect(html).toContain("ring-blue-100");
   });
 
-  it("Agenda agrupa dias, preparação e pós-Encontro sem dados operacionais", () => {
+  it("Agenda distingue Pré-Encontro, dias, preparação e pós-Encontro", () => {
     const items = [
       occurrence,
+      { ...occurrence, id: "PRE_ENCONTRO:1", origem: "PRE_ENCONTRO" as const, titulo: "Pré-Encontro", subtitulo: null, publicavel_externamente: false },
       { ...occurrence, id: "REUNIAO_PREPARATORIA:2", origem: "REUNIAO_PREPARATORIA" as const, titulo: "3ª Reunião", subtitulo: "Missa de Entrega", publicavel_externamente: false },
       { ...occurrence, id: "AVALIACAO:3", origem: "AVALIACAO" as const, titulo: "Avaliação", subtitulo: null, publicavel_externamente: false },
     ];
     const html = renderToStaticMarkup(<AgendaItems items={items} />);
-    expect(html).toMatch(/Dias do Encontro.*Preparação.*Pós-Encontro/);
+    expect(html).toMatch(/Pré-Encontro.*Dias do Encontro.*Preparação.*Pós-Encontro/);
+    expect(html).toContain("Pré-Encontro");
     expect(html).toContain("3ª Preparatória");
     expect(html).not.toContain("3ª Reunião");
     expect(html).toContain("Missa de Entrega");
@@ -335,6 +339,8 @@ describe("contratos e apresentação do Calendário", () => {
     expect(html).toContain('value="2027-03-21"');
     expect(html).toContain('value="Pré-Escalada"');
     expect(html).toContain("Adicionar data");
+    expect(html).toContain("Data do Pré-Encontro");
+    expect(html).toContain("diferente das Preparatórias");
     expect(html).toContain("Adicionar preparatória");
     expect(html).toContain("Avaliação opcional");
   });

@@ -1101,6 +1101,9 @@ indisponibilidade esperada do PostgreSQL local dentro da sandbox.
 
 ### R.3I.20 — Frontend de check-in do Pré-Encontro
 
+**Estado:** implementada em 11 de outubro de 2026; validações focadas
+aprovadas.
+
 **Prioridade:** NECESSÁRIO PARA MVP.
 
 **Objetivo:** criar tela operacional de busca, presença, regularização,
@@ -1134,6 +1137,61 @@ recalcular autorização ou aptidão no client.
 
 **Riscos:** UI esconder conflito sem impedir comando ou exibir cuidado sem
 capability.
+
+**Implementação:** o workspace canônico do Encontro recebeu a aba
+`Pré-Encontro`, com lista paginada, busca, filtros e painel lateral no desktop;
+em telas menores, o mesmo painel ocupa a tela e permite voltar sem perder o
+estado da lista. O novo atendimento usa fluxo guiado e explícito entre
+inscrição, Pessoa já cadastrada e avulso. A UI não consulta papéis: entrada,
+ações e seções são compostas exclusivamente pelas capabilities contextuais e
+por atendimento projetadas pelo backend.
+
+A aptidão e a situação de vaga são somente apresentadas. Disputas aguardando
+Diretoria recebem destaque sem posição, ordem ou prioridade inventada. O
+pagamento usa comandos compactos; cuidados são buscados somente sob demanda e
+fora do contrato comum; a experiência restrita de Comunicação permanece
+limitada a lista, identificação e foto quando essas capabilities forem
+fornecidas. Foto privada usa o endpoint autenticado do BFF, upload multipart e
+uma etapa intermediária de seleção/confirmação. Lista nenhuma carrega conteúdo
+de cuidado nem binários completos.
+
+**Melhoria prioritária futura:** crop/enquadramento de foto antes do envio no
+credenciamento. A etapa foi explicitamente postergada; a seleção de arquivo já
+está desacoplada da confirmação do upload para permitir sua inclusão sem
+reescrever a feature.
+
+**Validação executada:** 21 testes focados de contrato e componente passaram,
+além de TypeScript, ESLint e `git diff --check`. O lint preserva somente os dois
+warnings conhecidos de imagens protegidas anteriores. Nenhum backend,
+migration, build ou suíte completa foi executado.
+
+**Próximo bloco:** R.3I.21 — Fluxo protegido de foto.
+
+**Correção pós-smoke test:** `PreEncontro` permanece relação zero-ou-um e não é
+criado automaticamente junto do Encontro. A configuração inicial passou a ser
+um command explícito de Fichas ou Diretoria, com lifecycle datado, auditoria e
+defesa contra duplo envio; superuser continua apenas como bypass técnico. A
+projeção contextual agora parte do Encontro e responde mesmo antes da
+existência do Pré, distinguindo `pre_encontro_configurado` e
+`configurar_pre_encontro` sem criar dados em GET.
+
+O workspace exibe um empty state com formulário curto para quem recebe a nova
+capability e não dispara lista, check-in ou lookups antes da configuração. A
+UI também separa capability negada de falha real ao carregá-la, exibindo erro
+contextual e nova tentativa em vez de esconder silenciosamente a aba.
+
+**Fundação canônica da data:** a Agenda recebeu a origem própria
+`PRE_ENCONTRO`, distinta de `DIA_ENCONTRO`, `REUNIAO_PREPARATORIA` e
+`AVALIACAO`. A data fica versionada no `CalendarioEncontro` e é a única fonte
+aceita: não há fallback por primeiro dia, `data_referencia`, rótulo ou reunião.
+`PreEncontro.data` permanece como projeção operacional sincronizada pelo fluxo
+canônico de reprogramação. A configuração inicial solicita somente horário e
+local, com observações opcionais; data é definida e alterada exclusivamente
+pelo Calendário.
+
+**Refinamento pós-smoke test:** o editor do Calendário usa salvamento
+agregado: alterações são realizadas em draft e persistidas juntas por
+`Salvar alterações`, incluindo a data canônica do Pré-Encontro.
 
 ### R.3I.21 — Fluxo protegido de foto
 

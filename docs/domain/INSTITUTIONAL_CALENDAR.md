@@ -63,6 +63,8 @@ A Agenda apresentada ao usuário é uma composição cronológica de fontes
 canônicas, sem tabela visual duplicada:
 
 - dias próprios, vindos de `DiaEncontro`;
+- Pré-Encontro, como item próprio `PRE_ENCONTRO` versionado no
+  `CalendarioEncontro` vigente;
 - Preparatórias, vindas de `ReuniaoPreparatoriaEncontro`;
 - avaliação pós-Encontro, como item simples de agenda vinculado ao Encontro.
 
@@ -79,6 +81,13 @@ compromisso nesta fase.
 O Calendário Institucional e a seção Agenda da página canônica do Encontro
 leem esses mesmos objetos. Não há sincronização, cópia ou dual-write entre as
 duas interfaces.
+
+`PRE_ENCONTRO` é distinto de dia do Encontro, Preparatória e Avaliação. Sua
+data vem exclusivamente do Calendário, sem inferência por primeiro dia,
+`data_referencia`, rótulo ou reunião. Cada Encontro possui no máximo um item
+canônico vigente desse tipo; versões históricas preservam a data que já foi
+oficializada. Quando há `PreEncontro` operacional, seu campo `data` é uma
+projeção sincronizada dessa fonte durante a reprogramação.
 
 ## Lifecycle, adiamento e reprogramação
 

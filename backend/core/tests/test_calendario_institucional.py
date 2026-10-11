@@ -225,7 +225,7 @@ class CalendarioInstitucionalProjectionTests(TestCase):
         criar_encontro_canonico('Beta', [date(2032, 2, 1)])
         criar_encontro_canonico('Alfa', [date(2032, 2, 1)])
 
-        with self.assertNumQueries(4):
+        with self.assertNumQueries(5):
             resultado = consultar_calendario_institucional(
                 date(2032, 1, 1),
                 date(2032, 12, 31),

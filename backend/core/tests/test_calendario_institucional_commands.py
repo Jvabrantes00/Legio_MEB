@@ -1,5 +1,5 @@
 from concurrent.futures import ThreadPoolExecutor
-from datetime import date
+from datetime import date, time
 from threading import Barrier
 from unittest import skipUnless
 from unittest.mock import patch
@@ -13,10 +13,13 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from core.models import (
+    AvaliacaoEncontro,
     CalendarioEncontro,
     DiaEncontro,
     Encontro,
     LogSistema,
+    PreEncontro,
+    ReuniaoPreparatoriaEncontro,
 )
 from core.roles import SiaRole
 from core.services import comandos_calendario as command_services
@@ -217,6 +220,179 @@ class CalendarioInstitucionalCommandApiTests(APITestCase):
             list(encontro.calendarios.get().dias.values_list('data', flat=True)),
             [date(2034, 6, 2), date(2034, 6, 9), date(2034, 6, 20)],
         )
+
+    def test_pre_encontro_e_item_unico_criado_e_editado_no_calendario(self):
+        payload = self._payload_criacao(titulo='Com Pré canônico')
+        payload['pre_encontro_data'] = '2034-03-30'
+        criado = self.client.post(self.base_url, payload, format='json')
+
+        self.assertEqual(criado.status_code, status.HTTP_201_CREATED)
+        encontro = Encontro.objects.get(pk=criado.json()['encontro_id'])
+        calendario = encontro.calendarios.get(vigente=True)
+        self.assertEqual(calendario.pre_encontro_data, date(2034, 3, 30))
+        self.assertEqual(
+            [item['origem'] for item in criado.json()['agenda']].count(
+                'PRE_ENCONTRO'
+            ),
+            1,
+        )
+
+        alterado = self.client.patch(
+            f'{self.base_url}{encontro.pk}/planejamento/',
+            {
+                'dias': payload['dias'],
+                'pre_encontro_data': '2034-04-01',
+            },
+            format='json',
+        )
+
+        self.assertEqual(alterado.status_code, status.HTTP_200_OK)
+        calendario.refresh_from_db()
+        self.assertEqual(calendario.pre_encontro_data, date(2034, 4, 1))
+        self.assertEqual(
+            [item['origem'] for item in alterado.json()['agenda']].count(
+                'PRE_ENCONTRO'
+            ),
+            1,
+        )
+
+    def test_salvamento_agregado_persiste_todo_o_draft_com_uma_auditoria(self):
+        payload = self._payload_criacao(titulo='Agenda agregada')
+        payload.update({
+            'pre_encontro_data': '2034-03-30',
+            'reunioes': [{
+                'ordem': 1,
+                'data': '2034-03-20',
+                'horario': '19:30',
+                'local': 'Sede',
+                'complemento': 'Entrega',
+            }],
+            'avaliacao': {'data': '2034-04-10'},
+        })
+        criado = self.client.post(self.base_url, payload, format='json')
+        encontro = Encontro.objects.get(pk=criado.json()['encontro_id'])
+        reuniao = encontro.reunioes_preparatorias.get()
+        logs_antes = LogSistema.objects.count()
+
+        response = self.client.patch(
+            f'{self.base_url}{encontro.pk}/salvar-edicao/',
+            {
+                'encontro': 'Agenda agregada alterada',
+                'local': 'Novo local',
+                'dias': [
+                    {'ordem': 1, 'data': '2034-04-04', 'rotulo': 'Abertura'},
+                    {'ordem': 2, 'data': '2034-04-07', 'rotulo': 'Encerramento'},
+                ],
+                'pre_encontro_data': '2034-04-01',
+                'reunioes': [{
+                    'id': reuniao.pk,
+                    'ordem': 1,
+                    'data': '2034-03-21',
+                    'complemento': 'Missa',
+                }],
+                'avaliacao': {'data': '2034-04-11'},
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        encontro.refresh_from_db()
+        calendario = encontro.calendarios.get(vigente=True)
+        reuniao.refresh_from_db()
+        self.assertEqual(encontro.encontro, 'Agenda agregada alterada')
+        self.assertEqual(encontro.local, 'Novo local')
+        self.assertEqual(encontro.calendarios.count(), 1)
+        self.assertEqual(calendario.versao, 1)
+        self.assertEqual(calendario.pre_encontro_data, date(2034, 4, 1))
+        self.assertEqual(
+            list(calendario.dias.values_list('data', flat=True)),
+            [date(2034, 4, 4), date(2034, 4, 7)],
+        )
+        self.assertEqual(reuniao.data, date(2034, 3, 21))
+        self.assertEqual(reuniao.horario, time(19, 30))
+        self.assertEqual(reuniao.local, 'Sede')
+        self.assertEqual(reuniao.complemento, 'Missa')
+        self.assertEqual(encontro.avaliacao_agenda.data, date(2034, 4, 11))
+        self.assertEqual(LogSistema.objects.count(), logs_antes + 1)
+        self.assertIn(
+            'edição agregada do calendário salva',
+            LogSistema.objects.latest('pk').descricao,
+        )
+
+    def test_salvamento_agregado_versiona_uma_vez_e_sincroniza_pre_encontro(self):
+        payload = self._payload_criacao(titulo='Agenda oficial')
+        payload['pre_encontro_data'] = '2034-03-30'
+        criado = self.client.post(self.base_url, payload, format='json')
+        encontro = Encontro.objects.get(pk=criado.json()['encontro_id'])
+        calendario_anterior = encontro.calendarios.get()
+        pre_encontro = PreEncontro.objects.create(
+            encontro=encontro,
+            data=date(2034, 3, 30),
+            horario=time(8, 0),
+            local='Sede',
+        )
+        self._oficializar(encontro)
+        logs_antes = LogSistema.objects.count()
+
+        response = self.client.patch(
+            f'{self.base_url}{encontro.pk}/salvar-edicao/',
+            {
+                'encontro': encontro.encontro,
+                'dias': [
+                    {'ordem': 1, 'data': '2034-05-03'},
+                    {'ordem': 2, 'data': '2034-05-06'},
+                ],
+                'pre_encontro_data': '2034-04-29',
+                'reunioes': [],
+                'avaliacao': None,
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.json()['calendario_versao'], 2)
+        self.assertEqual(encontro.calendarios.count(), 2)
+        calendario_anterior.refresh_from_db()
+        self.assertFalse(calendario_anterior.vigente)
+        self.assertEqual(
+            calendario_anterior.pre_encontro_data,
+            date(2034, 3, 30),
+        )
+        atual = encontro.calendarios.get(vigente=True)
+        self.assertEqual(atual.pre_encontro_data, date(2034, 4, 29))
+        pre_encontro.refresh_from_db()
+        self.assertEqual(pre_encontro.data, date(2034, 4, 29))
+        self.assertEqual(LogSistema.objects.count(), logs_antes + 1)
+
+    def test_salvamento_agregado_invalido_reverte_todas_as_alteracoes(self):
+        criado = self._criar(titulo='Permanece igual')
+        encontro = Encontro.objects.get(pk=criado.json()['encontro_id'])
+
+        response = self.client.patch(
+            f'{self.base_url}{encontro.pk}/salvar-edicao/',
+            {
+                'encontro': 'Não pode persistir',
+                'dias': [
+                    {'ordem': 1, 'data': '2034-04-03'},
+                    {'ordem': 2, 'data': '2034-04-06'},
+                ],
+                'pre_encontro_data': None,
+                'reunioes': [{
+                    'id': 999999,
+                    'ordem': 1,
+                    'data': '2034-03-20',
+                    'complemento': '',
+                }],
+                'avaliacao': None,
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        encontro.refresh_from_db()
+        self.assertEqual(encontro.encontro, 'Permanece igual')
+        self.assertEqual(ReuniaoPreparatoriaEncontro.objects.count(), 0)
+        self.assertEqual(AvaliacaoEncontro.objects.count(), 0)
 
     def test_oficializacao_e_manual_e_transicao_invalida_retorna_400(self):
         encontro_id = self._criar().json()['encontro_id']

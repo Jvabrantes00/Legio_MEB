@@ -15,11 +15,13 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from core.models import (
+    AtendimentoPreEncontro,
     AvaliacaoEncontro,
     DiaEncontro,
     Encontro,
     Frequencia,
     ParticipacaoEncontro,
+    PreEncontro,
     ReuniaoPreparatoriaEncontro,
     TrabalhoEncontro,
 )
@@ -33,6 +35,7 @@ from core.services.avaliacoes_encontro import (
 from core.services.calendario_institucional import (
     TIPO_AVALIACAO,
     TIPO_DIA_ENCONTRO,
+    TIPO_PRE_ENCONTRO,
     TIPO_REUNIAO_PREPARATORIA,
     consultar_agenda_encontro,
     consultar_calendario_institucional,
@@ -123,7 +126,7 @@ class AgendaEncontroServiceTests(TestCase):
             data=date(2036, 4, 10),
         )
 
-        with self.assertNumQueries(5):
+        with self.assertNumQueries(6):
             resultado = consultar_calendario_institucional(
                 date(2036, 4, 1),
                 date(2036, 4, 30),
@@ -234,6 +237,58 @@ class AgendaEncontroServiceTests(TestCase):
                 command_services.criar_encontro(**argumentos)
         self.assertFalse(Encontro.objects.filter(encontro='Deve reverter').exists())
         self.assertEqual(ReuniaoPreparatoriaEncontro.objects.count(), 0)
+
+    def test_pre_encontro_e_item_canonico_distinto_sem_inferencia_por_rotulo(self):
+        self.calendario.pre_encontro_data = date(2036, 3, 18)
+        self.calendario.save(update_fields=['pre_encontro_data'])
+        dia = self.calendario.dias.order_by('ordem').first()
+        dia.rotulo = 'Pré-Encontro'
+        dia.save(update_fields=['rotulo'])
+
+        itens = consultar_agenda_encontro(self.encontro).itens
+        pre_itens = [item for item in itens if item.origem == TIPO_PRE_ENCONTRO]
+        dia_rotulado = [
+            item for item in itens
+            if item.origem == TIPO_DIA_ENCONTRO and item.titulo == 'Pré-Encontro'
+        ]
+
+        self.assertEqual(len(pre_itens), 1)
+        self.assertEqual(pre_itens[0].data, date(2036, 3, 18))
+        self.assertEqual(len(dia_rotulado), 1)
+        self.assertNotEqual(pre_itens[0].id, dia_rotulado[0].id)
+
+    def test_reprogramacao_sincroniza_pre_sem_duplicar_atendimento(self):
+        self.calendario.pre_encontro_data = date(2036, 3, 18)
+        self.calendario.save(update_fields=['pre_encontro_data'])
+        pre = PreEncontro.objects.create(
+            encontro=self.encontro,
+            data=date(2036, 3, 18),
+            horario=time(14),
+            local='Sede',
+        )
+        usuario = get_user_model().objects.create_user('ator-reprogramacao-pre')
+        atendimento = AtendimentoPreEncontro.objects.create(
+            pre_encontro=pre,
+            nome_informado='Pessoa preservada',
+            data_nascimento_informada=date(2010, 1, 1),
+            telefone_informado='61999999999',
+            registrado_por=usuario,
+        )
+        command_services.oficializar_agenda(self.encontro)
+
+        novo_calendario = command_services.reprogramar_agenda(
+            self.encontro,
+            dias=[{'ordem': 1, 'data': date(2036, 4, 20)}],
+            pre_encontro_data=date(2036, 4, 17),
+        )
+
+        pre.refresh_from_db()
+        atendimento.refresh_from_db()
+        self.assertEqual(novo_calendario.pre_encontro_data, date(2036, 4, 17))
+        self.assertEqual(pre.data, date(2036, 4, 17))
+        self.assertEqual(PreEncontro.objects.filter(encontro=self.encontro).count(), 1)
+        self.assertEqual(atendimento.pre_encontro_id, pre.pk)
+        self.assertEqual(pre.atendimentos.count(), 1)
 
 
 class AgendaEncontroApiTests(APITestCase):

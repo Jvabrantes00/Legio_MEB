@@ -162,9 +162,17 @@ class AtendimentoPreEncontroDetalheSerializer(
 
 
 class CapabilitiesContextoPreEncontroSerializer(serializers.Serializer):
+    pre_encontro_configurado = serializers.BooleanField(read_only=True)
     consultar_operacao = serializers.BooleanField(read_only=True)
     registrar_checkin = serializers.BooleanField(read_only=True)
     aumentar_capacidade = serializers.BooleanField(read_only=True)
+    configurar_pre_encontro = serializers.BooleanField(read_only=True)
+
+
+class ConfiguracaoInicialPreEncontroCommandSerializer(StrictCommandSerializer):
+    horario = serializers.TimeField()
+    local = serializers.CharField(max_length=255, allow_blank=False)
+    observacoes = serializers.CharField(required=False, allow_blank=True)
 
 
 def _mascarar_cpf(cpf):
@@ -1490,6 +1498,10 @@ class CriacaoEncontroCalendarioCommandSerializer(StrictCommandSerializer):
     tipo = serializers.ChoiceField(choices=Encontro.Tipo.choices)
     local = serializers.CharField(max_length=255, allow_blank=False)
     dias = DiaCalendarioCommandSerializer(many=True, allow_empty=False)
+    pre_encontro_data = serializers.DateField(
+        required=False,
+        allow_null=True,
+    )
     reunioes = serializers.ListField(
         child=serializers.DictField(),
         required=False,
@@ -1535,6 +1547,10 @@ class DadosBasicosCalendarioCommandSerializer(StrictCommandSerializer):
 
 class PlanejamentoCalendarioCommandSerializer(StrictCommandSerializer):
     dias = DiaCalendarioCommandSerializer(many=True, allow_empty=False)
+    pre_encontro_data = serializers.DateField(
+        required=False,
+        allow_null=True,
+    )
 
 
 class RotuloDiaCalendarioCommandSerializer(StrictCommandSerializer):
@@ -1590,6 +1606,62 @@ class ReuniaoAgendaEdicaoCommandSerializer(StrictCommandSerializer):
 
 class AvaliacaoAgendaCommandSerializer(StrictCommandSerializer):
     data = serializers.DateField()
+
+
+class ReuniaoAgendaSalvamentoCommandSerializer(StrictCommandSerializer):
+    id = serializers.IntegerField(required=False, min_value=1)
+    ordem = serializers.IntegerField(min_value=1)
+    data = serializers.DateField()
+    horario = serializers.TimeField(required=False)
+    local = serializers.CharField(
+        required=False,
+        max_length=255,
+        allow_blank=False,
+    )
+    complemento = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        max_length=255,
+        default='',
+    )
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        if 'id' not in attrs:
+            ausentes = [
+                campo for campo in ('horario', 'local')
+                if campo not in attrs
+            ]
+            if ausentes:
+                raise serializers.ValidationError({
+                    campo: ['Este campo é obrigatório para nova preparatória.']
+                    for campo in ausentes
+                })
+        return attrs
+
+
+class SalvamentoEdicaoCalendarioCommandSerializer(StrictCommandSerializer):
+    encontro = serializers.CharField(max_length=255, allow_blank=False)
+    local = serializers.CharField(
+        required=False,
+        max_length=255,
+        allow_blank=False,
+    )
+    dias = DiaCalendarioCommandSerializer(many=True, allow_empty=False)
+    pre_encontro_data = serializers.DateField(allow_null=True)
+    reunioes = ReuniaoAgendaSalvamentoCommandSerializer(
+        many=True,
+        allow_empty=True,
+    )
+    avaliacao = AvaliacaoAgendaCommandSerializer(allow_null=True)
+
+    def validate_reunioes(self, value):
+        ids = [item['id'] for item in value if 'id' in item]
+        if len(ids) != len(set(ids)):
+            raise serializers.ValidationError(
+                'Uma preparatória não pode aparecer mais de uma vez.'
+            )
+        return value
 
 
 class DiaResultadoComandoCalendarioSerializer(serializers.Serializer):

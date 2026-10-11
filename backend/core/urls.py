@@ -32,6 +32,7 @@ from .views import (
     DecisaoVagaPreEncontroAPIView,
     CapacidadePreEncontroAPIView,
     CapabilitiesContextoPreEncontroAPIView,
+    ConfiguracaoInicialPreEncontroAPIView,
     InscricoesLookupPreEncontroAPIView,
     PessoasLookupPreEncontroAPIView,
     RegularizacaoInscricoesLookupPreEncontroAPIView,
@@ -156,6 +157,11 @@ urlpatterns = [
         'encontros/<int:encontro_id>/pre-encontro/capabilities/',
         CapabilitiesContextoPreEncontroAPIView.as_view(),
         name='pre-encontro-capabilities',
+    ),
+    path(
+        'encontros/<int:encontro_id>/pre-encontro/configurar/',
+        ConfiguracaoInicialPreEncontroAPIView.as_view(),
+        name='pre-encontro-configurar',
     ),
     path(
         'encontros/<int:encontro_id>/pre-encontro/atendimentos/',

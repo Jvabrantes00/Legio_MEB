@@ -6,6 +6,7 @@ from django.utils import timezone
 from rest_framework.exceptions import PermissionDenied
 
 from core.models import (
+    CalendarioEncontro,
     ConfiguracaoEncontristasEncontro,
     ConviteEncontro,
     DadosCuidadoInscricao,
@@ -23,9 +24,11 @@ from core.models import (
     VinculoUsuarioPessoa,
 )
 from core.roles import SiaRole
+from core.permissions import pode_configurar_pre_encontro
 from core.services.pre_encontro import (
     aumentar_capacidade_pre_encontro,
     conferir_cuidados_pre_encontro,
+    configurar_pre_encontro,
     registrar_checkin_pre_encontro,
     registrar_pagamento_pre_encontro,
     regularizar_atendimento_pre_encontro,
@@ -288,3 +291,34 @@ class PreEncontroAuthorizationTests(TestCase):
         )
 
         self.assertEqual(atendimento.registrado_por, self.superuser)
+
+    def test_configuracao_inicial_e_exclusiva_de_fichas_diretoria_e_superuser(self):
+        coordenacao = self.criar_contextual('coord-sem-configuracao')
+        for usuario in (self.suporte, self.comunicacao, coordenacao):
+            self.assertFalse(pode_configurar_pre_encontro(usuario, self.encontro))
+            encontro = make_encontro(status=Encontro.Status.EM_PREPARACAO)
+            with self.assertRaises(PermissionDenied):
+                configurar_pre_encontro(
+                    usuario=usuario,
+                    encontro=encontro,
+                    horario=time(14),
+                    local='Local negado',
+                )
+            self.assertFalse(PreEncontro.objects.filter(encontro=encontro).exists())
+
+        for usuario in (self.fichas, self.diretoria, self.superuser):
+            encontro = make_encontro(status=Encontro.Status.EM_PREPARACAO)
+            CalendarioEncontro.objects.create(
+                encontro=encontro,
+                versao=1,
+                vigente=True,
+                pre_encontro_data=date(2030, 2, 1),
+            )
+            self.assertTrue(pode_configurar_pre_encontro(usuario, encontro))
+            configurado = configurar_pre_encontro(
+                usuario=usuario,
+                encontro=encontro,
+                horario=time(14),
+                local='Local autorizado',
+            )
+            self.assertEqual(configurado.encontro, encontro)

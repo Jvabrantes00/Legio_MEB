@@ -40,7 +40,11 @@ export function isAllowedPreEncounterRequest(
   }
   if (method === "POST") {
     return (
-      (tail.length === 1 && (tail[0] === "check-in" || tail[0] === "capacidade"))
+      (tail.length === 1 && (
+        tail[0] === "check-in"
+        || tail[0] === "capacidade"
+        || tail[0] === "configurar"
+      ))
       || (
         tail.length === 3
         && tail[0] === "atendimentos"

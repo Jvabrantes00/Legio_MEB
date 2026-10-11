@@ -156,8 +156,14 @@ def _item_exportacao(item_calendario, item_agenda):
     if item_agenda.origem == calendario_services.TIPO_DIA_ENCONTRO:
         rotulo = item_agenda.titulo if item_agenda.subtitulo else None
         complemento = None
-    else:
+    elif (
+        item_agenda.origem
+        == calendario_services.TIPO_REUNIAO_PREPARATORIA
+    ):
         rotulo = _titulo_preparatoria(item_agenda.titulo)
+        complemento = item_agenda.subtitulo
+    else:
+        rotulo = item_agenda.titulo
         complemento = item_agenda.subtitulo
     return ItemExportacaoCalendario(
         id=item_agenda.id,
