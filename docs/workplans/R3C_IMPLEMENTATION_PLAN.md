@@ -1227,6 +1227,35 @@ ser vinculada sem perder a origem.
 
 **Riscos:** órfãos de storage e exposição direta de mídia.
 
+**Implementação concluída:** a foto privada pode nascer no Atendimento antes
+da resolução cadastral. Ao regularizar uma Pessoa sem foto, o service associa
+automaticamente `Pessoa.foto` à mesma storage key da
+`FotoTemporariaPreEncontro`, dentro da transação e sem copiar, mover ou apagar
+a origem. Uma foto já existente da Pessoa nunca é sobrescrita por essa
+automação; a substituição permanece um command explícito e auditado, autorizado
+por Fichas, Comunicação, Coordenação Geral contextual ou superuser técnico.
+
+O MVP retém a foto histórica do Atendimento sem prazo automático de descarte.
+Na troca da foto temporária ou da foto da Pessoa, o arquivo anterior só é
+considerado para exclusão após o commit e depois de confirmar que nenhuma
+referência canônica persistida ainda usa sua chave. Falha no cleanup não desfaz
+o banco correto; falha transacional do novo upload remove o arquivo recém-criado
+e preserva o anterior. Referência cujo arquivo físico desapareceu produz 404
+seguro no preview, bloqueia a associação explícita e não impede a regularização
+da identidade.
+
+A mídia continua privada e acessível somente pelo BFF autenticado, com
+allowlist exata por método/path, streaming binário e sem rota pública `/media`.
+O detalhe do Atendimento expõe apenas a capability
+`associar_foto_pessoa`; o frontend não infere papéis. Nenhuma migration foi
+necessária. Crop permanece postergado.
+
+**Validação focada da implementação:** `test_pre_encontro_fotos` e
+`test_pre_encontro_services` no backend; `pre-encounter-media.test.ts` e
+TypeScript no frontend, além de checks baratos de Django, migrations e diff.
+
+**Estado:** concluída. Próximo bloco: R.3I.22, sem antecipação nesta entrega.
+
 ### R.3I.22 — PDFs sob demanda do Pré-Encontro
 
 **Prioridade:** PÓS-MVP / pode esperar após check-in digital.

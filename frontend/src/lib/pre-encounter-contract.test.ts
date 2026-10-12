@@ -28,6 +28,7 @@ const capabilities = {
   conferir_cuidados: true,
   visualizar_foto: true,
   alterar_foto: true,
+  associar_foto_pessoa: true,
   decidir_vaga: false,
 };
 

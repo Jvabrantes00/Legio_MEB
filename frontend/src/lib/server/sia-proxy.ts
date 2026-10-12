@@ -4,6 +4,10 @@ import { applyAuthenticationResult, authenticatedDjangoRequest } from "./django-
 import { validateCsrf } from "./csrf";
 import { backendApiUrl, getSiaServerConfig } from "./sia-config";
 import { isAllowedPreEncounterRequest } from "./pre-encounter-bff";
+import {
+  createPreEncounterMediaResponse,
+  preEncounterMediaOperation,
+} from "./pre-encounter-media";
 
 const ALLOWED_RESOURCES = new Set([
   "alpinistas",
@@ -168,7 +172,9 @@ export async function proxySiaRequest(
       };
       return fetch(target, init);
     });
-    const response = await createClientResponse(result.upstream);
+    const response = preEncounterMediaOperation(request.method, path) !== null
+      ? createPreEncounterMediaResponse(result.upstream)
+      : await createClientResponse(result.upstream);
     applyAuthenticationResult(response, result);
     return response;
   } catch {

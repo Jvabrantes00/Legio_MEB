@@ -1,3 +1,5 @@
+import { preEncounterMediaOperation } from "./pre-encounter-media";
+
 const POSITIVE_INTEGER = /^[1-9]\d*$/;
 
 function isId(value: string | undefined): boolean {
@@ -8,6 +10,7 @@ export function isAllowedPreEncounterRequest(
   method: string,
   path: readonly string[],
 ): boolean {
+  if (preEncounterMediaOperation(method, path) !== null) return true;
   if (path[0] !== "encontros" || !isId(path[1]) || path[2] !== "pre-encontro") {
     return false;
   }
@@ -27,7 +30,7 @@ export function isAllowedPreEncounterRequest(
         tail.length === 3
         && tail[0] === "atendimentos"
         && isId(tail[1])
-        && (tail[2] === "cuidados" || tail[2] === "foto")
+        && tail[2] === "cuidados"
       )
       || (
         tail.length === 4
@@ -65,7 +68,7 @@ export function isAllowedPreEncounterRequest(
       tail.length === 3
       && tail[0] === "atendimentos"
       && isId(tail[1])
-      && (tail[2] === "pagamento" || tail[2] === "foto")
+      && tail[2] === "pagamento"
     );
   }
   return false;

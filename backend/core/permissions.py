@@ -197,7 +197,22 @@ def pode_consultar_operacao_pre_encontro(user, encontro):
 
 
 def pode_operar_foto_pre_encontro(user, encontro):
-    return pode_consultar_operacao_pre_encontro(user, encontro)
+    return pode_associar_foto_pessoa_pre_encontro(user, encontro)
+
+
+def pode_associar_foto_pessoa_pre_encontro(user, encontro):
+    return bool(
+        _usuario_ativo(user)
+        and (
+            user.is_superuser
+            or user_has_any_role(
+                user,
+                SiaRole.FICHAS,
+                SiaRole.COMUNICACAO,
+            )
+            or pertence_coordenacao_geral_encontro(user, encontro)
+        )
+    )
 
 
 def pode_consultar_cuidados_pre_encontro(user, encontro):

@@ -149,6 +149,7 @@ class AtendimentoPreEncontroDetalheSerializer(
                 conferir_cuidados=False,
                 visualizar_foto=False,
                 alterar_foto=False,
+                associar_foto_pessoa=False,
                 decidir_vaga=False,
             ).as_dict()
         return (

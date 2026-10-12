@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from enum import StrEnum
 from hashlib import sha256
+import logging
 
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
@@ -9,6 +10,7 @@ from django.utils import timezone
 from rest_framework.exceptions import PermissionDenied
 
 from core.models import (
+    Alpinista,
     AtendimentoPreEncontro,
     CalendarioEncontro,
     ConferenciaCuidadoPreEncontro,
@@ -17,6 +19,7 @@ from core.models import (
     DadosCuidadoInscricao,
     DecisaoVagaPreEncontro,
     Encontro,
+    FotoEncontro,
     FotoTemporariaPreEncontro,
     InscricaoEncontro,
     PagamentoPreEncontro,
@@ -25,6 +28,7 @@ from core.models import (
 )
 from core.permissions import (
     pode_aumentar_capacidade_pre_encontro,
+    pode_associar_foto_pessoa_pre_encontro,
     pode_configurar_pre_encontro,
     pode_conferir_cuidados_pre_encontro,
     pode_consultar_cuidados_pre_encontro,
@@ -42,6 +46,9 @@ from core.services.configuracao_encontristas import (
     alterar_configuracao_encontristas,
 )
 from core.validators import normalize_cpf
+
+
+logger = logging.getLogger(__name__)
 
 
 class SituacaoAptidaoPreEncontro(StrEnum):
@@ -86,6 +93,7 @@ class CapabilitiesAtendimentoPreEncontro:
     conferir_cuidados: bool
     visualizar_foto: bool
     alterar_foto: bool
+    associar_foto_pessoa: bool
     decidir_vaga: bool
 
     def as_dict(self):
@@ -96,6 +104,7 @@ class CapabilitiesAtendimentoPreEncontro:
             'conferir_cuidados': self.conferir_cuidados,
             'visualizar_foto': self.visualizar_foto,
             'alterar_foto': self.alterar_foto,
+            'associar_foto_pessoa': self.associar_foto_pessoa,
             'decidir_vaga': self.decidir_vaga,
         }
 
@@ -228,6 +237,14 @@ def projetar_capabilities_atendimento_pre_encontro(
         and hasattr(atendimento.inscricao, 'dados_cuidado')
     )
     possui_foto = hasattr(atendimento, 'foto_privada')
+    foto_disponivel = False
+    if possui_foto:
+        try:
+            foto_disponivel = atendimento.foto_privada.arquivo.storage.exists(
+                atendimento.foto_privada.arquivo.name,
+            )
+        except OSError:
+            foto_disponivel = False
     try:
         decisao_pendente = (
             atendimento.decisao_vaga.status
@@ -261,6 +278,12 @@ def projetar_capabilities_atendimento_pre_encontro(
         alterar_foto=(
             mutavel
             and pode_operar_foto_pre_encontro(usuario, encontro)
+        ),
+        associar_foto_pessoa=(
+            mutavel
+            and atendimento.pessoa_id is not None
+            and foto_disponivel
+            and pode_associar_foto_pessoa_pre_encontro(usuario, encontro)
         ),
         decidir_vaga=(
             permite_operacao_datada
@@ -526,6 +549,71 @@ def _auditar(
     )
 
 
+def _arquivo_tem_referencia_persistida(nome):
+    if not nome:
+        return False
+    return any((
+        FotoTemporariaPreEncontro.objects.filter(arquivo=nome).exists(),
+        Pessoa.objects.filter(foto=nome).exists(),
+        Alpinista.objects.filter(foto=nome).exists(),
+        FotoEncontro.objects.filter(imagem=nome).exists(),
+    ))
+
+
+def _remover_arquivo_se_obsoleto(storage, nome):
+    try:
+        if nome and not _arquivo_tem_referencia_persistida(nome):
+            storage.delete(nome)
+    except Exception:
+        logger.warning(
+            'Falha ao remover arquivo de foto obsoleto após commit.',
+            exc_info=True,
+        )
+
+
+def _agendar_remocao_se_obsoleto(storage, nome):
+    if nome:
+        transaction.on_commit(
+            lambda: _remover_arquivo_se_obsoleto(storage, nome),
+        )
+
+
+def _foto_temporaria_disponivel(atendimento):
+    foto = (
+        FotoTemporariaPreEncontro.objects
+        .select_for_update(of=('self',))
+        .filter(atendimento=atendimento)
+        .first()
+    )
+    if foto is None or not foto.arquivo.name:
+        return None
+    try:
+        return foto if foto.arquivo.storage.exists(foto.arquivo.name) else None
+    except OSError:
+        return None
+
+
+def _associar_foto_automaticamente(*, encontro, usuario, atendimento, pessoa):
+    if pessoa is None or pessoa.foto:
+        return False
+    foto = _foto_temporaria_disponivel(atendimento)
+    if foto is None:
+        return False
+    pessoa.foto.name = foto.arquivo.name
+    pessoa.save(update_fields=['foto', 'atualizado_em'])
+    _auditar(
+        encontro=encontro,
+        usuario=usuario,
+        fato='pre_encontro.foto_associada_pessoa_automaticamente',
+        entidade='pessoa',
+        objeto_id=pessoa.pk,
+        anterior={'foto_existente': False},
+        novo={'foto_existente': True},
+        campos={'foto_existente'},
+    )
+    return True
+
+
 @transaction.atomic
 def registrar_checkin_pre_encontro(
     *,
@@ -664,7 +752,8 @@ def regularizar_atendimento_pre_encontro(
     _exigir_lifecycle(encontro)
     configuracao = _bloquear_configuracao(encontro)
     atendimento = _bloquear_atendimento(atendimento, encontro)
-    pessoa = _bloquear_pessoa(pessoa) if pessoa is not None else atendimento.pessoa
+    pessoa_referencia = pessoa if pessoa is not None else atendimento.pessoa
+    pessoa = _bloquear_pessoa(pessoa_referencia)
     inscricao = (
         _validar_inscricao_encontro(inscricao, encontro)
         if inscricao is not None
@@ -705,6 +794,12 @@ def regularizar_atendimento_pre_encontro(
         'pessoa_id': atendimento.pessoa_id,
         'inscricao_id': atendimento.inscricao_id,
     }
+    _associar_foto_automaticamente(
+        encontro=encontro,
+        usuario=usuario,
+        atendimento=atendimento,
+        pessoa=pessoa,
+    )
     if novo == anterior:
         return atendimento
     atendimento.full_clean()
@@ -1112,20 +1207,83 @@ def registrar_foto_pre_encontro(*, usuario, atendimento, arquivo):
     foto.tamanho = arquivo.size
     foto.sha256 = sha256(conteudo).hexdigest()
     foto.full_clean()
-    foto.save()
-
-    if nome_anterior and nome_anterior != foto.arquivo.name:
-        transaction.on_commit(
-            lambda: storage_anterior.delete(nome_anterior),
+    arquivo.seek(0)
+    novo_nome = ''
+    novo_storage = foto.arquivo.storage
+    try:
+        foto.arquivo.save(arquivo.name, arquivo, save=False)
+        novo_nome = foto.arquivo.name
+        foto.save()
+        _auditar(
+            encontro=encontro,
+            usuario=usuario,
+            fato='pre_encontro.foto_registrada',
+            entidade='foto_temporaria_pre_encontro',
+            objeto_id=foto.pk,
+            anterior={'foto_existente': bool(nome_anterior)},
+            novo={'foto_existente': True},
+            campos={'foto_existente'},
         )
+    except Exception:
+        if novo_nome and novo_nome != nome_anterior:
+            try:
+                novo_storage.delete(novo_nome)
+            except Exception:
+                logger.warning(
+                    'Falha ao limpar novo upload após rollback.',
+                    exc_info=True,
+                )
+        raise
+
+    if nome_anterior and nome_anterior != novo_nome:
+        _agendar_remocao_se_obsoleto(storage_anterior, nome_anterior)
+    return foto
+
+
+@transaction.atomic
+def usar_foto_pre_encontro_como_foto_pessoa(*, usuario, atendimento):
+    encontro = _encontro_do_atendimento(atendimento)
+    _exigir_permissao(
+        pode_associar_foto_pessoa_pre_encontro(usuario, encontro),
+        'Seu usuário não pode associar esta foto à Pessoa.',
+    )
+    encontro = _bloquear_encontro(encontro)
+    _exigir_lifecycle(encontro)
+    atendimento = _bloquear_atendimento(atendimento, encontro)
+    if atendimento.pessoa_id is None:
+        _erro('pessoa', 'Regularize a Pessoa antes de associar a foto.')
+    pessoa = _bloquear_pessoa(atendimento.pessoa)
+    foto = (
+        FotoTemporariaPreEncontro.objects
+        .select_for_update(of=('self',))
+        .filter(atendimento=atendimento)
+        .first()
+    )
+    if foto is None or not foto.arquivo.name:
+        _erro('foto', 'O atendimento não possui foto disponível.')
+    try:
+        arquivo_existe = foto.arquivo.storage.exists(foto.arquivo.name)
+    except OSError:
+        arquivo_existe = False
+    if not arquivo_existe:
+        _erro('foto', 'O arquivo da foto não está disponível.')
+
+    nome_anterior = pessoa.foto.name if pessoa.foto else ''
+    if nome_anterior == foto.arquivo.name:
+        return pessoa
+    storage_anterior = pessoa.foto.storage
+    pessoa.foto.name = foto.arquivo.name
+    pessoa.save(update_fields=['foto', 'atualizado_em'])
     _auditar(
         encontro=encontro,
         usuario=usuario,
-        fato='pre_encontro.foto_registrada',
-        entidade='foto_temporaria_pre_encontro',
-        objeto_id=foto.pk,
+        fato='pre_encontro.foto_associada_pessoa',
+        entidade='pessoa',
+        objeto_id=pessoa.pk,
         anterior={'foto_existente': bool(nome_anterior)},
         novo={'foto_existente': True},
         campos={'foto_existente'},
     )
-    return foto
+    if nome_anterior:
+        _agendar_remocao_se_obsoleto(storage_anterior, nome_anterior)
+    return pessoa

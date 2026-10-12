@@ -370,7 +370,7 @@ class PreEncontroApiTests(TestCase):
         self.assertFalse(contexto['registrar_checkin'])
         self.assertTrue(contexto['aumentar_capacidade'])
         self.assertTrue(detalhe['capabilities']['registrar_pagamento'])
-        self.assertTrue(detalhe['capabilities']['alterar_foto'])
+        self.assertFalse(detalhe['capabilities']['alterar_foto'])
         self.assertFalse(detalhe['capabilities']['decidir_vaga'])
 
     def test_decidir_vaga_so_quando_policy_e_estado_permitem(self):

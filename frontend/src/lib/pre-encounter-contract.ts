@@ -13,6 +13,7 @@ export type PreEncounterItemCapabilities = {
   conferir_cuidados: boolean;
   visualizar_foto: boolean;
   alterar_foto: boolean;
+  associar_foto_pessoa: boolean;
   decidir_vaga: boolean;
 };
 
@@ -200,6 +201,7 @@ export function parsePreEncounterItemCapabilities(
     conferir_cuidados: requireBoolean(value, "conferir_cuidados"),
     visualizar_foto: requireBoolean(value, "visualizar_foto"),
     alterar_foto: requireBoolean(value, "alterar_foto"),
+    associar_foto_pessoa: requireBoolean(value, "associar_foto_pessoa"),
     decidir_vaga: requireBoolean(value, "decidir_vaga"),
   };
 }

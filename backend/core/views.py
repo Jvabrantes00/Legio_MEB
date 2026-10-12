@@ -123,6 +123,7 @@ from .permissions import (
     HasAnySiaRole,
     require_sia_roles,
     pode_aumentar_capacidade_pre_encontro,
+    pode_associar_foto_pessoa_pre_encontro,
     pode_configurar_pre_encontro,
     pode_conferir_cuidados_pre_encontro,
     pode_consultar_cuidados_pre_encontro,
@@ -2073,6 +2074,34 @@ class FotoPreEncontroAPIView(APIView):
         except django_core_validation_error as error:
             _erro_de_dominio(error)
         return Response({'possui_foto': True})
+
+
+class AssociacaoFotoPessoaPreEncontroAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, encontro_id, atendimento_id):
+        encontro, atendimento = _atendimento_pre_encontro_do_contexto(
+            encontro_id,
+            atendimento_id,
+        )
+        _exigir_policy(
+            pode_associar_foto_pessoa_pre_encontro(
+                request.user,
+                encontro,
+            )
+        )
+        if request.data:
+            raise ValidationError({
+                'campos_extras': ['Este comando não recebe campos.'],
+            })
+        try:
+            pre_encontro_services.usar_foto_pre_encontro_como_foto_pessoa(
+                usuario=request.user,
+                atendimento=atendimento,
+            )
+        except django_core_validation_error as error:
+            _erro_de_dominio(error)
+        return Response({'foto_pessoa_atualizada': True})
 
 
 class DecisaoVagaPreEncontroAPIView(APIView):

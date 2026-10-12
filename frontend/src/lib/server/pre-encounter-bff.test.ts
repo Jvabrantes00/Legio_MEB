@@ -90,6 +90,7 @@ describe("allowlist BFF do Pré-Encontro", () => {
       conferir_cuidados: false,
       visualizar_foto: true,
       alterar_foto: true,
+      associar_foto_pessoa: true,
       decidir_vaga: false,
     });
 

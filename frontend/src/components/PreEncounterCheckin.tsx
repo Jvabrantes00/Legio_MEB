@@ -527,7 +527,7 @@ function PreEncounterDetailPanel({ encontroId, detail, loading, onClose, onRefre
           </section>
           <VacancyDecisionSection encontroId={encontroId} detail={detail} onRefresh={onRefresh} onActionError={onActionError} />
           {detail.capabilities.registrar_pagamento && <PaymentSection encontroId={encontroId} detail={detail} onRefresh={onRefresh} onActionError={onActionError} />}
-          {(detail.capabilities.visualizar_foto || detail.capabilities.alterar_foto) && <PhotoSection encontroId={encontroId} detail={detail} onRefresh={onRefresh} onActionError={onActionError} />}
+          {(detail.capabilities.visualizar_foto || detail.capabilities.alterar_foto || detail.capabilities.associar_foto_pessoa) && <PhotoSection encontroId={encontroId} detail={detail} onRefresh={onRefresh} onActionError={onActionError} />}
           {detail.capabilities.consultar_cuidados && detail.possui_dados_cuidado && <CareSection encontroId={encontroId} detail={detail} onRefresh={onRefresh} onActionError={onActionError} />}
           {detail.capabilities.regularizar && <RegularizationSection encontroId={encontroId} detail={detail} onRefresh={onRefresh} onActionError={onActionError} />}
         </div>
@@ -658,6 +658,15 @@ function PhotoSection({ encontroId, detail, onRefresh, onActionError }: ActionSe
     } catch (error: unknown) { toast.error(errorMessage(error, "Falha no envio da foto.")); }
     finally { setBusy(false); }
   }
+  async function associateWithPerson() {
+    setBusy(true);
+    try {
+      const response = await jsonCommand(`/encontros/${encontroId}/pre-encontro/atendimentos/${detail.id}/foto/usar-na-pessoa/`, "POST", {});
+      if (!response.ok) return await onActionError(response, "Não foi possível usar esta foto na Pessoa.");
+      toast.success("Foto da Pessoa atualizada"); await onRefresh();
+    } catch (error: unknown) { toast.error(errorMessage(error, "Falha ao associar a foto.")); }
+    finally { setBusy(false); }
+  }
   return (
     <section className="rounded-lg border p-3">
       <h4 className="flex items-center gap-2 font-semibold"><Camera size={17} /> Foto</h4>
@@ -669,6 +678,7 @@ function PhotoSection({ encontroId, detail, onRefresh, onActionError }: ActionSe
         <button onClick={() => setPreview(null)} className="mt-1 text-xs underline">Fechar preview</button>
       </div>}
       {detail.capabilities.alterar_foto && <div className="mt-3 space-y-2"><input aria-label="Selecionar ou capturar foto" type="file" accept="image/*" capture="environment" onChange={(event) => setFile(event.target.files?.[0] ?? null)} className="block w-full text-xs" />{file && <button disabled={busy} onClick={() => void upload()} className="rounded bg-escalada-azul px-3 py-2 text-sm font-semibold text-white disabled:opacity-50">{busy ? "Enviando..." : detail.possui_foto ? "Substituir foto" : "Confirmar envio"}</button>}</div>}
+      {detail.capabilities.associar_foto_pessoa && <button disabled={busy} onClick={() => void associateWithPerson()} className="mt-3 rounded border border-escalada-azul px-3 py-2 text-sm font-semibold text-escalada-azul disabled:opacity-50">Usar esta como foto da Pessoa</button>}
     </section>
   );
 }

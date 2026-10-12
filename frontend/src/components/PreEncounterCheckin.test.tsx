@@ -29,7 +29,7 @@ const item = {
 };
 const fullCapabilities = {
   regularizar: true, registrar_pagamento: true, consultar_cuidados: true,
-  conferir_cuidados: true, visualizar_foto: true, alterar_foto: true, decidir_vaga: true,
+  conferir_cuidados: true, visualizar_foto: true, alterar_foto: true, associar_foto_pessoa: false, decidir_vaga: true,
 };
 
 function json(body: unknown, status = 200) {
@@ -123,7 +123,7 @@ describe("workspace operacional do Pré-Encontro", () => {
   it("usa somente capabilities para uma experiência restrita a foto", async () => {
     const photoOnly = detail({ inscricao_id: null, possui_dados_cuidado: false, capabilities: {
       regularizar: false, registrar_pagamento: false, consultar_cuidados: false,
-      conferir_cuidados: false, visualizar_foto: true, alterar_foto: true, decidir_vaga: false,
+      conferir_cuidados: false, visualizar_foto: true, alterar_foto: true, associar_foto_pessoa: false, decidir_vaga: false,
     } });
     siaFetchMock.mockImplementation((path: string) => {
       if (path.endsWith("/atendimentos/?page=1")) return Promise.resolve(json(page()));
@@ -217,6 +217,37 @@ describe("workspace operacional do Pré-Encontro", () => {
       expect.objectContaining({ method: "PUT", body: expect.any(FormData) }),
     ));
     expect(siaFetchMock.mock.calls.some(([path]) => String(path).includes("/media"))).toBe(false);
+  });
+
+  it("associa a foto à Pessoa somente pela capability e pelo command explícito", async () => {
+    const associavel = detail({
+      pessoa_id: 19,
+      possui_foto: true,
+      capabilities: {
+        ...fullCapabilities,
+        associar_foto_pessoa: true,
+      },
+    });
+    siaFetchMock.mockImplementation((path: string, init?: RequestInit) => {
+      if (path.endsWith("/atendimentos/?page=1")) {
+        return Promise.resolve(json(page([{ ...item, possui_foto: true }])));
+      }
+      if (path.endsWith("/atendimentos/7/")) return Promise.resolve(json(associavel));
+      if (path.endsWith("/foto/usar-na-pessoa/") && init?.method === "POST") {
+        return Promise.resolve(json({ foto_pessoa_atualizada: true }));
+      }
+      throw new Error(`Request inesperado: ${init?.method ?? "GET"} ${path}`);
+    });
+    const user = userEvent.setup();
+    render(<PreEncounterCheckin encontroId="12" initialCapabilities={contextCapabilities} />);
+    await user.click((await screen.findAllByText("Pessoa Exemplo"))[0]);
+    await user.click(await screen.findByRole("button", { name: "Usar esta como foto da Pessoa" }));
+
+    await waitFor(() => expect(siaFetchMock).toHaveBeenCalledWith(
+      "/encontros/12/pre-encontro/atendimentos/7/foto/usar-na-pessoa/",
+      expect.objectContaining({ method: "POST", body: "{}" }),
+    ));
+    expect(toastSuccess).toHaveBeenCalledWith("Foto da Pessoa atualizada");
   });
 
   it("regulariza Pessoa sem ficha pelo lookup aninhado e preserva linguagem operacional", async () => {

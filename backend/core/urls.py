@@ -29,6 +29,7 @@ from .views import (
     CuidadosPreEncontroAPIView,
     ConferenciaCuidadoPreEncontroAPIView,
     FotoPreEncontroAPIView,
+    AssociacaoFotoPessoaPreEncontroAPIView,
     DecisaoVagaPreEncontroAPIView,
     CapacidadePreEncontroAPIView,
     CapabilitiesContextoPreEncontroAPIView,
@@ -207,6 +208,11 @@ urlpatterns = [
         'encontros/<int:encontro_id>/pre-encontro/atendimentos/<int:atendimento_id>/foto/',
         FotoPreEncontroAPIView.as_view(),
         name='pre-encontro-foto',
+    ),
+    path(
+        'encontros/<int:encontro_id>/pre-encontro/atendimentos/<int:atendimento_id>/foto/usar-na-pessoa/',
+        AssociacaoFotoPessoaPreEncontroAPIView.as_view(),
+        name='pre-encontro-foto-usar-na-pessoa',
     ),
     path(
         'encontros/<int:encontro_id>/pre-encontro/atendimentos/<int:atendimento_id>/decisao-vaga/',
