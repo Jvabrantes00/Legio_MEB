@@ -165,6 +165,7 @@ class AtendimentoPreEncontroDetalheSerializer(
 class CapabilitiesContextoPreEncontroSerializer(serializers.Serializer):
     pre_encontro_configurado = serializers.BooleanField(read_only=True)
     consultar_operacao = serializers.BooleanField(read_only=True)
+    consultar_cuidados = serializers.BooleanField(read_only=True)
     registrar_checkin = serializers.BooleanField(read_only=True)
     aumentar_capacidade = serializers.BooleanField(read_only=True)
     configurar_pre_encontro = serializers.BooleanField(read_only=True)

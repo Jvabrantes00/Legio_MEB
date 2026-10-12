@@ -17,6 +17,7 @@ import { PreEncounterCheckin } from "./PreEncounterCheckin";
 const contextCapabilities = {
   pre_encontro_configurado: true,
   consultar_operacao: true,
+  consultar_cuidados: true,
   registrar_checkin: true,
   aumentar_capacidade: false,
   configurar_pre_encontro: false,
@@ -70,6 +71,55 @@ describe("workspace operacional do Pré-Encontro", () => {
     expect(screen.getAllByText("Pendente").length).toBeGreaterThan(0);
     await user.click(screen.getByRole("button", { name: "Próxima página" }));
     await waitFor(() => expect(siaFetchMock).toHaveBeenCalledWith(expect.stringContaining("page=2")));
+  });
+
+  it("oferece os PDFs conforme capabilities e baixa bytes pelo BFF", async () => {
+    const anchorClick = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+    siaFetchMock.mockImplementation((path: string) => {
+      if (path.endsWith("/atendimentos/?page=1")) return Promise.resolve(json(page()));
+      if (path.endsWith("/pdf/operacional/")) return Promise.resolve(new Response("%PDF", {
+        headers: {
+          "Content-Type": "application/pdf",
+          "Content-Disposition": "attachment; filename=pre-encontro-operacional.pdf",
+        },
+      }));
+      throw new Error(`Request inesperado: ${path}`);
+    });
+    const user = userEvent.setup();
+    render(<PreEncounterCheckin encontroId="12" initialCapabilities={contextCapabilities} />);
+
+    expect(await screen.findByRole("button", { name: "Baixar lista operacional" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Baixar dados de cuidado" })).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "Baixar lista operacional" }));
+
+    await waitFor(() => expect(siaFetchMock).toHaveBeenCalledWith(
+      "/encontros/12/pre-encontro/pdf/operacional/",
+    ));
+    expect(URL.createObjectURL).toHaveBeenCalled();
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:foto");
+    expect(anchorClick).toHaveBeenCalledOnce();
+    anchorClick.mockRestore();
+  });
+
+  it("oculta PDF restrito sem capability e preserva a tela após erro de download", async () => {
+    siaFetchMock.mockImplementation((path: string) => {
+      if (path.endsWith("/atendimentos/?page=1")) return Promise.resolve(json(page()));
+      if (path.endsWith("/pdf/operacional/")) {
+        return Promise.resolve(json({ detail: "Falha controlada" }, 502));
+      }
+      throw new Error(`Request inesperado: ${path}`);
+    });
+    const user = userEvent.setup();
+    render(<PreEncounterCheckin encontroId="12" initialCapabilities={{
+      ...contextCapabilities,
+      consultar_cuidados: false,
+    }} />);
+
+    await screen.findAllByText("Pessoa Exemplo");
+    expect(screen.queryByRole("button", { name: "Baixar dados de cuidado" })).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Baixar lista operacional" }));
+    await waitFor(() => expect(toastError).toHaveBeenCalledWith("Falha controlada"));
+    expect(screen.getAllByText("Pessoa Exemplo").length).toBeGreaterThan(0);
   });
 
   it("busca e aplica filtros sem confundir busca com primeira página", async () => {

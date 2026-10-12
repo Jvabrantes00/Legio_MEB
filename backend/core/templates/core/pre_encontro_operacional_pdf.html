@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <style>
+    @page { size: A4 landscape; margin: 10mm; }
+    body { color: #001c38; font-family: "DejaVu Sans", sans-serif; font-size: 8pt; }
+    h1 { margin: 0 0 2mm; font-size: 18pt; }
+    .meta { display: flex; gap: 7mm; margin-bottom: 5mm; color: #425b70; }
+    table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+    th, td { border: 1px solid #b9c7d3; padding: 1.8mm; vertical-align: top; overflow-wrap: anywhere; }
+    th { background: #eaf1f7; color: #005ee9; font-size: 7pt; text-transform: uppercase; }
+    .name { width: 21%; } .phone { width: 13%; } .origin { width: 13%; }
+    .presence { width: 10%; } .payment { width: 10%; } .vacancy { width: 16%; }
+    .extra td { height: 8mm; color: #8798a7; }
+    footer { margin-top: 4mm; color: #607789; font-size: 6.5pt; }
+  </style>
+</head>
+<body>
+  <h1>Pré-Encontro — Lista operacional</h1>
+  <div class="meta">
+    <span><strong>Encontro:</strong> {{ projecao.cabecalho.encontro }}</span>
+    <span><strong>Data:</strong> {{ projecao.cabecalho.data|date:"d/m/Y" }}</span>
+    <span><strong>Horário:</strong> {{ projecao.cabecalho.horario|time:"H:i" }}</span>
+    <span><strong>Local:</strong> {{ projecao.cabecalho.local }}</span>
+  </div>
+  <table>
+    <thead><tr>
+      <th class="name">Nome</th><th class="phone">Telefone</th>
+      <th class="origin">Origem</th><th class="presence">Presença</th>
+      <th class="payment">Pagamento</th><th class="vacancy">Vaga</th>
+      <th>Aptidão</th>
+    </tr></thead>
+    <tbody>
+      {% for linha in projecao.linhas %}
+        <tr><td>{{ linha.nome }}</td><td>{{ linha.telefone }}</td>
+          <td>{{ linha.origem }}</td><td>{{ linha.presenca }}</td>
+          <td>{{ linha.pagamento }}</td><td>{{ linha.vaga }}</td>
+          <td>{{ linha.aptidao }}</td></tr>
+      {% endfor %}
+      {% for _ in linhas_extras %}
+        <tr class="extra" data-extra-line="{{ forloop.counter }}">
+          <td></td><td></td><td colspan="5">Observação operacional:</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <footer>Gerado em {{ projecao.cabecalho.gerado_em|date:"d/m/Y H:i" }} · Documento transitório de apoio operacional</footer>
+</body>
+</html>

@@ -1,6 +1,7 @@
 export type PreEncounterContextCapabilities = {
   pre_encontro_configurado: boolean;
   consultar_operacao: boolean;
+  consultar_cuidados: boolean;
   registrar_checkin: boolean;
   aumentar_capacidade: boolean;
   configurar_pre_encontro: boolean;
@@ -184,6 +185,7 @@ export function parsePreEncounterContextCapabilities(
   return {
     pre_encontro_configurado: requireBoolean(value, "pre_encontro_configurado"),
     consultar_operacao: requireBoolean(value, "consultar_operacao"),
+    consultar_cuidados: requireBoolean(value, "consultar_cuidados"),
     registrar_checkin: requireBoolean(value, "registrar_checkin"),
     aumentar_capacidade: requireBoolean(value, "aumentar_capacidade"),
     configurar_pre_encontro: requireBoolean(value, "configurar_pre_encontro"),

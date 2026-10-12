@@ -71,6 +71,7 @@ class AptidaoPreEncontro:
 class CapabilitiesContextoPreEncontro:
     pre_encontro_configurado: bool
     consultar_operacao: bool
+    consultar_cuidados: bool
     registrar_checkin: bool
     aumentar_capacidade: bool
     configurar_pre_encontro: bool
@@ -79,6 +80,7 @@ class CapabilitiesContextoPreEncontro:
         return {
             'pre_encontro_configurado': self.pre_encontro_configurado,
             'consultar_operacao': self.consultar_operacao,
+            'consultar_cuidados': self.consultar_cuidados,
             'registrar_checkin': self.registrar_checkin,
             'aumentar_capacidade': self.aumentar_capacidade,
             'configurar_pre_encontro': self.configurar_pre_encontro,
@@ -133,6 +135,10 @@ def projetar_capabilities_contexto_pre_encontro(*, usuario, encontro):
     return CapabilitiesContextoPreEncontro(
         pre_encontro_configurado=pre_encontro_configurado,
         consultar_operacao=pode_consultar_operacao_pre_encontro(
+            usuario,
+            encontro,
+        ),
+        consultar_cuidados=pode_consultar_cuidados_pre_encontro(
             usuario,
             encontro,
         ),

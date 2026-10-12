@@ -147,6 +147,7 @@ from .services import oportunidades_convites as oportunidade_convite_services
 from .services import calendario_institucional as calendario_services
 from .services import comandos_calendario as calendario_command_services
 from .services import exportacao_calendario as exportacao_calendario_services
+from .services import exportacao_pre_encontro as exportacao_pre_encontro_services
 from .services import pre_encontro as pre_encontro_services
 from .serializers import _erro_de_dominio, _erro_de_trabalho
 from .formacao_catalogo import TEMAS_FORMATIVOS
@@ -1520,6 +1521,54 @@ class CapabilitiesContextoPreEncontroAPIView(APIView):
         return Response(CapabilitiesContextoPreEncontroSerializer(
             capabilities,
         ).data)
+
+
+def _resposta_pdf_pre_encontro(conteudo, nome):
+    resposta = FileResponse(
+        BytesIO(conteudo),
+        as_attachment=True,
+        filename=nome,
+        content_type='application/pdf',
+    )
+    resposta['Cache-Control'] = 'private, no-store'
+    resposta['X-Content-Type-Options'] = 'nosniff'
+    return resposta
+
+
+class PdfOperacionalPreEncontroAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, encontro_id):
+        encontro, pre_encontro = _pre_encontro_do_contexto(encontro_id)
+        _exigir_policy(
+            pode_consultar_operacao_pre_encontro(request.user, encontro),
+        )
+        conteudo = (
+            exportacao_pre_encontro_services
+            .gerar_pdf_operacional_pre_encontro(pre_encontro)
+        )
+        return _resposta_pdf_pre_encontro(
+            conteudo,
+            'pre-encontro-operacional.pdf',
+        )
+
+
+class PdfCuidadosPreEncontroAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, encontro_id):
+        encontro, pre_encontro = _pre_encontro_do_contexto(encontro_id)
+        _exigir_policy(
+            pode_consultar_cuidados_pre_encontro(request.user, encontro),
+        )
+        conteudo = (
+            exportacao_pre_encontro_services
+            .gerar_pdf_cuidados_pre_encontro(pre_encontro)
+        )
+        return _resposta_pdf_pre_encontro(
+            conteudo,
+            'pre-encontro-cuidados.pdf',
+        )
 
 
 class ConfiguracaoInicialPreEncontroAPIView(APIView):

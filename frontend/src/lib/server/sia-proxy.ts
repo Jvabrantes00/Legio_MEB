@@ -8,6 +8,10 @@ import {
   createPreEncounterMediaResponse,
   preEncounterMediaOperation,
 } from "./pre-encounter-media";
+import {
+  createPreEncounterPdfResponse,
+  preEncounterPdfKind,
+} from "./pre-encounter-pdf";
 
 const ALLOWED_RESOURCES = new Set([
   "alpinistas",
@@ -174,7 +178,9 @@ export async function proxySiaRequest(
     });
     const response = preEncounterMediaOperation(request.method, path) !== null
       ? createPreEncounterMediaResponse(result.upstream)
-      : await createClientResponse(result.upstream);
+      : preEncounterPdfKind(request.method, path) !== null
+        ? createPreEncounterPdfResponse(result.upstream)
+        : await createClientResponse(result.upstream);
     applyAuthenticationResult(response, result);
     return response;
   } catch {

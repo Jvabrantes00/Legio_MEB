@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <style>
+    @page { size: A4 portrait; margin: 12mm; }
+    body { color: #241111; font-family: "DejaVu Sans", sans-serif; font-size: 9pt; }
+    h1 { margin: 0; font-size: 18pt; }
+    .restricted { margin: 2mm 0 5mm; border: 2px solid #a40000; padding: 2mm; color: #a40000; font-weight: 800; letter-spacing: .08em; text-align: center; }
+    .meta { margin-bottom: 5mm; color: #5c4747; }
+    .person { margin-bottom: 4mm; border: 1px solid #d7bebe; border-radius: 2mm; padding: 3mm; break-inside: avoid; }
+    h2 { margin: 0 0 2mm; font-size: 12pt; }
+    dl { margin: 0; }
+    dt { margin-top: 1.5mm; font-weight: 700; }
+    dd { margin: .5mm 0 0; white-space: pre-wrap; }
+    .conference { margin-top: 2mm; border-top: 1px solid #eadada; padding-top: 2mm; font-weight: 700; }
+    .empty { border: 1px dashed #cbb; padding: 4mm; color: #6f5c5c; }
+    footer { margin-top: 5mm; color: #765f5f; font-size: 7pt; }
+  </style>
+</head>
+<body>
+  <h1>Pré-Encontro</h1>
+  <div class="restricted">RESTRITO — DADOS DE CUIDADO</div>
+  <div class="meta">
+    <strong>Encontro:</strong> {{ projecao.cabecalho.encontro }} ·
+    <strong>Data:</strong> {{ projecao.cabecalho.data|date:"d/m/Y" }}
+  </div>
+  {% for linha in projecao.linhas %}
+    <section class="person">
+      <h2>{{ linha.nome }}</h2>
+      <dl>{% for campo in linha.campos %}<dt>{{ campo.rotulo }}</dt><dd>{{ campo.valor }}</dd>{% endfor %}</dl>
+      <div class="conference">Conferência: {{ linha.conferencia }}</div>
+    </section>
+  {% empty %}
+    <p class="empty">Nenhum dado de cuidado relevante registrado para os atendimentos deste Pré-Encontro.</p>
+  {% endfor %}
+  <footer>Documento transitório e informativo; não representa avaliação ou recomendação médica.</footer>
+</body>
+</html>

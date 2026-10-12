@@ -38,6 +38,8 @@ from .views import (
     PessoasLookupPreEncontroAPIView,
     RegularizacaoInscricoesLookupPreEncontroAPIView,
     RegularizacaoPessoasLookupPreEncontroAPIView,
+    PdfOperacionalPreEncontroAPIView,
+    PdfCuidadosPreEncontroAPIView,
 )
 from .views import dashboard_stats
 from .views import current_user
@@ -213,6 +215,16 @@ urlpatterns = [
         'encontros/<int:encontro_id>/pre-encontro/atendimentos/<int:atendimento_id>/foto/usar-na-pessoa/',
         AssociacaoFotoPessoaPreEncontroAPIView.as_view(),
         name='pre-encontro-foto-usar-na-pessoa',
+    ),
+    path(
+        'encontros/<int:encontro_id>/pre-encontro/pdf/operacional/',
+        PdfOperacionalPreEncontroAPIView.as_view(),
+        name='pre-encontro-pdf-operacional',
+    ),
+    path(
+        'encontros/<int:encontro_id>/pre-encontro/pdf/cuidados/',
+        PdfCuidadosPreEncontroAPIView.as_view(),
+        name='pre-encontro-pdf-cuidados',
     ),
     path(
         'encontros/<int:encontro_id>/pre-encontro/atendimentos/<int:atendimento_id>/decisao-vaga/',

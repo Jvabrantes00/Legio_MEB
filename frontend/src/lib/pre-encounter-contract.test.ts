@@ -65,6 +65,7 @@ describe("contratos operacionais do Pré-Encontro", () => {
     const parsed = parsePreEncounterContextCapabilities({
       pre_encontro_configurado: false,
       consultar_operacao: true,
+      consultar_cuidados: true,
       registrar_checkin: false,
       aumentar_capacidade: false,
       configurar_pre_encontro: true,
@@ -72,6 +73,7 @@ describe("contratos operacionais do Pré-Encontro", () => {
     expect(parsed).toEqual({
       pre_encontro_configurado: false,
       consultar_operacao: true,
+      consultar_cuidados: true,
       registrar_checkin: false,
       aumentar_capacidade: false,
       configurar_pre_encontro: true,
@@ -82,6 +84,7 @@ describe("contratos operacionais do Pré-Encontro", () => {
   it("rejeita capabilities contextuais sem os estados explícitos de configuração", () => {
     expect(() => parsePreEncounterContextCapabilities({
       consultar_operacao: true,
+      consultar_cuidados: true,
       registrar_checkin: false,
       aumentar_capacidade: false,
     })).toThrow();

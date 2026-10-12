@@ -103,9 +103,11 @@ comandos explícitos sobre o domínio canônico de Encontros.
   check-in, regularização, pagamento, cuidados, decisão de vaga ou capacidade.
 - Check-in e regularização pertencem a Suporte, Diretoria e Fichas, conforme
   as policies administrativas já aplicadas pelo domínio.
-- Pagamento e cuidado seguem as policies do domínio: Fichas e administração
-  ampla, além da Coordenação Geral do mesmo Encontro. O conteúdo de cuidado
-  fica em endpoint separado e nunca integra lista, busca ou detalhe comum.
+- Pagamento e conferência operacional seguem as policies de gestão existentes.
+  A consulta ao conteúdo de cuidado é mais restrita: Fichas, Coordenação Geral
+  do mesmo Encontro e superuser técnico. O conteúdo fica em endpoint e PDF
+  separados e nunca integra lista, busca ou detalhe comum; Comunicação,
+  Suporte e Diretoria não recebem essa consulta apenas por seus papéis.
 - A decisão excepcional de vaga pertence à Diretoria. Aumento de capacidade
   pertence a Suporte e Diretoria pelo comando canônico. O superuser permanece
   bypass técnico separado.

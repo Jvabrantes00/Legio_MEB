@@ -269,18 +269,19 @@ class PreEncontroApiTests(TestCase):
 
     def test_capabilities_contextuais_reutilizam_policies_e_default_deny(self):
         casos = (
-            (self.fichas, True, True, False),
-            (self.comunicacao, True, False, False),
-            (self.suporte, True, True, True),
-            (self.sem_papel, False, False, False),
+            (self.fichas, True, True, True, False),
+            (self.comunicacao, True, False, False, False),
+            (self.suporte, True, False, True, True),
+            (self.sem_papel, False, False, False, False),
         )
-        for usuario, consultar, checkin, capacidade in casos:
+        for usuario, consultar, cuidados, checkin, capacidade in casos:
             self._autenticar(usuario)
             resposta = self.client.get(self._capabilities_url())
             self.assertEqual(resposta.status_code, status.HTTP_200_OK)
             self.assertEqual(resposta.data, {
                 'pre_encontro_configurado': True,
                 'consultar_operacao': consultar,
+                'consultar_cuidados': cuidados,
                 'registrar_checkin': checkin,
                 'aumentar_capacidade': capacidade,
                 'configurar_pre_encontro': False,
@@ -340,6 +341,7 @@ class PreEncontroApiTests(TestCase):
         self.assertEqual(contexto.data, {
             'pre_encontro_configurado': True,
             'consultar_operacao': False,
+            'consultar_cuidados': False,
             'registrar_checkin': False,
             'aumentar_capacidade': False,
             'configurar_pre_encontro': False,
@@ -415,15 +417,15 @@ class PreEncontroApiTests(TestCase):
         coordenacao = self._coordenacao('coord-sem-configurar', encontro=encontro)
         superuser = User.objects.create_superuser('super-configurar')
         casos = (
-            (self.fichas, True, True),
-            (self.diretoria, True, True),
-            (self.comunicacao, True, False),
-            (coordenacao, True, False),
-            (self.suporte, True, False),
-            (self.sem_papel, False, False),
-            (superuser, True, True),
+            (self.fichas, True, True, True),
+            (self.diretoria, True, False, True),
+            (self.comunicacao, True, False, False),
+            (coordenacao, True, True, False),
+            (self.suporte, True, False, False),
+            (self.sem_papel, False, False, False),
+            (superuser, True, True, True),
         )
-        for usuario, consultar, configurar in casos:
+        for usuario, consultar, cuidados, configurar in casos:
             with self.subTest(usuario=usuario.username):
                 self._autenticar(usuario)
                 resposta = self.client.get(self._capabilities_url(encontro))
@@ -431,6 +433,7 @@ class PreEncontroApiTests(TestCase):
                 self.assertEqual(resposta.data, {
                     'pre_encontro_configurado': False,
                     'consultar_operacao': consultar,
+                    'consultar_cuidados': cuidados,
                     'registrar_checkin': False,
                     'aumentar_capacidade': False,
                     'configurar_pre_encontro': configurar,

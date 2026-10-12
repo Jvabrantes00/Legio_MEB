@@ -1,4 +1,5 @@
 import { preEncounterMediaOperation } from "./pre-encounter-media";
+import { preEncounterPdfKind } from "./pre-encounter-pdf";
 
 const POSITIVE_INTEGER = /^[1-9]\d*$/;
 
@@ -11,6 +12,7 @@ export function isAllowedPreEncounterRequest(
   path: readonly string[],
 ): boolean {
   if (preEncounterMediaOperation(method, path) !== null) return true;
+  if (preEncounterPdfKind(method, path) !== null) return true;
   if (path[0] !== "encontros" || !isId(path[1]) || path[2] !== "pre-encontro") {
     return false;
   }

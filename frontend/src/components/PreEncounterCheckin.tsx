@@ -1,7 +1,7 @@
 "use client";
 
 import {
-  ArrowLeft, Camera, ChevronLeft, ChevronRight, CircleAlert, Search,
+  ArrowLeft, Camera, ChevronLeft, ChevronRight, CircleAlert, Download, Search,
   UserPlus, X,
 } from "lucide-react";
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
@@ -119,6 +119,7 @@ export function PreEncounterCheckin({
   const [detail, setDetail] = useState<PreEncounterDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [checkinOpen, setCheckinOpen] = useState(false);
+  const [downloadBusy, setDownloadBusy] = useState<"operacional" | "cuidados" | null>(null);
   const preEncounterConfigured = capabilities?.pre_encontro_configurado ?? false;
   const canConsultOperation = capabilities?.consultar_operacao ?? false;
 
@@ -214,6 +215,32 @@ export function PreEncounterCheckin({
     }
   }, [loadCapabilities, refresh]);
 
+  async function downloadPdf(kind: "operacional" | "cuidados") {
+    setDownloadBusy(kind);
+    try {
+      const response = await siaFetch(
+        `/encontros/${encontroId}/pre-encontro/pdf/${kind}/`,
+      );
+      if (!response.ok) {
+        toast.error(await responseError(response, "Não foi possível baixar o PDF."));
+        return;
+      }
+      const disposition = response.headers.get("content-disposition") ?? "";
+      const filename = disposition.match(/filename="?([^";]+)"?/i)?.[1]
+        ?? `pre-encontro-${kind}.pdf`;
+      const url = URL.createObjectURL(await response.blob());
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = filename;
+      anchor.click();
+      URL.revokeObjectURL(url);
+    } catch (error: unknown) {
+      toast.error(errorMessage(error, "Falha ao baixar o PDF."));
+    } finally {
+      setDownloadBusy(null);
+    }
+  }
+
   if (capabilitiesLoading) return <p className="p-6 text-sm text-gray-500">Carregando Pré-Encontro...</p>;
   if (capabilitiesError) {
     return (
@@ -253,15 +280,19 @@ export function PreEncounterCheckin({
           <h2 className="text-2xl font-bold text-gray-900">Pré-Encontro</h2>
           <p className="text-sm text-gray-600">Credenciamento do Encontro atual · {count} atendimento(s)</p>
         </div>
-        {capabilities.registrar_checkin && (
-          <button
-            type="button"
-            onClick={() => setCheckinOpen(true)}
-            className="inline-flex items-center justify-center gap-2 rounded-lg bg-escalada-azul px-4 py-2.5 font-semibold text-white hover:bg-blue-800"
-          >
-            <UserPlus size={18} /> Novo atendimento
-          </button>
-        )}
+        <div className="flex flex-wrap gap-2">
+          <button type="button" disabled={downloadBusy !== null} onClick={() => void downloadPdf("operacional")} className="inline-flex items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm font-semibold disabled:opacity-50"><Download size={16} /> Baixar lista operacional</button>
+          {capabilities.consultar_cuidados && <button type="button" disabled={downloadBusy !== null} onClick={() => void downloadPdf("cuidados")} className="inline-flex items-center justify-center gap-2 rounded-lg border border-red-200 px-3 py-2 text-sm font-semibold text-red-800 disabled:opacity-50"><Download size={16} /> Baixar dados de cuidado</button>}
+          {capabilities.registrar_checkin && (
+            <button
+              type="button"
+              onClick={() => setCheckinOpen(true)}
+              className="inline-flex items-center justify-center gap-2 rounded-lg bg-escalada-azul px-4 py-2.5 font-semibold text-white hover:bg-blue-800"
+            >
+              <UserPlus size={18} /> Novo atendimento
+            </button>
+          )}
+        </div>
       </header>
 
       <ListControls

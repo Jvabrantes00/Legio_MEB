@@ -79,6 +79,7 @@ describe("allowlist BFF do Pré-Encontro", () => {
     const contexto = parsePreEncounterContextCapabilities({
       pre_encontro_configurado: false,
       consultar_operacao: true,
+      consultar_cuidados: true,
       registrar_checkin: false,
       aumentar_capacidade: false,
       configurar_pre_encontro: true,
@@ -104,6 +105,7 @@ describe("allowlist BFF do Pré-Encontro", () => {
     expect(() => parsePreEncounterContextCapabilities({
       pre_encontro_configurado: false,
       consultar_operacao: true,
+      consultar_cuidados: true,
       registrar_checkin: "sim",
       aumentar_capacidade: false,
       configurar_pre_encontro: true,

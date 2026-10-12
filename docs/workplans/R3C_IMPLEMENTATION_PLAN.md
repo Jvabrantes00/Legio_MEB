@@ -1289,6 +1289,31 @@ gerado por usuário sem acesso aos dados.
 
 **Riscos:** reutilizar publicação do Calendário ou persistir PDF sensível.
 
+**Implementação concluída:** foram criadas projeções, templates e renderers
+WeasyPrint independentes. O PDF operacional usa nome, telefone canônico com os
+fallbacks já existentes, origem operacional, presença, pagamento, vaga e
+aptidão derivada, além de dez linhas visuais extras para anotações; ele não
+carrega cuidado ou foto. O PDF restrito usa exclusivamente
+`DadosCuidadoInscricao`, inclui somente casos relevantes e projeta `Conferido`,
+`Não conferido` ou `Atualizado após conferência` a partir da conferência e do
+timestamp canônicos.
+
+Ambos são gerados integralmente em memória, sem model, publicação, storage,
+histórico ou auditoria de mutação, e permanecem disponíveis como consulta
+histórica após encerramento do Encontro. A data exibida usa
+`PreEncontro.data`, projeção operacional sincronizada da data canônica do
+Calendário. O fluxo não reutiliza a publicação do Calendário Institucional.
+
+Os endpoints e o BFF possuem paths GET explícitos, streaming binário, nomes de
+arquivo previsíveis e headers privados. O PDF operacional reutiliza
+`consultar_operacao`; o restrito reutiliza a policy canônica
+`consultar_cuidados`, limitada a Fichas, Coordenação Geral contextual e
+superuser. A autorização ocorre antes da projeção sensível. Comunicação,
+Suporte, Diretoria e default deny não acessam o documento restrito. Nenhuma
+migration foi necessária.
+
+**Estado:** concluída. R.3I.23 permanece como próximo bloco, sem antecipação.
+
 ### R.3I.23 — Auditoria das correções históricas existentes
 
 **Prioridade:** NECESSÁRIO ANTES DO CUTOVER.
