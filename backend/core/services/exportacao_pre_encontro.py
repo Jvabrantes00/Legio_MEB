@@ -104,7 +104,7 @@ def _cabecalho(pre_encontro, *, momento=None):
     )
 
 
-def _nome(atendimento):
+def nome_canonico_atendimento(atendimento):
     if atendimento.pessoa_id:
         return atendimento.pessoa.nome
     if atendimento.inscricao_id:
@@ -134,7 +134,7 @@ def _telefone_pessoa(pessoa):
     )
 
 
-def _telefone(atendimento):
+def telefone_canonico_atendimento(atendimento):
     if atendimento.inscricao_id:
         try:
             telefone = atendimento.inscricao.dados_declarados.telefone_whatsapp
@@ -169,8 +169,8 @@ def projetar_operacional(pre_encontro, *, momento=None):
             atendimento,
         )
         linhas.append(LinhaOperacionalPreEncontro(
-            nome=_nome(atendimento),
-            telefone=_telefone(atendimento),
+            nome=nome_canonico_atendimento(atendimento),
+            telefone=telefone_canonico_atendimento(atendimento),
             origem=_origem(atendimento),
             presenca='Presente',
             pagamento=_pagamento(atendimento),
@@ -264,7 +264,7 @@ def projetar_cuidados(pre_encontro, *, momento=None):
         if not _cuidado_relevante(dados):
             continue
         linhas.append(LinhaCuidadoPreEncontro(
-            nome=_nome(atendimento),
+            nome=nome_canonico_atendimento(atendimento),
             campos=_campos_cuidado(dados),
             conferencia=_estado_conferencia(atendimento, dados),
         ))

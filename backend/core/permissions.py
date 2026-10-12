@@ -11,7 +11,9 @@ from .models import (
 )
 from .roles import (
     FICHAS_MANAGEMENT_ROLES,
+    FORMATION_HISTORY_ROLES,
     FULL_ADMIN_ROLES,
+    INSTITUTIONAL_CALENDAR_READ_ROLES,
     SiaRole,
     user_has_any_role,
 )
@@ -221,6 +223,51 @@ def pode_consultar_cuidados_pre_encontro(user, encontro):
         and (
             user.is_superuser
             or user_has_any_role(user, SiaRole.FICHAS)
+            or pertence_coordenacao_geral_encontro(user, encontro)
+        )
+    )
+
+
+def pode_consultar_resumo_workspace_encontro(user, encontro):
+    return pode_consultar_operacao_pre_encontro(user, encontro)
+
+
+def pode_consultar_encontristas_workspace(user, encontro):
+    return pode_consultar_operacao_pre_encontro(user, encontro)
+
+
+def pode_consultar_contato_workspace(user, encontro):
+    return pode_registrar_pagamento_pre_encontro(user, encontro)
+
+
+def pode_acessar_equipes_workspace(user, encontro):
+    return bool(
+        _usuario_ativo(user)
+        and (
+            user.is_superuser
+            or user_has_any_role(user, *FICHAS_MANAGEMENT_ROLES)
+            or pertence_coordenacao_geral_encontro(user, encontro)
+        )
+    )
+
+
+def pode_acessar_formacao_workspace(user, encontro):
+    del encontro
+    return bool(
+        _usuario_ativo(user)
+        and (
+            user.is_superuser
+            or user_has_any_role(user, *FORMATION_HISTORY_ROLES)
+        )
+    )
+
+
+def pode_acessar_agenda_workspace(user, encontro):
+    return bool(
+        _usuario_ativo(user)
+        and (
+            user.is_superuser
+            or user_has_any_role(user, *INSTITUTIONAL_CALENDAR_READ_ROLES)
             or pertence_coordenacao_geral_encontro(user, encontro)
         )
     )

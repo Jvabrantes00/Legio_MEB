@@ -40,6 +40,9 @@ from .views import (
     RegularizacaoPessoasLookupPreEncontroAPIView,
     PdfOperacionalPreEncontroAPIView,
     PdfCuidadosPreEncontroAPIView,
+    EncontroWorkspaceSummaryAPIView,
+    EncontroWorkspaceCapabilitiesAPIView,
+    EncontroWorkspaceEncontristasAPIView,
 )
 from .views import dashboard_stats
 from .views import current_user
@@ -136,6 +139,21 @@ router.register(r'entregas-materiais', EntregaMaterialViewSet)
 
 # Exporta as rotas 
 urlpatterns = [
+    path(
+        'encontros/<int:encontro_id>/workspace/',
+        EncontroWorkspaceSummaryAPIView.as_view(),
+        name='encontro-workspace-summary',
+    ),
+    path(
+        'encontros/<int:encontro_id>/workspace/capabilities/',
+        EncontroWorkspaceCapabilitiesAPIView.as_view(),
+        name='encontro-workspace-capabilities',
+    ),
+    path(
+        'encontros/<int:encontro_id>/workspace/encontristas/',
+        EncontroWorkspaceEncontristasAPIView.as_view(),
+        name='encontro-workspace-encontristas',
+    ),
     path(
         'encontros/<int:encontro_id>/pre-encontro/lookups/inscricoes/',
         InscricoesLookupPreEncontroAPIView.as_view(),

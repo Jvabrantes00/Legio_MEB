@@ -55,6 +55,107 @@ class StrictCommandSerializer(serializers.Serializer):
         return super().to_internal_value(data)
 
 
+class WorkspaceCodigoLabelSerializer(serializers.Serializer):
+    codigo = serializers.CharField(read_only=True)
+    label = serializers.CharField(read_only=True)
+
+
+class WorkspaceCandidatoRefSerializer(serializers.Serializer):
+    origem_tipo = serializers.CharField(read_only=True)
+    origem_id = serializers.CharField(read_only=True)
+
+
+class WorkspaceCandidatoSummarySerializer(serializers.Serializer):
+    ref = WorkspaceCandidatoRefSerializer(read_only=True)
+    nome = serializers.CharField(read_only=True)
+    origem = WorkspaceCodigoLabelSerializer(read_only=True)
+    situacao = WorkspaceCodigoLabelSerializer(read_only=True)
+    presenca_pre = serializers.BooleanField(read_only=True)
+    aptidao = serializers.CharField(read_only=True, allow_null=True)
+    pessoa_id = serializers.IntegerField(read_only=True, allow_null=True)
+
+
+class WorkspaceCandidatoFullSerializer(WorkspaceCandidatoSummarySerializer):
+    telefone = serializers.CharField(read_only=True, allow_blank=True)
+
+
+class WorkspaceCapabilitiesSerializer(serializers.Serializer):
+    consultar_resumo = serializers.BooleanField(read_only=True)
+    consultar_encontristas = serializers.BooleanField(read_only=True)
+    consultar_contato = serializers.BooleanField(read_only=True)
+    acessar_pre_encontro = serializers.BooleanField(read_only=True)
+    acessar_equipes = serializers.BooleanField(read_only=True)
+    acessar_formacao = serializers.BooleanField(read_only=True)
+    acessar_agenda = serializers.BooleanField(read_only=True)
+
+
+class WorkspaceEncontroSerializer(serializers.Serializer):
+    id = serializers.IntegerField(read_only=True)
+    nome = serializers.CharField(read_only=True)
+    tipo = serializers.CharField(read_only=True)
+    local = serializers.CharField(read_only=True)
+
+
+class WorkspaceAgendaResumoSerializer(serializers.Serializer):
+    configurada = serializers.BooleanField(read_only=True)
+    oficializada = serializers.BooleanField(read_only=True)
+    quantidade_itens = serializers.IntegerField(read_only=True)
+    proximo_item = serializers.DateField(read_only=True, allow_null=True)
+    datas_principais = serializers.ListField(
+        child=serializers.DateField(),
+        read_only=True,
+    )
+    pre_encontro_data = serializers.DateField(read_only=True, allow_null=True)
+
+
+class WorkspaceEncontristasResumoSerializer(serializers.Serializer):
+    inscricoes_recebidas = serializers.IntegerField(read_only=True)
+    total_funil = serializers.IntegerField(read_only=True)
+    por_situacao = serializers.DictField(
+        child=serializers.IntegerField(),
+        read_only=True,
+    )
+
+
+class WorkspacePreEncontroResumoSerializer(serializers.Serializer):
+    configurado = serializers.BooleanField(read_only=True)
+    data = serializers.DateField(read_only=True, allow_null=True)
+    capacidade = serializers.IntegerField(read_only=True, allow_null=True)
+    quantidade_checkins = serializers.IntegerField(read_only=True)
+    quantidade_aptos = serializers.IntegerField(read_only=True)
+    quantidade_aguardando_decisao = serializers.IntegerField(read_only=True)
+
+
+class WorkspaceEquipesResumoSerializer(serializers.Serializer):
+    quantidade_equipes = serializers.IntegerField(read_only=True)
+    quantidade_funcoes = serializers.IntegerField(read_only=True)
+    vagas_estruturais = serializers.IntegerField(read_only=True, allow_null=True)
+    vagas_preenchidas = serializers.IntegerField(read_only=True)
+
+
+class WorkspaceFormacaoResumoSerializer(serializers.Serializer):
+    total_sessoes = serializers.IntegerField(read_only=True)
+    planejadas = serializers.IntegerField(read_only=True)
+    realizadas = serializers.IntegerField(read_only=True)
+    canceladas = serializers.IntegerField(read_only=True)
+
+
+class WorkspaceAlertaSerializer(serializers.Serializer):
+    codigo = serializers.CharField(read_only=True)
+    mensagem = serializers.CharField(read_only=True)
+
+
+class EncontroWorkspaceSummarySerializer(serializers.Serializer):
+    encontro = WorkspaceEncontroSerializer(read_only=True)
+    lifecycle = serializers.CharField(read_only=True)
+    agenda = WorkspaceAgendaResumoSerializer(read_only=True)
+    encontristas = WorkspaceEncontristasResumoSerializer(read_only=True)
+    pre_encontro = WorkspacePreEncontroResumoSerializer(read_only=True)
+    equipes = WorkspaceEquipesResumoSerializer(read_only=True)
+    formacao = WorkspaceFormacaoResumoSerializer(read_only=True)
+    alertas = WorkspaceAlertaSerializer(many=True, read_only=True)
+
+
 def _identificacao_atendimento(atendimento):
     if atendimento.pessoa_id:
         return atendimento.pessoa.nome

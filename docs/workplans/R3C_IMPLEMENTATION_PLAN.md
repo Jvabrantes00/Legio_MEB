@@ -1349,6 +1349,9 @@ cd /home/vinicius/projects/Legio_MEB/backend
 
 ### R.3I.24 — Projeção canônica do Workspace e BFF interno
 
+**Estado:** implementada em 11 de outubro de 2026; validações focadas
+aprovadas.
+
 **Prioridade:** NECESSÁRIO PARA MVP de produto.
 
 **Objetivo:** oferecer consultas agregadas e commands mínimos para Visão geral
@@ -1382,6 +1385,47 @@ novo workspace, sem remover contratos antigos.
 **Commit sugerido:** `feat: expose canonical encounter workspace`
 
 **Riscos:** endpoint gigante, N+1 e contrato full para papéis summary.
+
+**Implementação:** o backend passou a expor três consultas aninhadas e
+independentes: resumo agregado, capabilities contextuais e Encontristas
+paginados. A projeção do funil une todas as `InscricaoEncontro` do Encontro
+aos atendimentos de Pré sem inscrição, mantendo a inscrição como origem
+canônica quando há vínculo. Não há correspondência por nome, telefone ou CPF,
+nem model, contador ou status persistido de Workspace.
+
+A situação é derivada por uma regra única a partir de cancelamento da
+inscrição, confirmação canônica do convite, presença no Pré, decisão de vaga e
+aptidão. A avaliação de aptidão ganhou operação em lote, reutilizada pela
+projeção, para que relações previsíveis não gerem consultas por linha. Resumo,
+filtros e contagens usam a mesma regra; `inscricoes_recebidas` permanece uma
+contagem separada de todas as fichas recebidas.
+
+O contrato summary não contém telefone, CPF, endereço, cuidado, foto ou chave
+de storage. O contrato full acrescenta somente o telefone operacional quando
+a capability existente permite e reutiliza a precedência canônica do
+Pré-Encontro. Comunicação permanece no contrato summary; autorizações de
+Pré, Equipes, Formação e Agenda são projetadas separadamente e o frontend não
+infere papéis.
+
+A Visão geral integra apenas agregados dos domínios atuais de Equipes e
+Formação. Agenda usa exclusivamente o `CalendarioEncontro` vigente, inclusive
+`pre_encontro_data`, sem fallback em `data_referencia`, `data_exato`, rótulo ou
+Preparatória. Lifecycle histórico continua consultável. Nenhuma leitura usa
+`Alpinista.status` ou `VinculoEncontroLegado`, e mutations permanecem nos
+commands canônicos dos respectivos domínios.
+
+O BFF aceita somente `GET` nos três paths exatos do Workspace. Apenas a lista
+aceita `page`, `search`, `situacao` e `origem`; método, path, traversal, URL
+absoluta e query fora da allowlist são recusados. O contrato TypeScript separa
+summary/full, capabilities e página de candidatos. Não houve migration nem
+redesign visual neste bloco.
+
+**Validação:** 19 testes backend focados cobrem mais de quarenta comportamentos
+de autorização, lifecycle, composição do funil, deduplicação, situações,
+contagens, filtros, privacidade, domínios integrados, ausência de legado e
+queries limitadas. Os 22 testes Vitest focados cobrem allowlist e contrato. A
+execução registrada inclui esses testes, TypeScript, Django check, migration
+check e `git diff --check`, sem suíte completa, build ou PostgreSQL.
 
 ### R.3I.25 — Frontend do Workspace de Encontros
 

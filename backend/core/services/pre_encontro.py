@@ -983,23 +983,13 @@ def conferir_cuidados_pre_encontro(
     return conferencia
 
 
-def avaliar_aptidao_pre_encontro(atendimento):
-    atendimento_id = _pk(atendimento, 'Atendimento')
-    try:
-        atendimento = (
-            AtendimentoPreEncontro.objects
-            .select_related(
-                'pre_encontro',
-                'pre_encontro__encontro',
-                'inscricao',
-                'pessoa',
-                'decisao_vaga',
-            )
-            .get(pk=atendimento_id)
-        )
-    except AtendimentoPreEncontro.DoesNotExist as error:
-        raise ValidationError('Atendimento não encontrado.') from error
-    encontro = atendimento.pre_encontro.encontro
+def _avaliar_aptidao_carregada(
+    atendimento,
+    *,
+    configuracao,
+    confirmados,
+    atendimentos_encontro,
+):
     if not _identidade_regularizada(atendimento):
         return AptidaoPreEncontro(
             SituacaoAptidaoPreEncontro.NAO_APTO,
@@ -1026,26 +1016,20 @@ def avaliar_aptidao_pre_encontro(atendimento):
                 'vaga_aprovada_pela_diretoria',
             )
     pessoa_id = _pessoa_id_atendimento(atendimento)
-    if pessoa_id in _pessoas_confirmadas(encontro):
+    if pessoa_id in confirmados:
         return AptidaoPreEncontro(
             SituacaoAptidaoPreEncontro.APTO,
             'vaga_confirmada',
         )
-    configuracao = ConfiguracaoEncontristasEncontro.objects.filter(
-        encontro=encontro,
-    ).first()
     if configuracao is None:
         return AptidaoPreEncontro(
             SituacaoAptidaoPreEncontro.NAO_APTO,
             'capacidade_nao_configurada',
         )
-    confirmados = _pessoas_confirmadas(encontro)
-    atendimentos = list(
-        AtendimentoPreEncontro.objects
-        .filter(pre_encontro__encontro=encontro)
-        .select_related('pre_encontro', 'inscricao', 'pessoa', 'decisao_vaga')
+    candidatos = _candidatos_nao_confirmados(
+        atendimentos_encontro,
+        confirmados,
     )
-    candidatos = _candidatos_nao_confirmados(atendimentos, confirmados)
     aprovados = sum(
         1
         for candidato in candidatos
@@ -1067,6 +1051,64 @@ def avaliar_aptidao_pre_encontro(atendimento):
         SituacaoAptidaoPreEncontro.AGUARDANDO_DECISAO_DIRETORIA,
         'disputa_de_vaga',
     )
+
+
+def avaliar_aptidoes_pre_encontro(atendimentos):
+    """Avalia um conjunto do mesmo Encontro com custo constante de queries."""
+    atendimentos = list(atendimentos)
+    if not atendimentos:
+        return {}
+    encontro_id = atendimentos[0].pre_encontro.encontro_id
+    if any(
+        item.pre_encontro.encontro_id != encontro_id
+        for item in atendimentos
+    ):
+        raise ValidationError('Atendimentos pertencem a Encontros diferentes.')
+    todos = list(
+        AtendimentoPreEncontro.objects
+        .filter(pre_encontro__encontro_id=encontro_id)
+        .select_related(
+            'pre_encontro',
+            'pre_encontro__encontro',
+            'inscricao',
+            'decisao_vaga',
+        )
+    )
+    configuracao = ConfiguracaoEncontristasEncontro.objects.filter(
+        encontro_id=encontro_id,
+    ).first()
+    confirmados = _pessoas_confirmadas(
+        atendimentos[0].pre_encontro.encontro,
+    )
+    por_id = {item.pk: item for item in todos}
+    return {
+        item.pk: _avaliar_aptidao_carregada(
+            por_id.get(item.pk, item),
+            configuracao=configuracao,
+            confirmados=confirmados,
+            atendimentos_encontro=todos,
+        )
+        for item in atendimentos
+    }
+
+
+def avaliar_aptidao_pre_encontro(atendimento):
+    atendimento_id = _pk(atendimento, 'Atendimento')
+    try:
+        atendimento = (
+            AtendimentoPreEncontro.objects
+            .select_related(
+                'pre_encontro',
+                'pre_encontro__encontro',
+                'inscricao',
+                'pessoa',
+                'decisao_vaga',
+            )
+            .get(pk=atendimento_id)
+        )
+    except AtendimentoPreEncontro.DoesNotExist as error:
+        raise ValidationError('Atendimento não encontrado.') from error
+    return avaliar_aptidoes_pre_encontro([atendimento])[atendimento.pk]
 
 
 @transaction.atomic

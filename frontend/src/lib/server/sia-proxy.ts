@@ -4,6 +4,7 @@ import { applyAuthenticationResult, authenticatedDjangoRequest } from "./django-
 import { validateCsrf } from "./csrf";
 import { backendApiUrl, getSiaServerConfig } from "./sia-config";
 import { isAllowedPreEncounterRequest } from "./pre-encounter-bff";
+import { isAllowedEncounterWorkspaceRequest } from "./encounter-workspace-bff";
 import {
   createPreEncounterMediaResponse,
   preEncounterMediaOperation,
@@ -47,6 +48,12 @@ export function validateProxyPath(
   }
   if (path.includes("pre-encontro") && !isAllowedPreEncounterRequest(method, path)) {
     throw new Error("Operação de Pré-Encontro não permitida.");
+  }
+  if (
+    path.includes("workspace")
+    && !isAllowedEncounterWorkspaceRequest(method, path, searchParams)
+  ) {
+    throw new Error("Operação de Workspace não permitida.");
   }
   for (const key of searchParams.keys()) {
     if (BLOCKED_QUERY_KEYS.has(key.toLowerCase())) {

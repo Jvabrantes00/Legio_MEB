@@ -116,6 +116,10 @@ from .serializers import (
     ConfiguracaoInicialPreEncontroCommandSerializer,
     InscricaoLookupPreEncontroSerializer,
     PessoaLookupPreEncontroSerializer,
+    EncontroWorkspaceSummarySerializer,
+    WorkspaceCapabilitiesSerializer,
+    WorkspaceCandidatoFullSerializer,
+    WorkspaceCandidatoSummarySerializer,
     )
 from .permissions import (
     AlpinistaQueryPolicy,
@@ -133,6 +137,8 @@ from .permissions import (
     pode_registrar_pagamento_pre_encontro,
     pode_regularizar_pre_encontro,
     pode_resolver_vaga_pre_encontro,
+    pode_consultar_encontristas_workspace,
+    pode_consultar_resumo_workspace_encontro,
 )
 from .services.reunioes_preparatorias import corrigir_presenca_preparatoria
 from .services import avaliacoes_encontro as avaliacao_services
@@ -149,6 +155,7 @@ from .services import comandos_calendario as calendario_command_services
 from .services import exportacao_calendario as exportacao_calendario_services
 from .services import exportacao_pre_encontro as exportacao_pre_encontro_services
 from .services import pre_encontro as pre_encontro_services
+from .services import encontro_workspace as encontro_workspace_services
 from .serializers import _erro_de_dominio, _erro_de_trabalho
 from .formacao_catalogo import TEMAS_FORMATIVOS
 from .throttles import (
@@ -185,6 +192,94 @@ from django_filters import rest_framework as django_filters
 
 public_registration_logger = logging.getLogger('core.public_registration')
 PUBLIC_REGISTRATION_NOT_FOUND = 'Recurso público não encontrado.'
+
+
+class EncontroWorkspaceSummaryAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, encontro_id):
+        encontro = get_object_or_404(Encontro, pk=encontro_id)
+        _exigir_policy(
+            pode_consultar_resumo_workspace_encontro(request.user, encontro),
+        )
+        resultado = encontro_workspace_services.projetar_resumo(
+            encontro=encontro,
+        )
+        return Response(EncontroWorkspaceSummarySerializer(resultado).data)
+
+
+class EncontroWorkspaceCapabilitiesAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, encontro_id):
+        encontro = get_object_or_404(Encontro, pk=encontro_id)
+        capabilities = encontro_workspace_services.projetar_capabilities(
+            usuario=request.user,
+            encontro=encontro,
+        )
+        if not any(capabilities.values()):
+            raise PermissionDenied(
+                'Seu usuário não pode consultar este Workspace.',
+            )
+        return Response(WorkspaceCapabilitiesSerializer(capabilities).data)
+
+
+class EncontroWorkspaceEncontristasAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+    PARAMETROS = frozenset({'page', 'search', 'situacao', 'origem'})
+
+    def get(self, request, encontro_id):
+        encontro = get_object_or_404(Encontro, pk=encontro_id)
+        _exigir_policy(
+            pode_consultar_encontristas_workspace(request.user, encontro),
+        )
+        desconhecidos = set(request.query_params) - self.PARAMETROS
+        if desconhecidos:
+            raise ValidationError({
+                'parametros': [
+                    f"Parâmetros desconhecidos: {', '.join(sorted(desconhecidos))}."
+                ],
+            })
+        situacao = request.query_params.get('situacao', '')
+        if situacao and situacao not in {
+            item.value
+            for item in encontro_workspace_services.SituacaoCandidatoWorkspace
+        }:
+            raise ValidationError({'situacao': ['Situação inválida.']})
+        origem = request.query_params.get('origem', '')
+        if origem and origem not in {
+            item.value
+            for item in encontro_workspace_services.OrigemCandidatoWorkspace
+        }:
+            raise ValidationError({'origem': ['Origem inválida.']})
+        capabilities = encontro_workspace_services.projetar_capabilities(
+            usuario=request.user,
+            encontro=encontro,
+        )
+        incluir_contato = capabilities['consultar_contato']
+        candidatos = encontro_workspace_services.listar_encontristas(
+            encontro=encontro,
+            incluir_contato=incluir_contato,
+            search=request.query_params.get('search', ''),
+            situacao=situacao,
+            origem=origem,
+        )
+        paginator = PageNumberPagination()
+        pagina = paginator.paginate_queryset(candidatos, request, view=self)
+        dados = [
+            encontro_workspace_services.serializar_candidato(
+                item,
+                incluir_contato=incluir_contato,
+            )
+            for item in pagina
+        ]
+        serializer = (
+            WorkspaceCandidatoFullSerializer
+            if incluir_contato else WorkspaceCandidatoSummarySerializer
+        )
+        return paginator.get_paginated_response(
+            serializer(dados, many=True).data,
+        )
 
 
 SUMMARY_PROFILE_FIELDS = (
