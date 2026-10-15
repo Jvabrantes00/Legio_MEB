@@ -1,5 +1,6 @@
 import inspect
 import os
+from datetime import timedelta
 from io import StringIO
 from unittest.mock import patch
 
@@ -7,16 +8,22 @@ from django.contrib.auth.models import User
 from django.core.management import call_command
 from django.core.management.base import CommandError
 from django.test import TestCase, override_settings
+from django.utils import timezone
 
 from core.management.commands.seed_demo import (
     DEMO_ACCOUNTS,
     DEMO_ENCOUNTERS,
     DEMO_GROUP_NAMES,
     DEMO_PERSON_NAMES,
+    DEMO_REGISTRATION_CLOSE_DAYS_BEFORE,
+    DEMO_REGISTRATION_OPEN_DAYS_BEFORE,
+    DEMO_REGISTRATION_SPECS,
+    _configure_encounter_registrations,
     _delete_demo_dataset,
 )
 from core.models import (
     Alpinista,
+    ConfiguracaoEncontristasEncontro,
     ConviteEncontro,
     Encontro,
     Grupo,
@@ -142,6 +149,56 @@ class SeedDemoCommandTests(TestCase):
             dict(encounters.values_list('encontro', 'status')),
             expected_statuses,
         )
+        configurations = ConfiguracaoEncontristasEncontro.objects.filter(
+            encontro__in=encounters,
+        ).select_related('encontro')
+        self.assertEqual(configurations.count(), len(DEMO_ENCOUNTERS))
+        for configuration in configurations:
+            spec = DEMO_REGISTRATION_SPECS[configuration.encontro.tipo]
+            self.assertEqual(configuration.capacidade, spec['capacidade'])
+            self.assertEqual(
+                configuration.idade_minima,
+                spec['idade_minima'],
+            )
+            self.assertEqual(
+                configuration.idade_maxima,
+                spec['idade_maxima'],
+            )
+            self.assertIsNotNone(configuration.public_id)
+            configuration.full_clean()
+            first_day = (
+                configuration.encontro.calendarios
+                .get(vigente=True)
+                .dias
+                .order_by('ordem', 'data')
+                .values_list('data', flat=True)
+                .first()
+            )
+            opening_local = timezone.localtime(
+                configuration.inscricoes_abrem_em,
+            )
+            closing_local = timezone.localtime(
+                configuration.inscricoes_encerram_em,
+            )
+            self.assertEqual(
+                opening_local.date(),
+                first_day - timedelta(
+                    days=DEMO_REGISTRATION_OPEN_DAYS_BEFORE,
+                ),
+            )
+            self.assertEqual(opening_local.hour, 8)
+            self.assertEqual(
+                closing_local.date(),
+                first_day - timedelta(
+                    days=DEMO_REGISTRATION_CLOSE_DAYS_BEFORE,
+                ),
+            )
+            self.assertEqual(closing_local.hour, 23)
+            self.assertEqual(closing_local.minute, 59)
+            self.assertLess(
+                configuration.inscricoes_abrem_em,
+                configuration.inscricoes_encerram_em,
+            )
 
         confirmed_without_participation = ConviteEncontro.objects.filter(
             encontro__encontro='[DEMO] ESPPA Horizonte 2027',
@@ -202,6 +259,11 @@ class SeedDemoCommandTests(TestCase):
             User.objects.filter(
                 username__in=[username for username, _ in DEMO_ACCOUNTS]
             ).count(),
+            ConfiguracaoEncontristasEncontro.objects.filter(
+                encontro__encontro__in=[
+                    title for title, _ in DEMO_ENCOUNTERS
+                ],
+            ).count(),
         )
 
         self.run_seed()
@@ -215,8 +277,49 @@ class SeedDemoCommandTests(TestCase):
                 User.objects.filter(
                     username__in=[username for username, _ in DEMO_ACCOUNTS]
                 ).count(),
+                ConfiguracaoEncontristasEncontro.objects.filter(
+                    encontro__encontro__in=[
+                        title for title, _ in DEMO_ENCOUNTERS
+                    ],
+                ).count(),
             ),
             first_counts,
+        )
+
+    def test_registration_configuration_reconciliation_is_idempotent(self):
+        self.run_seed()
+        encounters = {
+            key: Encontro.objects.get(encontro=title)
+            for key, (title, _) in zip(
+                ('serra', 'vale', 'horizonte', 'caminho'),
+                DEMO_ENCOUNTERS,
+                strict=True,
+            )
+        }
+        recorder = User.objects.get(username='demo.fichas')
+        configuration = ConfiguracaoEncontristasEncontro.objects.get(
+            encontro=encounters['serra'],
+        )
+        original_pk = configuration.pk
+        original_public_id = configuration.public_id
+        configuration.capacidade = 99
+        configuration.save(update_fields=['capacidade'])
+
+        _configure_encounter_registrations(encounters, recorder)
+        _configure_encounter_registrations(encounters, recorder)
+
+        configuration.refresh_from_db()
+        self.assertEqual(configuration.pk, original_pk)
+        self.assertEqual(configuration.public_id, original_public_id)
+        self.assertEqual(
+            configuration.capacidade,
+            DEMO_REGISTRATION_SPECS[Encontro.Tipo.ESCALADA]['capacidade'],
+        )
+        self.assertEqual(
+            ConfiguracaoEncontristasEncontro.objects.filter(
+                encontro__in=encounters.values(),
+            ).count(),
+            len(DEMO_ENCOUNTERS),
         )
 
     def test_reset_removes_only_allowlisted_demo_roots(self):

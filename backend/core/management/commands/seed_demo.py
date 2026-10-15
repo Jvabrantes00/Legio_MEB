@@ -1,5 +1,5 @@
 import os
-from datetime import date, time, timedelta
+from datetime import date, datetime, time, timedelta
 
 from django.conf import settings
 from django.contrib.auth.models import Group as AuthGroup
@@ -7,16 +7,19 @@ from django.contrib.auth.models import User
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 from django.db.models import Q
+from django.utils import timezone
 
 from core.models import (
     Alpinista,
     AvaliacaoEncontro,
+    ConfiguracaoEncontristasEncontro,
     ConfiguracaoGrupo,
     ConviteEncontro,
     CoordenacaoGrupo,
     EnderecoPessoa,
     Encontro,
     EquipeEncontro,
+    EventoAuditoriaEncontro,
     Frequencia,
     Grupo,
     Inscricao,
@@ -39,6 +42,10 @@ from core.models import (
 )
 from core.roles import SiaRole
 from core.services.avaliacoes_encontro import criar_avaliacao_encontro
+from core.services.configuracao_encontristas import (
+    alterar_configuracao_encontristas,
+    criar_configuracao_encontristas,
+)
 from core.services.encontros import (
     criar_encontro_com_agenda,
     finalizar_encontro,
@@ -150,6 +157,21 @@ DEMO_ENCOUNTERS = (
     ('[DEMO] ESPPA Caminho 2026', Encontro.Tipo.ESPPA),
 )
 
+DEMO_REGISTRATION_SPECS = {
+    Encontro.Tipo.ESCALADA: {
+        'capacidade': 40,
+        'idade_minima': 15,
+        'idade_maxima': 18,
+    },
+    Encontro.Tipo.ESPPA: {
+        'capacidade': 50,
+        'idade_minima': 18,
+        'idade_maxima': 80,
+    },
+}
+DEMO_REGISTRATION_OPEN_DAYS_BEFORE = 210
+DEMO_REGISTRATION_CLOSE_DAYS_BEFORE = 14
+
 DEMO_TEMPLATE_SPECS = (
     ('demo-coordenacao-geral', '[DEMO] Coordenação Geral'),
     ('demo-acolhida', '[DEMO] Acolhida'),
@@ -242,6 +264,13 @@ def _delete_demo_dataset():
         equipe_encontro__encontro__in=encounters
     ).delete()
     EquipeEncontro.objects.filter(encontro__in=encounters).delete()
+    demo_audit_events = EventoAuditoriaEncontro.objects.filter(
+        encontro__in=encounters,
+    )
+    demo_audit_events._raw_delete(demo_audit_events.db)
+    ConfiguracaoEncontristasEncontro.objects.filter(
+        encontro__in=encounters,
+    ).delete()
     encounters.delete()
 
     Frequencia.objects.filter(perfil_alpinista__in=profiles).delete()
@@ -474,6 +503,58 @@ def _create_encounters():
         'horizonte': horizonte,
         'caminho': caminho,
     }
+
+
+def _configure_encounter_registrations(encounters, recorder):
+    configurations = {}
+    for key, encounter in encounters.items():
+        first_day = (
+            encounter.calendarios
+            .get(vigente=True)
+            .dias
+            .order_by('ordem', 'data')
+            .values_list('data', flat=True)
+            .first()
+        )
+        if first_day is None:
+            raise CommandError(
+                f'O Encontro demo {encounter.encontro} não possui dias.'
+            )
+        spec = DEMO_REGISTRATION_SPECS[encounter.tipo]
+        values = {
+            **spec,
+            'inscricoes_abrem_em': timezone.make_aware(datetime.combine(
+                first_day - timedelta(
+                    days=DEMO_REGISTRATION_OPEN_DAYS_BEFORE,
+                ),
+                time(8),
+            )),
+            'inscricoes_encerram_em': timezone.make_aware(datetime.combine(
+                first_day - timedelta(
+                    days=DEMO_REGISTRATION_CLOSE_DAYS_BEFORE,
+                ),
+                time(23, 59),
+            )),
+        }
+        existing = ConfiguracaoEncontristasEncontro.objects.filter(
+            encontro=encounter,
+        ).first()
+        if existing is None:
+            configuration = criar_configuracao_encontristas(
+                usuario=recorder,
+                encontro=encounter,
+                justificativa='Configuração determinística do dataset demo.',
+                **values,
+            )
+        else:
+            configuration = alterar_configuracao_encontristas(
+                usuario=recorder,
+                configuracao=existing,
+                justificativa='Reconciliação determinística do dataset demo.',
+                **values,
+            )
+        configurations[key] = configuration
+    return configurations
 
 
 def _create_participation_flows(people, encounters):
@@ -858,6 +939,10 @@ def _seed_dataset(password):
     accounts = _create_accounts(people, password)
     recorder = next(user for user, role in accounts if role == SiaRole.FICHAS)
     encounters = _create_encounters()
+    registration_configurations = _configure_encounter_registrations(
+        encounters,
+        recorder,
+    )
     _create_participation_flows(people, encounters)
     groups = _create_groups_and_frequency(people, recorder)
     proposal_profiles = _prepare_mme_profiles(people)
@@ -883,6 +968,7 @@ def _seed_dataset(password):
         'accounts': accounts,
         'groups': groups,
         'encounters': encounters,
+        'registration_configurations': registration_configurations,
         'proposal': proposal,
         'meetings': meetings,
     }
