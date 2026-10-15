@@ -1,8 +1,10 @@
 from datetime import date, datetime
+from enum import StrEnum
 
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from django.db.models import Q
+from django.utils import timezone
 from rest_framework.exceptions import PermissionDenied
 
 from core.models import (
@@ -31,6 +33,44 @@ _CAMPOS_CONFIGURACAO = frozenset({
     'inscricoes_abrem_em',
     'inscricoes_encerram_em',
 })
+
+
+class StatusJanelaInscricoes(StrEnum):
+    AINDA_NAO_ABRIU = 'ainda_nao_abriu'
+    ABERTAS = 'abertas'
+    ENCERRADAS = 'encerradas'
+
+
+def projetar_configuracao_encontristas(configuracao, *, momento=None):
+    if configuracao is None:
+        return {
+            'configurado': False,
+            'capacidade': None,
+            'idade_minima': None,
+            'idade_maxima': None,
+            'inscricoes_abrem_em': None,
+            'inscricoes_encerram_em': None,
+            'public_id': None,
+            'status_janela': None,
+        }
+
+    momento = momento or timezone.now()
+    if momento < configuracao.inscricoes_abrem_em:
+        status_janela = StatusJanelaInscricoes.AINDA_NAO_ABRIU
+    elif momento <= configuracao.inscricoes_encerram_em:
+        status_janela = StatusJanelaInscricoes.ABERTAS
+    else:
+        status_janela = StatusJanelaInscricoes.ENCERRADAS
+    return {
+        'configurado': True,
+        'capacidade': configuracao.capacidade,
+        'idade_minima': configuracao.idade_minima,
+        'idade_maxima': configuracao.idade_maxima,
+        'inscricoes_abrem_em': configuracao.inscricoes_abrem_em,
+        'inscricoes_encerram_em': configuracao.inscricoes_encerram_em,
+        'public_id': configuracao.public_id,
+        'status_janela': status_janela.value,
+    }
 
 
 def _exigir_gestao(usuario):

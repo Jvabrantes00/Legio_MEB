@@ -1420,6 +1420,33 @@ absoluta e query fora da allowlist são recusados. O contrato TypeScript separa
 summary/full, capabilities e página de candidatos. Não houve migration nem
 redesign visual neste bloco.
 
+**Complemento operacional da R.3I.24:** o Workspace passou a oferecer o
+subrecurso singleton de configuração de inscrições com `GET`, `POST` e
+`PATCH`, serializer estrito e os services transacionais já existentes. O card
+interno chama-se **Inscrições**, aparece antes da listagem na aba Encontristas
+e permite configurar ou editar, em salvamento único, capacidade, faixa etária
+e janela. Diretoria, Fichas e Suporte gerem a configuração; superuser mantém o
+bypass técnico e os demais papéis permanecem default deny. Essa permissão não
+amplia outras autoridades de Fichas.
+
+O `public_id` continua automático e somente leitura. A UI monta a rota pública
+local `/inscricoes/<public_id>` e pode copiá-la antes da abertura. Não existe
+estado adicional de publicação: a disponibilidade é derivada exclusivamente
+da janela canônica, com os estados `ainda_nao_abriu`, `abertas` e `encerradas`
+projetados pelo backend. A configuração permanece uma decisão humana e não é
+criada automaticamente em produção. Quando ausente, o resumo inclui o alerta
+**“Inscrições ainda não configuradas.”**, sem bloquear outros domínios.
+
+O BFF ganhou allowlist exata apenas para os três métodos do novo singleton. O
+restante visual da aba Encontristas ainda consome fila, confirmados e actions
+legados; sua substituição pela projeção canônica permanece na R.3I.25. O
+`seed_demo` não foi alterado e será tratado em bloco separado. Não houve
+alteração de schema nem migration.
+
+**Validação do complemento:** 48 testes backend focados e 30 testes frontend
+focados aprovados, além de TypeScript, Django check, migration check e
+`git diff --check`.
+
 **Validação:** 19 testes backend focados cobrem mais de quarenta comportamentos
 de autorização, lifecycle, composição do funil, deduplicação, situações,
 contagens, filtros, privacidade, domínios integrados, ausência de legado e

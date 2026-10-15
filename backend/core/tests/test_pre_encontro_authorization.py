@@ -251,9 +251,9 @@ class PreEncontroAuthorizationTests(TestCase):
             'aguardando_decisao_diretoria',
         )
 
-    def test_capacidade_so_diretoria_suporte_ou_superuser(self):
+    def test_capacidade_diretoria_fichas_suporte_ou_superuser(self):
         coordenacao = self.criar_contextual('coordenacao-sem-capacidade')
-        for usuario in (self.fichas, coordenacao, self.comunicacao):
+        for usuario in (coordenacao, self.comunicacao):
             with self.subTest(usuario=usuario.username):
                 with self.assertRaises(PermissionDenied):
                     aumentar_capacidade_pre_encontro(
@@ -264,8 +264,9 @@ class PreEncontroAuthorizationTests(TestCase):
 
         for capacidade, usuario in (
             (6, self.diretoria),
-            (7, self.suporte),
-            (8, self.superuser),
+            (7, self.fichas),
+            (8, self.suporte),
+            (9, self.superuser),
         ):
             atualizada = aumentar_capacidade_pre_encontro(
                 usuario=usuario,

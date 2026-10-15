@@ -21,9 +21,11 @@ from core.permissions import (
     pode_acessar_equipes_workspace,
     pode_acessar_formacao_workspace,
     pode_consultar_contato_workspace,
+    pode_consultar_configuracao_encontristas,
     pode_consultar_encontristas_workspace,
     pode_consultar_operacao_pre_encontro,
     pode_consultar_resumo_workspace_encontro,
+    pode_gerir_configuracao_encontristas,
 )
 from core.services import pre_encontro as pre_encontro_services
 from core.services.exportacao_pre_encontro import (
@@ -89,6 +91,12 @@ def projetar_capabilities(*, usuario, encontro):
         'acessar_equipes': pode_acessar_equipes_workspace(usuario, encontro),
         'acessar_formacao': pode_acessar_formacao_workspace(usuario, encontro),
         'acessar_agenda': pode_acessar_agenda_workspace(usuario, encontro),
+        'consultar_inscricoes': pode_consultar_configuracao_encontristas(
+            usuario,
+        ),
+        'configurar_inscricoes': pode_gerir_configuracao_encontristas(
+            usuario,
+        ),
     }
 
 
@@ -415,6 +423,11 @@ def projetar_resumo(*, encontro):
     alertas = []
     if pre is None:
         alertas.append({'codigo': 'PRE_NAO_CONFIGURADO', 'mensagem': 'Pré-Encontro ainda não configurado.'})
+    if configuracao is None:
+        alertas.append({
+            'codigo': 'INSCRICOES_NAO_CONFIGURADAS',
+            'mensagem': 'Inscrições ainda não configuradas.',
+        })
     if agenda['pre_encontro_data'] is None:
         alertas.append({'codigo': 'DATA_PRE_AUSENTE', 'mensagem': 'Data do Pré-Encontro ausente no Calendário.'})
     if aguardando:

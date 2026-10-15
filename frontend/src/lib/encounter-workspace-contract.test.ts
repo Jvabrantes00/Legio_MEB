@@ -4,6 +4,7 @@ import {
   parseEncounterCandidateFull,
   parseEncounterCandidatePage,
   parseEncounterCandidateSummary,
+  parseEncounterRegistrationConfig,
   parseEncounterWorkspaceCapabilities,
 } from "./encounter-workspace-contract";
 
@@ -52,8 +53,38 @@ describe("contrato do Workspace do Encontro", () => {
       acessar_equipes: false,
       acessar_formacao: false,
       acessar_agenda: true,
+      consultar_inscricoes: true,
+      configurar_inscricoes: true,
     });
     expect(capabilities.consultar_contato).toBe(false);
     expect("roles" in capabilities).toBe(false);
+  });
+
+  it("modela a ausência e a configuração sem tornar public_id editável", () => {
+    const ausente = parseEncounterRegistrationConfig({
+      configurado: false,
+      capacidade: null,
+      idade_minima: null,
+      idade_maxima: null,
+      inscricoes_abrem_em: null,
+      inscricoes_encerram_em: null,
+      public_id: null,
+      status_janela: null,
+    });
+    expect(ausente.configurado).toBe(false);
+
+    const configurada = parseEncounterRegistrationConfig({
+      configurado: true,
+      capacidade: 30,
+      idade_minima: 15,
+      idade_maxima: 18,
+      inscricoes_abrem_em: "2030-01-01T08:00:00-03:00",
+      inscricoes_encerram_em: "2030-02-01T08:00:00-03:00",
+      public_id: "2a62fca6-e0cc-4fb4-9728-8ff8be832adc",
+      status_janela: "abertas",
+    });
+    expect(configurada.configurado && configurada.public_id).toBe(
+      "2a62fca6-e0cc-4fb4-9728-8ff8be832adc",
+    );
   });
 });

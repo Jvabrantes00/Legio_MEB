@@ -87,6 +87,39 @@ class WorkspaceCapabilitiesSerializer(serializers.Serializer):
     acessar_equipes = serializers.BooleanField(read_only=True)
     acessar_formacao = serializers.BooleanField(read_only=True)
     acessar_agenda = serializers.BooleanField(read_only=True)
+    consultar_inscricoes = serializers.BooleanField(read_only=True)
+    configurar_inscricoes = serializers.BooleanField(read_only=True)
+
+
+class ConfiguracaoInscricoesWorkspaceSerializer(serializers.Serializer):
+    configurado = serializers.BooleanField(read_only=True)
+    capacidade = serializers.IntegerField(read_only=True, allow_null=True)
+    idade_minima = serializers.IntegerField(read_only=True, allow_null=True)
+    idade_maxima = serializers.IntegerField(read_only=True, allow_null=True)
+    inscricoes_abrem_em = serializers.DateTimeField(
+        read_only=True,
+        allow_null=True,
+    )
+    inscricoes_encerram_em = serializers.DateTimeField(
+        read_only=True,
+        allow_null=True,
+    )
+    public_id = serializers.UUIDField(read_only=True, allow_null=True)
+    status_janela = serializers.ChoiceField(
+        choices=('ainda_nao_abriu', 'abertas', 'encerradas'),
+        read_only=True,
+        allow_null=True,
+    )
+
+
+class ConfiguracaoInscricoesWorkspaceCommandSerializer(
+    StrictCommandSerializer,
+):
+    capacidade = serializers.IntegerField(min_value=1)
+    idade_minima = serializers.IntegerField(min_value=0)
+    idade_maxima = serializers.IntegerField(min_value=0)
+    inscricoes_abrem_em = serializers.DateTimeField()
+    inscricoes_encerram_em = serializers.DateTimeField()
 
 
 class WorkspaceEncontroSerializer(serializers.Serializer):

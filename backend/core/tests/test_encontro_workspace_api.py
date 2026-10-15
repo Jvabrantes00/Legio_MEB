@@ -290,6 +290,12 @@ class EncontroWorkspaceApiTests(TestCase):
         self.assertFalse(comunicacao['acessar_equipes'])
         self.assertFalse(comunicacao['acessar_formacao'])
         self.assertTrue(comunicacao['acessar_agenda'])
+        self.assertFalse(comunicacao['consultar_inscricoes'])
+        self.assertFalse(comunicacao['configurar_inscricoes'])
+        self._auth(self.fichas)
+        fichas = self.client.get(self._url('capabilities/')).data
+        self.assertTrue(fichas['consultar_inscricoes'])
+        self.assertTrue(fichas['configurar_inscricoes'])
         self._auth(self.superuser)
         self.assertTrue(all(self.client.get(self._url('capabilities/')).data.values()))
 

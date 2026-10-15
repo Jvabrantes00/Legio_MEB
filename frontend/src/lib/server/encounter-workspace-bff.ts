@@ -11,8 +11,7 @@ export function isAllowedEncounterWorkspaceRequest(
   searchParams = new URLSearchParams(),
 ): boolean {
   if (
-    method !== "GET"
-    || path.length < 3
+    path.length < 3
     || path[0] !== "encontros"
     || !isId(path[1])
     || path[2] !== "workspace"
@@ -22,7 +21,12 @@ export function isAllowedEncounterWorkspaceRequest(
   const isSummary = tail.length === 0;
   const isCapabilities = tail.length === 1 && tail[0] === "capabilities";
   const isCandidates = tail.length === 1 && tail[0] === "encontristas";
-  if (!isSummary && !isCapabilities && !isCandidates) return false;
+  const isRegistrationConfig = tail.length === 2
+    && tail[0] === "inscricoes"
+    && tail[1] === "configuracao";
+  if (!isSummary && !isCapabilities && !isCandidates && !isRegistrationConfig) return false;
+  if (isRegistrationConfig && !["GET", "POST", "PATCH"].includes(method)) return false;
+  if (!isRegistrationConfig && method !== "GET") return false;
   if (!isCandidates && searchParams.size > 0) return false;
   if (isCandidates) {
     for (const key of searchParams.keys()) {

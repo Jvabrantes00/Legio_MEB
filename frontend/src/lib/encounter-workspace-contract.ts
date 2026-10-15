@@ -20,6 +20,43 @@ export type EncounterWorkspaceCapabilities = {
   acessar_equipes: boolean;
   acessar_formacao: boolean;
   acessar_agenda: boolean;
+  consultar_inscricoes: boolean;
+  configurar_inscricoes: boolean;
+};
+
+export type EncounterRegistrationWindowStatus =
+  | "ainda_nao_abriu"
+  | "abertas"
+  | "encerradas";
+
+export type EncounterRegistrationConfig =
+  | {
+      configurado: false;
+      capacidade: null;
+      idade_minima: null;
+      idade_maxima: null;
+      inscricoes_abrem_em: null;
+      inscricoes_encerram_em: null;
+      public_id: null;
+      status_janela: null;
+    }
+  | {
+      configurado: true;
+      capacidade: number;
+      idade_minima: number;
+      idade_maxima: number;
+      inscricoes_abrem_em: string;
+      inscricoes_encerram_em: string;
+      public_id: string;
+      status_janela: EncounterRegistrationWindowStatus;
+    };
+
+export type EncounterRegistrationConfigDraft = {
+  capacidade: string;
+  idade_minima: string;
+  idade_maxima: string;
+  inscricoes_abrem_em: string;
+  inscricoes_encerram_em: string;
 };
 
 export type EncounterCandidateSummary = {
@@ -115,6 +152,7 @@ function nullableText(record: Record<string, unknown>, key: string): string | nu
 const ORIGINS = ["INSCRICAO", "PESSOA", "AVULSO"] as const;
 const STATUSES = ["INSCRITO", "CANCELADO", "AGUARDANDO_DECISAO", "APTO", "NAO_APTO", "CONFIRMADO"] as const;
 const APTITUDES = ["apto", "nao_apto", "aguardando_decisao_diretoria"] as const;
+const REGISTRATION_WINDOW_STATUSES = ["ainda_nao_abriu", "abertas", "encerradas"] as const;
 
 function enumValue<T extends string>(value: unknown, values: readonly T[], key: string): T {
   if (typeof value !== "string" || !values.includes(value as T)) {
@@ -133,6 +171,55 @@ export function parseEncounterWorkspaceCapabilities(value: unknown): EncounterWo
     acessar_equipes: bool(value, "acessar_equipes"),
     acessar_formacao: bool(value, "acessar_formacao"),
     acessar_agenda: bool(value, "acessar_agenda"),
+    consultar_inscricoes: bool(value, "consultar_inscricoes"),
+    configurar_inscricoes: bool(value, "configurar_inscricoes"),
+  };
+}
+
+export function parseEncounterRegistrationConfig(value: unknown): EncounterRegistrationConfig {
+  if (!isRecord(value) || typeof value.configurado !== "boolean") {
+    throw new Error("Configuração de inscrições inválida.");
+  }
+  if (!value.configurado) {
+    for (const key of [
+      "capacidade",
+      "idade_minima",
+      "idade_maxima",
+      "inscricoes_abrem_em",
+      "inscricoes_encerram_em",
+      "public_id",
+      "status_janela",
+    ]) {
+      if (value[key] !== null) throw new Error(`Campo inválido: ${key}.`);
+    }
+    return {
+      configurado: false,
+      capacidade: null,
+      idade_minima: null,
+      idade_maxima: null,
+      inscricoes_abrem_em: null,
+      inscricoes_encerram_em: null,
+      public_id: null,
+      status_janela: null,
+    };
+  }
+  const capacidade = integer(value, "capacidade");
+  const idadeMinima = integer(value, "idade_minima");
+  const idadeMaxima = integer(value, "idade_maxima");
+  if (capacidade === 0) throw new Error("Campo inválido: capacidade.");
+  return {
+    configurado: true,
+    capacidade: capacidade as number,
+    idade_minima: idadeMinima as number,
+    idade_maxima: idadeMaxima as number,
+    inscricoes_abrem_em: text(value, "inscricoes_abrem_em"),
+    inscricoes_encerram_em: text(value, "inscricoes_encerram_em"),
+    public_id: text(value, "public_id"),
+    status_janela: enumValue(
+      value.status_janela,
+      REGISTRATION_WINDOW_STATUSES,
+      "status_janela",
+    ),
   };
 }
 

@@ -43,6 +43,7 @@ from .views import (
     EncontroWorkspaceSummaryAPIView,
     EncontroWorkspaceCapabilitiesAPIView,
     EncontroWorkspaceEncontristasAPIView,
+    ConfiguracaoInscricoesWorkspaceAPIView,
 )
 from .views import dashboard_stats
 from .views import current_user
@@ -153,6 +154,11 @@ urlpatterns = [
         'encontros/<int:encontro_id>/workspace/encontristas/',
         EncontroWorkspaceEncontristasAPIView.as_view(),
         name='encontro-workspace-encontristas',
+    ),
+    path(
+        'encontros/<int:encontro_id>/workspace/inscricoes/configuracao/',
+        ConfiguracaoInscricoesWorkspaceAPIView.as_view(),
+        name='encontro-workspace-configuracao-inscricoes',
     ),
     path(
         'encontros/<int:encontro_id>/pre-encontro/lookups/inscricoes/',

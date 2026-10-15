@@ -39,7 +39,7 @@ def pode_gerir_configuracao_encontristas(user):
         return False
     return bool(
         user.is_superuser
-        or user_has_any_role(user, *FULL_ADMIN_ROLES)
+        or user_has_any_role(user, *FICHAS_MANAGEMENT_ROLES)
     )
 
 

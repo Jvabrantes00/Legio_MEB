@@ -29,6 +29,23 @@ describe("allowlist BFF do Workspace do Encontro", () => {
     expect(() => validateProxyPath(base, new URLSearchParams(), method)).toThrow();
   });
 
+  it("permite somente os métodos do singleton de configuração", () => {
+    const path = [...base, "inscricoes", "configuracao"];
+    for (const method of ["GET", "POST", "PATCH"]) {
+      expect(isAllowedEncounterWorkspaceRequest(method, path)).toBe(true);
+      expect(() => validateProxyPath(path, new URLSearchParams(), method)).not.toThrow();
+    }
+    for (const method of ["PUT", "DELETE"]) {
+      expect(isAllowedEncounterWorkspaceRequest(method, path)).toBe(false);
+    }
+    expect(isAllowedEncounterWorkspaceRequest("GET", [...path, "1"])).toBe(false);
+    expect(isAllowedEncounterWorkspaceRequest(
+      "GET",
+      path,
+      new URLSearchParams("url=https://example.test"),
+    )).toBe(false);
+  });
+
   it.each([
     [["encontros", "12", "workspace", "qualquer"]],
     [["encontros", "12", "workspace", "..", "encontristas"]],

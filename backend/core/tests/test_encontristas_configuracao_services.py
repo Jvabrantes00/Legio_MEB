@@ -97,7 +97,7 @@ class ConfiguracaoEncontristasServiceTests(TestCase):
 
                 self.assertEqual(alterada.capacidade, 90)
 
-    def test_fichas_consulta_mas_nao_altera_configuracao(self):
+    def test_fichas_consulta_e_altera_configuracao(self):
         configuracao = self._criar_diretamente()
 
         consultada = consultar_configuracao_encontristas(
@@ -106,12 +106,12 @@ class ConfiguracaoEncontristasServiceTests(TestCase):
         )
 
         self.assertEqual(consultada, configuracao)
-        with self.assertRaises(PermissionDenied):
-            alterar_configuracao_encontristas(
-                usuario=self.fichas,
-                configuracao=configuracao,
-                capacidade=90,
-            )
+        alterada = alterar_configuracao_encontristas(
+            usuario=self.fichas,
+            configuracao=configuracao,
+            capacidade=90,
+        )
+        self.assertEqual(alterada.capacidade, 90)
 
     def test_default_deny_impede_consulta_e_alteracao(self):
         configuracao = self._criar_diretamente()
@@ -231,4 +231,3 @@ class ConfiguracaoEncontristasServiceTests(TestCase):
 
         configuracao.refresh_from_db()
         self.assertEqual(configuracao.capacidade, 80)
-

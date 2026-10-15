@@ -75,6 +75,17 @@ comandos explícitos sobre o domínio canônico de Encontros.
 - As respostas internas são minimizadas: não expõem token, digest, e-mail,
   telefone ou outros dados pessoais do candidato.
 
+### Configuração de inscrições de Encontro
+
+- Diretoria, Fichas e Suporte podem consultar, criar e editar a configuração
+  de inscrições; o superuser permanece como bypass técnico separado.
+- A permissão abrange somente capacidade, faixa etária e janela de inscrições.
+  Ela não concede a Fichas comandos exclusivos da Diretoria em outros fluxos.
+- O `public_id` é automático e somente leitura. A existência da configuração
+  disponibiliza o formulário público, cuja abertura continua determinada pela
+  janela, sem estado adicional de publicação.
+- Os demais papéis permanecem negados por default.
+
 ### Presença preparatória contextual
 
 - Suporte, Diretoria e Fichas podem registrar e corrigir presença preparatória
@@ -109,8 +120,8 @@ comandos explícitos sobre o domínio canônico de Encontros.
   separados e nunca integra lista, busca ou detalhe comum; Comunicação,
   Suporte e Diretoria não recebem essa consulta apenas por seus papéis.
 - A decisão excepcional de vaga pertence à Diretoria. Aumento de capacidade
-  pertence a Suporte e Diretoria pelo comando canônico. O superuser permanece
-  bypass técnico separado.
+  pertence a Suporte, Diretoria e Fichas pelo command canônico da configuração
+  de inscrições. O superuser permanece bypass técnico separado.
 - Todos os subrecursos são escopados pelo Encontro; vínculo com outro Encontro
   resulta em `404`. Ausência de papel ou vínculo explícito permanece negada.
 - A UI recebe apenas capabilities operacionais calculadas pelas mesmas

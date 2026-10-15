@@ -11,6 +11,7 @@ import { EncontroSummaryPanel } from "../../../../components/EncontroSummaryPane
 import { ConfirmedAlpinistasTable } from "../../../../components/ConfirmedAlpinistasTable";
 import { EncounterAgendaSection } from "../../../../components/EncounterAgendaSection";
 import { PreEncounterCheckin } from "../../../../components/PreEncounterCheckin";
+import { EncounterRegistrationConfigCard } from "../../../../components/EncounterRegistrationConfigCard";
 import { canManageEncontros, canViewEncontros } from "../../../../lib/sia-capabilities";
 import {
     parsePreEncounterContextCapabilities,
@@ -653,6 +654,7 @@ function ManagedEncounterDetails({ preCapabilities, preCapabilitiesError, onRelo
 
                 {abaAtiva === "encontristas" && (
                     <div className="animate-in fade-in duration-300">
+                        <EncounterRegistrationConfigCard encontroId={encontroId} />
                         <div className="flex justify-between items-center mb-6 border-b pb-4">
                             <div>
                                 <h2 className="text-xl font-bold text-gray-800">Inscrições Pendentes</h2>

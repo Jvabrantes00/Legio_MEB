@@ -120,6 +120,8 @@ from .serializers import (
     WorkspaceCapabilitiesSerializer,
     WorkspaceCandidatoFullSerializer,
     WorkspaceCandidatoSummarySerializer,
+    ConfiguracaoInscricoesWorkspaceCommandSerializer,
+    ConfiguracaoInscricoesWorkspaceSerializer,
     )
 from .permissions import (
     AlpinistaQueryPolicy,
@@ -139,6 +141,8 @@ from .permissions import (
     pode_resolver_vaga_pre_encontro,
     pode_consultar_encontristas_workspace,
     pode_consultar_resumo_workspace_encontro,
+    pode_consultar_configuracao_encontristas,
+    pode_gerir_configuracao_encontristas,
 )
 from .services.reunioes_preparatorias import corrigir_presenca_preparatoria
 from .services import avaliacoes_encontro as avaliacao_services
@@ -156,6 +160,7 @@ from .services import exportacao_calendario as exportacao_calendario_services
 from .services import exportacao_pre_encontro as exportacao_pre_encontro_services
 from .services import pre_encontro as pre_encontro_services
 from .services import encontro_workspace as encontro_workspace_services
+from .services import configuracao_encontristas as configuracao_encontristas_services
 from .serializers import _erro_de_dominio, _erro_de_trabalho
 from .formacao_catalogo import TEMAS_FORMATIVOS
 from .throttles import (
@@ -222,6 +227,83 @@ class EncontroWorkspaceCapabilitiesAPIView(APIView):
                 'Seu usuário não pode consultar este Workspace.',
             )
         return Response(WorkspaceCapabilitiesSerializer(capabilities).data)
+
+
+class ConfiguracaoInscricoesWorkspaceAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def _encontro(self, encontro_id):
+        return get_object_or_404(Encontro, pk=encontro_id)
+
+    def _resposta(self, configuracao, *, status_code=status.HTTP_200_OK):
+        projecao = (
+            configuracao_encontristas_services
+            .projetar_configuracao_encontristas(configuracao)
+        )
+        return Response(
+            ConfiguracaoInscricoesWorkspaceSerializer(projecao).data,
+            status=status_code,
+        )
+
+    def get(self, request, encontro_id):
+        encontro = self._encontro(encontro_id)
+        _exigir_policy(
+            pode_consultar_configuracao_encontristas(request.user),
+        )
+        configuracao = (
+            ConfiguracaoEncontristasEncontro.objects
+            .filter(encontro=encontro)
+            .first()
+        )
+        return self._resposta(configuracao)
+
+    def post(self, request, encontro_id):
+        encontro = self._encontro(encontro_id)
+        _exigir_policy(pode_gerir_configuracao_encontristas(request.user))
+        comando = ConfiguracaoInscricoesWorkspaceCommandSerializer(
+            data=request.data,
+        )
+        comando.is_valid(raise_exception=True)
+        try:
+            configuracao = (
+                configuracao_encontristas_services
+                .criar_configuracao_encontristas(
+                    usuario=request.user,
+                    encontro=encontro,
+                    **comando.validated_data,
+                )
+            )
+        except django_core_validation_error as error:
+            _erro_de_dominio(error)
+        return self._resposta(
+            configuracao,
+            status_code=status.HTTP_201_CREATED,
+        )
+
+    def patch(self, request, encontro_id):
+        encontro = self._encontro(encontro_id)
+        _exigir_policy(pode_gerir_configuracao_encontristas(request.user))
+        configuracao = get_object_or_404(
+            ConfiguracaoEncontristasEncontro,
+            encontro=encontro,
+        )
+        comando = ConfiguracaoInscricoesWorkspaceCommandSerializer(
+            data=request.data,
+            partial=True,
+        )
+        comando.is_valid(raise_exception=True)
+        try:
+            configuracao = (
+                configuracao_encontristas_services
+                .alterar_configuracao_encontristas(
+                    usuario=request.user,
+                    configuracao=configuracao,
+                    **comando.validated_data,
+                )
+            )
+        except django_core_validation_error as error:
+            _erro_de_dominio(error)
+        return self._resposta(configuracao)
 
 
 class EncontroWorkspaceEncontristasAPIView(APIView):
