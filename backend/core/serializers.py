@@ -143,6 +143,8 @@ class WorkspaceAgendaResumoSerializer(serializers.Serializer):
 
 class WorkspaceEncontristasResumoSerializer(serializers.Serializer):
     inscricoes_recebidas = serializers.IntegerField(read_only=True)
+    pendentes = serializers.IntegerField(read_only=True)
+    confirmados = serializers.IntegerField(read_only=True)
     total_funil = serializers.IntegerField(read_only=True)
     por_situacao = serializers.DictField(
         child=serializers.IntegerField(),

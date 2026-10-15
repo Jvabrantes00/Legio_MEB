@@ -420,6 +420,15 @@ def projetar_resumo(*, encontro):
     pre = getattr(encontro, 'pre_encontro', None)
     agenda = _resumo_agenda(encontro)
     aguardando = contagens[SituacaoCandidatoWorkspace.AGUARDANDO_DECISAO.value]
+    pendentes = sum(
+        contagens[situacao.value]
+        for situacao in (
+            SituacaoCandidatoWorkspace.INSCRITO,
+            SituacaoCandidatoWorkspace.AGUARDANDO_DECISAO,
+            SituacaoCandidatoWorkspace.APTO,
+        )
+    )
+    confirmados = contagens[SituacaoCandidatoWorkspace.CONFIRMADO.value]
     alertas = []
     if pre is None:
         alertas.append({'codigo': 'PRE_NAO_CONFIGURADO', 'mensagem': 'Pré-Encontro ainda não configurado.'})
@@ -447,6 +456,8 @@ def projetar_resumo(*, encontro):
         'agenda': agenda,
         'encontristas': {
             'inscricoes_recebidas': InscricaoEncontro.objects.filter(encontro=encontro).count(),
+            'pendentes': pendentes,
+            'confirmados': confirmados,
             'total_funil': len(candidatos),
             'por_situacao': {
                 item.value: contagens[item.value]

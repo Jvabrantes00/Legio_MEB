@@ -6,6 +6,7 @@ import {
   parseEncounterCandidateSummary,
   parseEncounterRegistrationConfig,
   parseEncounterWorkspaceCapabilities,
+  parseEncounterWorkspaceSummary,
 } from "./encounter-workspace-contract";
 
 const summary = {
@@ -58,6 +59,49 @@ describe("contrato do Workspace do Encontro", () => {
     });
     expect(capabilities.consultar_contato).toBe(false);
     expect("roles" in capabilities).toBe(false);
+  });
+
+  it("valida o resumo agregado sem reconstruir contagens", () => {
+    const parsed = parseEncounterWorkspaceSummary({
+      encontro: { id: 37, nome: "Escalada Demo", tipo: "ESCALADA", local: "Casa" },
+      lifecycle: "EM_PREPARACAO",
+      agenda: {
+        configurada: true,
+        oficializada: true,
+        quantidade_itens: 4,
+        proximo_item: "2030-02-01",
+        datas_principais: ["2030-02-01", "2030-02-02"],
+        pre_encontro_data: "2030-01-20",
+      },
+      encontristas: {
+        inscricoes_recebidas: 12,
+        pendentes: 5,
+        confirmados: 7,
+        total_funil: 12,
+        por_situacao: {
+          INSCRITO: 3,
+          CANCELADO: 0,
+          AGUARDANDO_DECISAO: 1,
+          APTO: 1,
+          NAO_APTO: 0,
+          CONFIRMADO: 7,
+        },
+      },
+      pre_encontro: {
+        configurado: true,
+        data: "2030-01-20",
+        capacidade: 30,
+        quantidade_checkins: 8,
+        quantidade_aptos: 7,
+        quantidade_aguardando_decisao: 1,
+      },
+      equipes: { quantidade_equipes: 4, quantidade_funcoes: 8, vagas_estruturais: 20, vagas_preenchidas: 12 },
+      formacao: { total_sessoes: 3, planejadas: 2, realizadas: 1, canceladas: 0 },
+      alertas: [{ codigo: "TESTE", mensagem: "Alerta canônico." }],
+    });
+    expect(parsed.encontristas.pendentes).toBe(5);
+    expect(parsed.encontristas.confirmados).toBe(7);
+    expect(parsed.alertas[0].mensagem).toBe("Alerta canônico.");
   });
 
   it("modela a ausência e a configuração sem tornar public_id editável", () => {

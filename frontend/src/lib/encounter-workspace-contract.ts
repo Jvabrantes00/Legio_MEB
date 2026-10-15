@@ -93,6 +93,8 @@ export type EncounterWorkspaceSummary = {
   };
   encontristas: {
     inscricoes_recebidas: number;
+    pendentes: number;
+    confirmados: number;
     total_funil: number;
     por_situacao: Record<EncounterWorkspaceCandidateStatus, number>;
   };
@@ -154,6 +156,18 @@ const STATUSES = ["INSCRITO", "CANCELADO", "AGUARDANDO_DECISAO", "APTO", "NAO_AP
 const APTITUDES = ["apto", "nao_apto", "aguardando_decisao_diretoria"] as const;
 const REGISTRATION_WINDOW_STATUSES = ["ainda_nao_abriu", "abertas", "encerradas"] as const;
 
+function record(value: unknown, key: string): Record<string, unknown> {
+  if (!isRecord(value)) throw new Error(`Campo inválido: ${key}.`);
+  return value;
+}
+
+function textList(value: unknown, key: string): string[] {
+  if (!Array.isArray(value) || !value.every((item) => typeof item === "string")) {
+    throw new Error(`Campo inválido: ${key}.`);
+  }
+  return value;
+}
+
 function enumValue<T extends string>(value: unknown, values: readonly T[], key: string): T {
   if (typeof value !== "string" || !values.includes(value as T)) {
     throw new Error(`Campo inválido: ${key}.`);
@@ -173,6 +187,75 @@ export function parseEncounterWorkspaceCapabilities(value: unknown): EncounterWo
     acessar_agenda: bool(value, "acessar_agenda"),
     consultar_inscricoes: bool(value, "consultar_inscricoes"),
     configurar_inscricoes: bool(value, "configurar_inscricoes"),
+  };
+}
+
+export function parseEncounterWorkspaceSummary(value: unknown): EncounterWorkspaceSummary {
+  const root = record(value, "summary");
+  const encontro = record(root.encontro, "encontro");
+  const agenda = record(root.agenda, "agenda");
+  const encontristas = record(root.encontristas, "encontristas");
+  const preEncontro = record(root.pre_encontro, "pre_encontro");
+  const equipes = record(root.equipes, "equipes");
+  const formacao = record(root.formacao, "formacao");
+  const alertas = root.alertas;
+  if (!Array.isArray(alertas)) throw new Error("Campo inválido: alertas.");
+
+  const porSituacao = record(encontristas.por_situacao, "por_situacao");
+  const situacoes = Object.fromEntries(
+    STATUSES.map((status) => [status, integer(porSituacao, status)]),
+  ) as Record<EncounterWorkspaceCandidateStatus, number>;
+
+  return {
+    encontro: {
+      id: integer(encontro, "id") as number,
+      nome: text(encontro, "nome"),
+      tipo: text(encontro, "tipo"),
+      local: text(encontro, "local"),
+    },
+    lifecycle: text(root, "lifecycle"),
+    agenda: {
+      configurada: bool(agenda, "configurada"),
+      oficializada: bool(agenda, "oficializada"),
+      quantidade_itens: integer(agenda, "quantidade_itens") as number,
+      proximo_item: nullableText(agenda, "proximo_item"),
+      datas_principais: textList(agenda.datas_principais, "datas_principais"),
+      pre_encontro_data: nullableText(agenda, "pre_encontro_data"),
+    },
+    encontristas: {
+      inscricoes_recebidas: integer(encontristas, "inscricoes_recebidas") as number,
+      pendentes: integer(encontristas, "pendentes") as number,
+      confirmados: integer(encontristas, "confirmados") as number,
+      total_funil: integer(encontristas, "total_funil") as number,
+      por_situacao: situacoes,
+    },
+    pre_encontro: {
+      configurado: bool(preEncontro, "configurado"),
+      data: nullableText(preEncontro, "data"),
+      capacidade: integer(preEncontro, "capacidade", true),
+      quantidade_checkins: integer(preEncontro, "quantidade_checkins") as number,
+      quantidade_aptos: integer(preEncontro, "quantidade_aptos") as number,
+      quantidade_aguardando_decisao: integer(
+        preEncontro,
+        "quantidade_aguardando_decisao",
+      ) as number,
+    },
+    equipes: {
+      quantidade_equipes: integer(equipes, "quantidade_equipes") as number,
+      quantidade_funcoes: integer(equipes, "quantidade_funcoes") as number,
+      vagas_estruturais: integer(equipes, "vagas_estruturais", true),
+      vagas_preenchidas: integer(equipes, "vagas_preenchidas") as number,
+    },
+    formacao: {
+      total_sessoes: integer(formacao, "total_sessoes") as number,
+      planejadas: integer(formacao, "planejadas") as number,
+      realizadas: integer(formacao, "realizadas") as number,
+      canceladas: integer(formacao, "canceladas") as number,
+    },
+    alertas: alertas.map((item) => {
+      const alerta = record(item, "alerta");
+      return { codigo: text(alerta, "codigo"), mensagem: text(alerta, "mensagem") };
+    }),
   };
 }
 

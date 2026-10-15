@@ -141,6 +141,8 @@ class EncontroWorkspaceApiTests(TestCase):
         self.assertEqual(resposta.status_code, status.HTTP_200_OK)
         self.assertEqual(resposta.data['lifecycle'], Encontro.Status.EM_PREPARACAO)
         self.assertEqual(resposta.data['encontristas']['inscricoes_recebidas'], 1)
+        self.assertEqual(resposta.data['encontristas']['pendentes'], 1)
+        self.assertEqual(resposta.data['encontristas']['confirmados'], 0)
         self.assertEqual(resposta.data['encontristas']['total_funil'], 1)
         self.assertNotIn('cpf', str(resposta.data).lower())
         self.assertNotIn('telefone', str(resposta.data).lower())
@@ -232,6 +234,9 @@ class EncontroWorkspaceApiTests(TestCase):
         self.assertEqual(codigos['Confirmada'], 'CONFIRMADO')
         self.assertIsNotNone(avulso.pk)
         resumo = self.client.get(self._url()).data['encontristas']['por_situacao']
+        agregados = self.client.get(self._url()).data['encontristas']
+        self.assertEqual(agregados['pendentes'], 2)
+        self.assertEqual(agregados['confirmados'], 1)
         for codigo in set(codigos.values()):
             filtrada = self.client.get(
                 self._url(f'encontristas/?situacao={codigo}'),
