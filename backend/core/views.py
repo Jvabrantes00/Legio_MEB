@@ -101,6 +101,7 @@ from .serializers import (
     SelecaoCamposResolucaoSerializer,
     SubmissaoInscricaoPublicaSerializer,
     SubstituicaoPropostaVioleirosCommandSerializer,
+    AtendimentoPreEncontroFotoSerializer,
     AtendimentoPreEncontroOperacionalSerializer,
     AtendimentoPreEncontroDetalheSerializer,
     CheckinPreEncontroCommandSerializer,
@@ -133,7 +134,9 @@ from .permissions import (
     pode_configurar_pre_encontro,
     pode_conferir_cuidados_pre_encontro,
     pode_consultar_cuidados_pre_encontro,
-    pode_consultar_operacao_pre_encontro,
+    pode_baixar_pdf_operacional_pre_encontro,
+    pode_consultar_operacao_completa_pre_encontro,
+    pode_localizar_atendimento_foto_pre_encontro,
     pode_operar_checkin_pre_encontro,
     pode_operar_foto_pre_encontro,
     pode_registrar_pagamento_pre_encontro,
@@ -1659,6 +1662,17 @@ def _atendimentos_pre_encontro_queryset():
     )
 
 
+def _atendimentos_foto_pre_encontro_queryset():
+    return AtendimentoPreEncontro.objects.select_related(
+        'pre_encontro',
+        'pre_encontro__encontro',
+        'pessoa',
+        'inscricao',
+        'inscricao__dados_declarados',
+        'foto_privada',
+    )
+
+
 def _exigir_policy(permitido, mensagem='Acesso negado.'):
     if not permitido:
         raise PermissionDenied(mensagem)
@@ -1718,7 +1732,7 @@ class PdfOperacionalPreEncontroAPIView(APIView):
     def get(self, request, encontro_id):
         encontro, pre_encontro = _pre_encontro_do_contexto(encontro_id)
         _exigir_policy(
-            pode_consultar_operacao_pre_encontro(request.user, encontro),
+            pode_baixar_pdf_operacional_pre_encontro(request.user, encontro),
         )
         conteudo = (
             exportacao_pre_encontro_services
@@ -2012,13 +2026,68 @@ class RegularizacaoPessoasLookupPreEncontroAPIView(APIView):
         )
 
 
+class AtendimentoPreEncontroFotoListaAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, encontro_id):
+        encontro, pre_encontro = _pre_encontro_do_contexto(encontro_id)
+        _exigir_policy(
+            pode_localizar_atendimento_foto_pre_encontro(
+                request.user,
+                encontro,
+            ),
+        )
+        parametros_extras = set(request.query_params) - {'page', 'q'}
+        if parametros_extras:
+            raise ValidationError({
+                'parametros': [
+                    'Parâmetros não permitidos: '
+                    + ', '.join(sorted(parametros_extras))
+                    + '.',
+                ],
+            })
+        atendimentos = _atendimentos_foto_pre_encontro_queryset().filter(
+            pre_encontro=pre_encontro,
+        )
+        termo = request.query_params.get('q', '').strip()
+        if termo:
+            atendimentos = atendimentos.filter(
+                Q(
+                    pessoa__isnull=False,
+                    pessoa__nome__icontains=termo,
+                )
+                | Q(
+                    pessoa__isnull=True,
+                    inscricao__isnull=False,
+                    inscricao__dados_declarados__nome_completo__icontains=termo,
+                )
+                | Q(
+                    pessoa__isnull=True,
+                    inscricao__isnull=True,
+                    nome_informado__icontains=termo,
+                )
+            ).distinct()
+        atendimentos = atendimentos.order_by('registrado_em', 'pk')
+        paginator = PageNumberPagination()
+        pagina = paginator.paginate_queryset(atendimentos, request, view=self)
+        dados = AtendimentoPreEncontroFotoSerializer(
+            pagina,
+            many=True,
+            context={'usuario': request.user},
+        ).data
+        return paginator.get_paginated_response(dados)
+
+
 class AtendimentoPreEncontroListaAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, encontro_id):
         encontro, pre_encontro = _pre_encontro_do_contexto(encontro_id)
         _exigir_policy(
-            pode_consultar_operacao_pre_encontro(request.user, encontro),
+            pode_consultar_operacao_completa_pre_encontro(
+                request.user,
+                encontro,
+            ),
         )
         atendimentos = _atendimentos_pre_encontro_queryset().filter(
             pre_encontro=pre_encontro,
@@ -2081,7 +2150,10 @@ class AtendimentoPreEncontroBuscaAPIView(APIView):
     def get(self, request, encontro_id):
         encontro, pre_encontro = _pre_encontro_do_contexto(encontro_id)
         _exigir_policy(
-            pode_consultar_operacao_pre_encontro(request.user, encontro),
+            pode_consultar_operacao_completa_pre_encontro(
+                request.user,
+                encontro,
+            ),
         )
         termo = request.query_params.get('q', '').strip()
         if not termo:
@@ -2128,7 +2200,10 @@ class AtendimentoPreEncontroDetalheAPIView(APIView):
             atendimento_id,
         )
         _exigir_policy(
-            pode_consultar_operacao_pre_encontro(request.user, encontro),
+            pode_consultar_operacao_completa_pre_encontro(
+                request.user,
+                encontro,
+            ),
         )
         return Response(_serializar_atendimentos(
             atendimento,

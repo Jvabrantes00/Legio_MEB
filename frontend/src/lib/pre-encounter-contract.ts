@@ -1,6 +1,8 @@
 export type PreEncounterContextCapabilities = {
   pre_encontro_configurado: boolean;
+  localizar_atendimento_foto: boolean;
   consultar_operacao: boolean;
+  baixar_pdf_operacional: boolean;
   consultar_cuidados: boolean;
   registrar_checkin: boolean;
   aumentar_capacidade: boolean;
@@ -19,6 +21,20 @@ export type PreEncounterItemCapabilities = {
 };
 
 export type PreEncounterOrigin = "inscricao" | "pessoa" | "avulso";
+
+export type PreEncounterPhotoCapabilities = {
+  visualizar_foto: boolean;
+  alterar_foto: boolean;
+  associar_foto_pessoa: boolean;
+};
+
+export type PreEncounterPhotoItem = {
+  id: number;
+  identificacao: string;
+  origem: PreEncounterOrigin;
+  possui_foto: boolean;
+  capabilities: PreEncounterPhotoCapabilities;
+};
 export type PreEncounterPaymentStatus = "pendente" | "pago" | "isento";
 export type PreEncounterAptitudeStatus =
   | "apto"
@@ -51,6 +67,7 @@ export type PreEncounterDetail = PreEncounterOperationalItem & {
 };
 
 export type PaginatedPreEncounterItems = PaginatedLookup<PreEncounterOperationalItem>;
+export type PaginatedPreEncounterPhotoItems = PaginatedLookup<PreEncounterPhotoItem>;
 
 export type PreEncounterPayment = {
   status: PreEncounterPaymentStatus;
@@ -184,12 +201,42 @@ export function parsePreEncounterContextCapabilities(
   if (!isRecord(value)) throw new Error("Capabilities de Pré-Encontro inválidas.");
   return {
     pre_encontro_configurado: requireBoolean(value, "pre_encontro_configurado"),
+    localizar_atendimento_foto: requireBoolean(value, "localizar_atendimento_foto"),
     consultar_operacao: requireBoolean(value, "consultar_operacao"),
+    baixar_pdf_operacional: requireBoolean(value, "baixar_pdf_operacional"),
     consultar_cuidados: requireBoolean(value, "consultar_cuidados"),
     registrar_checkin: requireBoolean(value, "registrar_checkin"),
     aumentar_capacidade: requireBoolean(value, "aumentar_capacidade"),
     configurar_pre_encontro: requireBoolean(value, "configurar_pre_encontro"),
   };
+}
+
+export function parsePreEncounterPhotoCapabilities(
+  value: unknown,
+): PreEncounterPhotoCapabilities {
+  if (!isRecord(value)) throw new Error("Capabilities de fotografia inválidas.");
+  return {
+    visualizar_foto: requireBoolean(value, "visualizar_foto"),
+    alterar_foto: requireBoolean(value, "alterar_foto"),
+    associar_foto_pessoa: requireBoolean(value, "associar_foto_pessoa"),
+  };
+}
+
+export function parsePreEncounterPhotoItem(value: unknown): PreEncounterPhotoItem {
+  if (!isRecord(value)) throw new Error("Atendimento para fotografia inválido.");
+  return {
+    id: requireNumber(value, "id"),
+    identificacao: requireString(value, "identificacao"),
+    origem: requireEnum(value, "origem", ["inscricao", "pessoa", "avulso"]),
+    possui_foto: requireBoolean(value, "possui_foto"),
+    capabilities: parsePreEncounterPhotoCapabilities(value.capabilities),
+  };
+}
+
+export function parsePreEncounterPhotoItems(
+  value: unknown,
+): PaginatedPreEncounterPhotoItems {
+  return parsePage(value, parsePreEncounterPhotoItem);
 }
 
 export function parsePreEncounterItemCapabilities(

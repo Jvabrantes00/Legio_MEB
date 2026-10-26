@@ -5,6 +5,7 @@ import {
   parsePreEncounterContextCapabilities,
   parsePreEncounterDetail,
   parsePreEncounterItems,
+  parsePreEncounterPhotoItems,
 } from "./pre-encounter-contract";
 
 const operational = {
@@ -33,6 +34,58 @@ const capabilities = {
 };
 
 describe("contratos operacionais do Pré-Encontro", () => {
+  it("projeta o contrato mínimo de fotografia sem incorporar campos operacionais", () => {
+    const page = parsePreEncounterPhotoItems({
+      count: 1,
+      next: null,
+      previous: null,
+      results: [{
+        id: 7,
+        identificacao: "Pessoa Exemplo",
+        origem: "inscricao",
+        possui_foto: true,
+        capabilities: {
+          visualizar_foto: true,
+          alterar_foto: true,
+          associar_foto_pessoa: false,
+        },
+        pagamento: "pago",
+        pessoa_id: 99,
+        cpf: "não deve integrar a projeção",
+      }],
+    });
+
+    expect(page.results[0]).toEqual({
+      id: 7,
+      identificacao: "Pessoa Exemplo",
+      origem: "inscricao",
+      possui_foto: true,
+      capabilities: {
+        visualizar_foto: true,
+        alterar_foto: true,
+        associar_foto_pessoa: false,
+      },
+    });
+    expect("pagamento" in page.results[0]).toBe(false);
+    expect("pessoa_id" in page.results[0]).toBe(false);
+    expect("cpf" in page.results[0]).toBe(false);
+  });
+
+  it("rejeita tipos e capabilities inválidos no contrato mínimo de fotografia", () => {
+    expect(() => parsePreEncounterPhotoItems({
+      count: 1,
+      next: null,
+      previous: null,
+      results: [{
+        id: 7,
+        identificacao: "Pessoa Exemplo",
+        origem: "inscricao",
+        possui_foto: "sim",
+        capabilities: {},
+      }],
+    })).toThrow();
+  });
+
   it("preserva paginação, indicadores mínimos e aptidão recebida", () => {
     const page = parsePreEncounterItems({ count: 21, next: "?page=2", previous: null, results: [operational] });
     expect(page.count).toBe(21);
@@ -64,7 +117,9 @@ describe("contratos operacionais do Pré-Encontro", () => {
   it("valida capabilities sem identidade ou papéis", () => {
     const parsed = parsePreEncounterContextCapabilities({
       pre_encontro_configurado: false,
+      localizar_atendimento_foto: true,
       consultar_operacao: true,
+      baixar_pdf_operacional: true,
       consultar_cuidados: true,
       registrar_checkin: false,
       aumentar_capacidade: false,
@@ -72,7 +127,9 @@ describe("contratos operacionais do Pré-Encontro", () => {
     });
     expect(parsed).toEqual({
       pre_encontro_configurado: false,
+      localizar_atendimento_foto: true,
       consultar_operacao: true,
+      baixar_pdf_operacional: true,
       consultar_cuidados: true,
       registrar_checkin: false,
       aumentar_capacidade: false,

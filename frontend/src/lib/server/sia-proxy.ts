@@ -46,7 +46,10 @@ export function validateProxyPath(
   if (!path.length || path.some(invalidPathPart) || !ALLOWED_RESOURCES.has(path[0])) {
     throw new Error("Caminho de API não permitido.");
   }
-  if (path.includes("pre-encontro") && !isAllowedPreEncounterRequest(method, path)) {
+  if (
+    path.includes("pre-encontro")
+    && !isAllowedPreEncounterRequest(method, path, searchParams)
+  ) {
     throw new Error("Operação de Pré-Encontro não permitida.");
   }
   if (

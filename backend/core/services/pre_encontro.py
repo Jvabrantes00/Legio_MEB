@@ -32,7 +32,9 @@ from core.permissions import (
     pode_configurar_pre_encontro,
     pode_conferir_cuidados_pre_encontro,
     pode_consultar_cuidados_pre_encontro,
-    pode_consultar_operacao_pre_encontro,
+    pode_baixar_pdf_operacional_pre_encontro,
+    pode_consultar_operacao_completa_pre_encontro,
+    pode_localizar_atendimento_foto_pre_encontro,
     pode_operar_checkin_pre_encontro,
     pode_operar_foto_pre_encontro,
     pode_registrar_pagamento_pre_encontro,
@@ -70,7 +72,9 @@ class AptidaoPreEncontro:
 @dataclass(frozen=True)
 class CapabilitiesContextoPreEncontro:
     pre_encontro_configurado: bool
+    localizar_atendimento_foto: bool
     consultar_operacao: bool
+    baixar_pdf_operacional: bool
     consultar_cuidados: bool
     registrar_checkin: bool
     aumentar_capacidade: bool
@@ -79,7 +83,9 @@ class CapabilitiesContextoPreEncontro:
     def as_dict(self):
         return {
             'pre_encontro_configurado': self.pre_encontro_configurado,
+            'localizar_atendimento_foto': self.localizar_atendimento_foto,
             'consultar_operacao': self.consultar_operacao,
+            'baixar_pdf_operacional': self.baixar_pdf_operacional,
             'consultar_cuidados': self.consultar_cuidados,
             'registrar_checkin': self.registrar_checkin,
             'aumentar_capacidade': self.aumentar_capacidade,
@@ -111,6 +117,20 @@ class CapabilitiesAtendimentoPreEncontro:
         }
 
 
+@dataclass(frozen=True)
+class CapabilitiesFotoAtendimentoPreEncontro:
+    visualizar_foto: bool
+    alterar_foto: bool
+    associar_foto_pessoa: bool
+
+    def as_dict(self):
+        return {
+            'visualizar_foto': self.visualizar_foto,
+            'alterar_foto': self.alterar_foto,
+            'associar_foto_pessoa': self.associar_foto_pessoa,
+        }
+
+
 _STATUS_ENCERRADOS = {
     Encontro.Status.CANCELADO,
     Encontro.Status.FINALIZADO,
@@ -134,7 +154,14 @@ def projetar_capabilities_contexto_pre_encontro(*, usuario, encontro):
     )
     return CapabilitiesContextoPreEncontro(
         pre_encontro_configurado=pre_encontro_configurado,
-        consultar_operacao=pode_consultar_operacao_pre_encontro(
+        localizar_atendimento_foto=(
+            pode_localizar_atendimento_foto_pre_encontro(usuario, encontro)
+        ),
+        consultar_operacao=pode_consultar_operacao_completa_pre_encontro(
+            usuario,
+            encontro,
+        ),
+        baixar_pdf_operacional=pode_baixar_pdf_operacional_pre_encontro(
             usuario,
             encontro,
         ),
@@ -227,6 +254,38 @@ def configurar_pre_encontro(
     return pre_encontro
 
 
+def _foto_atendimento_disponivel(atendimento):
+    if not hasattr(atendimento, 'foto_privada'):
+        return False
+    try:
+        return atendimento.foto_privada.arquivo.storage.exists(
+            atendimento.foto_privada.arquivo.name,
+        )
+    except OSError:
+        return False
+
+
+def projetar_capabilities_foto_atendimento_pre_encontro(
+    *,
+    usuario,
+    atendimento,
+):
+    encontro = atendimento.pre_encontro.encontro
+    mutavel = _lifecycle_permite_operacao(encontro)
+    possui_foto = hasattr(atendimento, 'foto_privada')
+    pode_operar_foto = pode_operar_foto_pre_encontro(usuario, encontro)
+    return CapabilitiesFotoAtendimentoPreEncontro(
+        visualizar_foto=possui_foto and pode_operar_foto,
+        alterar_foto=mutavel and pode_operar_foto,
+        associar_foto_pessoa=(
+            mutavel
+            and atendimento.pessoa_id is not None
+            and _foto_atendimento_disponivel(atendimento)
+            and pode_associar_foto_pessoa_pre_encontro(usuario, encontro)
+        ),
+    )
+
+
 def projetar_capabilities_atendimento_pre_encontro(
     *,
     usuario,
@@ -242,15 +301,10 @@ def projetar_capabilities_atendimento_pre_encontro(
         atendimento.inscricao_id
         and hasattr(atendimento.inscricao, 'dados_cuidado')
     )
-    possui_foto = hasattr(atendimento, 'foto_privada')
-    foto_disponivel = False
-    if possui_foto:
-        try:
-            foto_disponivel = atendimento.foto_privada.arquivo.storage.exists(
-                atendimento.foto_privada.arquivo.name,
-            )
-        except OSError:
-            foto_disponivel = False
+    capabilities_foto = projetar_capabilities_foto_atendimento_pre_encontro(
+        usuario=usuario,
+        atendimento=atendimento,
+    )
     try:
         decisao_pendente = (
             atendimento.decisao_vaga.status
@@ -277,20 +331,9 @@ def projetar_capabilities_atendimento_pre_encontro(
             and possui_cuidado
             and pode_conferir_cuidados_pre_encontro(usuario, encontro)
         ),
-        visualizar_foto=(
-            possui_foto
-            and pode_operar_foto_pre_encontro(usuario, encontro)
-        ),
-        alterar_foto=(
-            mutavel
-            and pode_operar_foto_pre_encontro(usuario, encontro)
-        ),
-        associar_foto_pessoa=(
-            mutavel
-            and atendimento.pessoa_id is not None
-            and foto_disponivel
-            and pode_associar_foto_pessoa_pre_encontro(usuario, encontro)
-        ),
+        visualizar_foto=capabilities_foto.visualizar_foto,
+        alterar_foto=capabilities_foto.alterar_foto,
+        associar_foto_pessoa=capabilities_foto.associar_foto_pessoa,
         decidir_vaga=(
             permite_operacao_datada
             and decisao_pendente

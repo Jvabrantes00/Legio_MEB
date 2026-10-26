@@ -36,8 +36,10 @@ from core.models import (
 from core.roles import SiaRole
 from core.permissions import (
     pode_aumentar_capacidade_pre_encontro,
+    pode_baixar_pdf_operacional_pre_encontro,
     pode_configurar_pre_encontro,
-    pode_consultar_operacao_pre_encontro,
+    pode_consultar_operacao_completa_pre_encontro,
+    pode_localizar_atendimento_foto_pre_encontro,
     pode_operar_checkin_pre_encontro,
     pode_registrar_pagamento_pre_encontro,
     pode_resolver_vaga_pre_encontro,
@@ -112,6 +114,9 @@ class PreEncontroApiTests(TestCase):
 
     def _capabilities_url(self, encontro=None):
         return f'{self._base(encontro)}/capabilities/'
+
+    def _foto_lista_url(self, encontro=None):
+        return f'{self._base(encontro)}/fotos/atendimentos/'
 
     def _configurar_url(self, encontro=None):
         return f'{self._base(encontro)}/configurar/'
@@ -269,18 +274,28 @@ class PreEncontroApiTests(TestCase):
 
     def test_capabilities_contextuais_reutilizam_policies_e_default_deny(self):
         casos = (
-            (self.fichas, True, True, True, False),
-            (self.comunicacao, True, False, False, False),
-            (self.suporte, True, False, True, True),
-            (self.sem_papel, False, False, False, False),
+            (self.fichas, True, True, True, True, True, True),
+            (self.comunicacao, True, False, False, False, False, False),
+            (self.suporte, True, True, True, False, True, True),
+            (self.sem_papel, False, False, False, False, False, False),
         )
-        for usuario, consultar, cuidados, checkin, capacidade in casos:
+        for (
+            usuario,
+            localizar,
+            consultar,
+            pdf_operacional,
+            cuidados,
+            checkin,
+            capacidade,
+        ) in casos:
             self._autenticar(usuario)
             resposta = self.client.get(self._capabilities_url())
             self.assertEqual(resposta.status_code, status.HTTP_200_OK)
             self.assertEqual(resposta.data, {
                 'pre_encontro_configurado': True,
+                'localizar_atendimento_foto': localizar,
                 'consultar_operacao': consultar,
+                'baixar_pdf_operacional': pdf_operacional,
                 'consultar_cuidados': cuidados,
                 'registrar_checkin': checkin,
                 'aumentar_capacidade': capacidade,
@@ -288,7 +303,24 @@ class PreEncontroApiTests(TestCase):
             })
             self.assertEqual(
                 resposta.data['consultar_operacao'],
-                pode_consultar_operacao_pre_encontro(usuario, self.encontro),
+                pode_consultar_operacao_completa_pre_encontro(
+                    usuario,
+                    self.encontro,
+                ),
+            )
+            self.assertEqual(
+                resposta.data['localizar_atendimento_foto'],
+                pode_localizar_atendimento_foto_pre_encontro(
+                    usuario,
+                    self.encontro,
+                ),
+            )
+            self.assertEqual(
+                resposta.data['baixar_pdf_operacional'],
+                pode_baixar_pdf_operacional_pre_encontro(
+                    usuario,
+                    self.encontro,
+                ),
             )
             self.assertEqual(
                 resposta.data['registrar_checkin'],
@@ -305,7 +337,6 @@ class PreEncontroApiTests(TestCase):
         casos = (
             (self.fichas, True, True, True, False),
             (coordenacao, True, True, True, False),
-            (self.comunicacao, False, False, True, False),
         )
         for usuario, pagamento, cuidados, foto, decisao in casos:
             self._autenticar(usuario)
@@ -340,7 +371,9 @@ class PreEncontroApiTests(TestCase):
         self.assertEqual(contexto.status_code, status.HTTP_200_OK)
         self.assertEqual(contexto.data, {
             'pre_encontro_configurado': True,
+            'localizar_atendimento_foto': False,
             'consultar_operacao': False,
+            'baixar_pdf_operacional': False,
             'consultar_cuidados': False,
             'registrar_checkin': False,
             'aumentar_capacidade': False,
@@ -390,7 +423,6 @@ class PreEncontroApiTests(TestCase):
             (self.diretoria, True),
             (self.fichas, False),
             (self._coordenacao('coord-cap-sem-decisao'), False),
-            (self.comunicacao, False),
             (self.suporte, False),
         ):
             self._autenticar(usuario)
@@ -417,22 +449,31 @@ class PreEncontroApiTests(TestCase):
         coordenacao = self._coordenacao('coord-sem-configurar', encontro=encontro)
         superuser = User.objects.create_superuser('super-configurar')
         casos = (
-            (self.fichas, True, True, True),
-            (self.diretoria, True, False, True),
-            (self.comunicacao, True, False, False),
-            (coordenacao, True, True, False),
-            (self.suporte, True, False, False),
-            (self.sem_papel, False, False, False),
-            (superuser, True, True, True),
+            (self.fichas, True, True, True, True, True),
+            (self.diretoria, True, True, True, False, True),
+            (self.comunicacao, True, False, False, False, False),
+            (coordenacao, True, True, True, True, False),
+            (self.suporte, True, True, True, False, False),
+            (self.sem_papel, False, False, False, False, False),
+            (superuser, True, True, True, True, True),
         )
-        for usuario, consultar, cuidados, configurar in casos:
+        for (
+            usuario,
+            localizar,
+            consultar,
+            pdf_operacional,
+            cuidados,
+            configurar,
+        ) in casos:
             with self.subTest(usuario=usuario.username):
                 self._autenticar(usuario)
                 resposta = self.client.get(self._capabilities_url(encontro))
                 self.assertEqual(resposta.status_code, status.HTTP_200_OK)
                 self.assertEqual(resposta.data, {
                     'pre_encontro_configurado': False,
+                    'localizar_atendimento_foto': localizar,
                     'consultar_operacao': consultar,
+                    'baixar_pdf_operacional': pdf_operacional,
                     'consultar_cuidados': cuidados,
                     'registrar_checkin': False,
                     'aumentar_capacidade': False,
@@ -939,13 +980,14 @@ class PreEncontroApiTests(TestCase):
                 format='multipart',
             )
             preview = self.client.get(self._atendimento_url('foto/'))
-            detalhe = self.client.get(self._atendimento_url())
+            localizacao = self.client.get(self._foto_lista_url())
             self.assertEqual(upload.status_code, status.HTTP_200_OK)
             self.assertEqual(preview.status_code, status.HTTP_200_OK)
             self.assertEqual(preview['Cache-Control'], 'private, no-store')
             self.assertNotIn('/media/', str(preview.headers))
-            self.assertTrue(detalhe.data['capabilities']['visualizar_foto'])
-            self.assertTrue(detalhe.data['capabilities']['alterar_foto'])
+            item = localizacao.data['results'][0]
+            self.assertTrue(item['capabilities']['visualizar_foto'])
+            self.assertTrue(item['capabilities']['alterar_foto'])
         foto = FotoTemporariaPreEncontro.objects.get(atendimento=self.atendimento)
         self.assertNotIn(foto.arquivo.name, str(upload.data))
 
@@ -964,16 +1006,69 @@ class PreEncontroApiTests(TestCase):
 
     def test_comunicacao_tem_somente_leitura_minima_e_foto(self):
         self._autenticar(self.comunicacao)
-        self.assertEqual(
-            self.client.get(f'{self._base()}/atendimentos/').status_code,
-            status.HTTP_200_OK,
+        localizacao = self.client.get(self._foto_lista_url(), {'q': 'Maria'})
+        self.assertEqual(localizacao.status_code, status.HTTP_200_OK)
+        self.assertEqual(localizacao.data['count'], 1)
+        item = localizacao.data['results'][0]
+        self.assertEqual(set(item), {
+            'id',
+            'identificacao',
+            'origem',
+            'possui_foto',
+            'capabilities',
+        })
+        self.assertEqual(set(item['capabilities']), {
+            'visualizar_foto',
+            'alterar_foto',
+            'associar_foto_pessoa',
+        })
+        self.assertEqual(item['identificacao'], self.pessoa.nome)
+        self.assertEqual(item['origem'], 'inscricao')
+        self.assertNotIn('pagamento', item)
+        self.assertNotIn('aptidao', item)
+        self.assertNotIn('situacao_vaga', item)
+        self.assertNotIn('presente', item)
+        self.assertNotIn('registrado_em', item)
+        self.assertNotIn('possui_dados_cuidado', item)
+        self.assertNotIn('pessoa_id', item)
+        self.assertNotIn('inscricao_id', item)
+
+        for url in (
+            f'{self._base()}/atendimentos/',
+            f'{self._base()}/atendimentos/busca/?q=Maria',
+            self._atendimento_url(),
+        ):
+            self.assertEqual(
+                self.client.get(url).status_code,
+                status.HTTP_403_FORBIDDEN,
+            )
+
+        for termo_restrito in (
+            self.pessoa.cpf,
+            '61999990000',
+            str(self.inscricao.identificador),
+        ):
+            resposta = self.client.get(
+                self._foto_lista_url(),
+                {'q': termo_restrito},
+            )
+            self.assertEqual(resposta.status_code, status.HTTP_200_OK)
+            self.assertEqual(resposta.data['count'], 0)
+
+        self.atendimento.nome_informado = 'Identificação antiga oculta'
+        self.atendimento.save(update_fields=['nome_informado', 'atualizado_em'])
+        nome_nao_exibido = self.client.get(
+            self._foto_lista_url(),
+            {'q': 'antiga oculta'},
         )
-        self.assertEqual(
-            self.client.get(
-                f'{self._base()}/atendimentos/busca/', {'q': 'Maria'},
-            ).status_code,
-            status.HTTP_200_OK,
-        )
+        self.assertEqual(nome_nao_exibido.data['count'], 0)
+
+        for parametro in ('pagamento', 'aptidao', 'situacao_vaga', 'presente'):
+            resposta = self.client.get(
+                self._foto_lista_url(),
+                {parametro: 'qualquer'},
+            )
+            self.assertEqual(resposta.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(
             self.client.post(
                 self._atendimento_url('regularizar/'),
@@ -992,10 +1087,64 @@ class PreEncontroApiTests(TestCase):
         )
         self.assertEqual(
             self.client.post(
-                f'{self._base()}/capacidade/', {'capacidade': 20}, format='json',
+                f'{self._base()}/capacidade/',
+                {'capacidade': 20},
+                format='json',
             ).status_code,
             status.HTTP_403_FORBIDDEN,
         )
+
+    def test_localizacao_foto_respeita_default_deny_contexto_e_multiplos_papeis(self):
+        outro_encontro, _ = self._outro_contexto()
+        coordenacao_outro = self._coordenacao(
+            'coord-localizacao-outro',
+            encontro=outro_encontro,
+        )
+        for usuario in (self.sem_papel, coordenacao_outro):
+            self._autenticar(usuario)
+            self.assertEqual(
+                self.client.get(self._foto_lista_url()).status_code,
+                status.HTTP_403_FORBIDDEN,
+            )
+
+        for usuario in (
+            self.fichas,
+            self.diretoria,
+            self.suporte,
+            self._coordenacao('coord-localizacao-mesmo'),
+        ):
+            self._autenticar(usuario)
+            for url in (
+                self._foto_lista_url(),
+                f'{self._base()}/atendimentos/',
+                f'{self._base()}/atendimentos/busca/?q=Maria',
+                self._atendimento_url(),
+            ):
+                self.assertEqual(
+                    self.client.get(url).status_code,
+                    status.HTTP_200_OK,
+                )
+
+        for usuario in (self.diretoria, self.suporte):
+            self._autenticar(usuario)
+            capabilities = self.client.get(
+                self._foto_lista_url(),
+            ).data['results'][0]['capabilities']
+            self.assertFalse(any(capabilities.values()))
+
+        grupo_fichas, _ = Group.objects.get_or_create(name=SiaRole.FICHAS.value)
+        self.comunicacao.groups.add(grupo_fichas)
+        self._autenticar(self.comunicacao)
+        for url in (
+            self._foto_lista_url(),
+            f'{self._base()}/atendimentos/',
+            f'{self._base()}/atendimentos/busca/?q=Maria',
+            self._atendimento_url(),
+        ):
+            self.assertEqual(
+                self.client.get(url).status_code,
+                status.HTTP_200_OK,
+            )
 
     def test_decisao_vaga_somente_diretoria(self):
         self.configuracao.capacidade = 1
@@ -1026,7 +1175,7 @@ class PreEncontroApiTests(TestCase):
         self.assertEqual(resposta.status_code, status.HTTP_200_OK)
         self.assertEqual(resposta.data['status'], 'nao_aprovado')
 
-    def test_capacidade_apenas_admin_amplo_e_sem_crud_generico(self):
+    def test_capacidade_papeis_de_gestao_e_sem_crud_generico(self):
         self._autenticar(self.suporte)
         resposta = self.client.post(
             f'{self._base()}/capacidade/',
@@ -1036,14 +1185,15 @@ class PreEncontroApiTests(TestCase):
         self.assertEqual(resposta.status_code, status.HTTP_200_OK)
         self.assertEqual(resposta.data['capacidade'], 20)
         self._autenticar(self.fichas)
-        negado = self.client.post(
+        autorizado = self.client.post(
             f'{self._base()}/capacidade/', {'capacidade': 21}, format='json',
         )
         delete = self.client.delete(self._atendimento_url())
         patch = self.client.patch(
             self._atendimento_url(), {'pessoa_id': None}, format='json',
         )
-        self.assertEqual(negado.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(autorizado.status_code, status.HTTP_200_OK)
+        self.assertEqual(autorizado.data['capacidade'], 21)
         self.assertEqual(delete.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
         self.assertEqual(patch.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
 

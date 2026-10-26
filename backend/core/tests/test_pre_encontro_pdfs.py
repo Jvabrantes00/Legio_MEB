@@ -324,23 +324,36 @@ class PreEncontroPdfTests(TestCase):
             self.assertEqual(resposta['Cache-Control'], 'private, no-store')
             self.assertEqual(resposta['X-Content-Type-Options'], 'nosniff')
 
-    def test_autorizacao_operacional_reutiliza_consultar_operacao(self):
+    def test_pdf_operacional_separa_comunicacao_da_operacao_completa(self):
+        coordenacao = self._coordenacao()
         with patch.object(
             exportacao_pre_encontro,
             'gerar_pdf_operacional_pre_encontro',
             return_value=b'%PDF',
-        ):
-            for usuario in (self.fichas, self.comunicacao, self.suporte):
+        ) as gerar:
+            for usuario in (
+                self.comunicacao,
+                self.sem_papel,
+            ):
+                self.client.force_authenticate(usuario)
+                self.assertEqual(
+                    self.client.get(self._url('operacional')).status_code,
+                    status.HTTP_403_FORBIDDEN,
+                )
+            gerar.assert_not_called()
+
+            for usuario in (
+                self.fichas,
+                self.diretoria,
+                self.suporte,
+                coordenacao,
+                self.superuser,
+            ):
                 self.client.force_authenticate(usuario)
                 self.assertEqual(
                     self.client.get(self._url('operacional')).status_code,
                     status.HTTP_200_OK,
                 )
-            self.client.force_authenticate(self.sem_papel)
-            self.assertEqual(
-                self.client.get(self._url('operacional')).status_code,
-                status.HTTP_403_FORBIDDEN,
-            )
 
     def test_cuidados_autoriza_fichas_coordenacao_e_superuser(self):
         coordenacao = self._coordenacao()

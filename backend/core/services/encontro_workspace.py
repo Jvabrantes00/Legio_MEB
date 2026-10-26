@@ -23,7 +23,7 @@ from core.permissions import (
     pode_consultar_contato_workspace,
     pode_consultar_configuracao_encontristas,
     pode_consultar_encontristas_workspace,
-    pode_consultar_operacao_pre_encontro,
+    pode_localizar_atendimento_foto_pre_encontro,
     pode_consultar_resumo_workspace_encontro,
     pode_gerir_configuracao_encontristas,
 )
@@ -85,7 +85,7 @@ def projetar_capabilities(*, usuario, encontro):
         'consultar_contato': pode_consultar_contato_workspace(
             usuario, encontro,
         ),
-        'acessar_pre_encontro': pode_consultar_operacao_pre_encontro(
+        'acessar_pre_encontro': pode_localizar_atendimento_foto_pre_encontro(
             usuario, encontro,
         ),
         'acessar_equipes': pode_acessar_equipes_workspace(usuario, encontro),

@@ -202,6 +202,41 @@ def _identificacao_atendimento(atendimento):
     return atendimento.nome_informado
 
 
+def _origem_atendimento(atendimento):
+    if atendimento.inscricao_id:
+        return 'inscricao'
+    if atendimento.pessoa_id:
+        return 'pessoa'
+    return 'avulso'
+
+
+class AtendimentoPreEncontroFotoSerializer(serializers.Serializer):
+    id = serializers.IntegerField(read_only=True)
+    identificacao = serializers.SerializerMethodField()
+    origem = serializers.SerializerMethodField()
+    possui_foto = serializers.SerializerMethodField()
+    capabilities = serializers.SerializerMethodField()
+
+    def get_identificacao(self, atendimento):
+        return _identificacao_atendimento(atendimento)
+
+    def get_origem(self, atendimento):
+        return _origem_atendimento(atendimento)
+
+    def get_possui_foto(self, atendimento):
+        return hasattr(atendimento, 'foto_privada')
+
+    def get_capabilities(self, atendimento):
+        return (
+            pre_encontro_services
+            .projetar_capabilities_foto_atendimento_pre_encontro(
+                usuario=self.context['usuario'],
+                atendimento=atendimento,
+            )
+            .as_dict()
+        )
+
+
 class AtendimentoPreEncontroOperacionalSerializer(serializers.Serializer):
     id = serializers.IntegerField(read_only=True)
     identificacao = serializers.SerializerMethodField()
@@ -219,11 +254,7 @@ class AtendimentoPreEncontroOperacionalSerializer(serializers.Serializer):
         return _identificacao_atendimento(atendimento)
 
     def get_origem(self, atendimento):
-        if atendimento.inscricao_id:
-            return 'inscricao'
-        if atendimento.pessoa_id:
-            return 'pessoa'
-        return 'avulso'
+        return _origem_atendimento(atendimento)
 
     def get_presente(self, atendimento):
         return True
@@ -300,7 +331,9 @@ class AtendimentoPreEncontroDetalheSerializer(
 
 class CapabilitiesContextoPreEncontroSerializer(serializers.Serializer):
     pre_encontro_configurado = serializers.BooleanField(read_only=True)
+    localizar_atendimento_foto = serializers.BooleanField(read_only=True)
     consultar_operacao = serializers.BooleanField(read_only=True)
+    baixar_pdf_operacional = serializers.BooleanField(read_only=True)
     consultar_cuidados = serializers.BooleanField(read_only=True)
     registrar_checkin = serializers.BooleanField(read_only=True)
     aumentar_capacidade = serializers.BooleanField(read_only=True)

@@ -16,11 +16,14 @@ import {
   type PreEncounterDetail,
   type PreEncounterOperationalItem,
   type PreEncounterPaymentStatus,
+  type PreEncounterPhotoCapabilities,
+  type PreEncounterPhotoItem,
   parsePreEncounterCare,
   parsePreEncounterCareConference,
   parsePreEncounterContextCapabilities,
   parsePreEncounterDetail,
   parsePreEncounterItems,
+  parsePreEncounterPhotoItems,
   parsePreEncounterPersonLookup,
   parsePreEncounterRegistrationLookup,
 } from "../lib/pre-encounter-contract";
@@ -97,6 +100,12 @@ function buildListPath(
   return `${base}/?${params}`;
 }
 
+function buildPhotoListPath(encontroId: string, page: number, query: string) {
+  const params = new URLSearchParams({ page: String(page) });
+  if (query) params.set("q", query);
+  return `/encontros/${encontroId}/pre-encontro/fotos/atendimentos/?${params}`;
+}
+
 export function PreEncounterCheckin({
   encontroId,
   initialCapabilities,
@@ -122,6 +131,7 @@ export function PreEncounterCheckin({
   const [downloadBusy, setDownloadBusy] = useState<"operacional" | "cuidados" | null>(null);
   const preEncounterConfigured = capabilities?.pre_encontro_configurado ?? false;
   const canConsultOperation = capabilities?.consultar_operacao ?? false;
+  const canLocatePhoto = capabilities?.localizar_atendimento_foto ?? false;
 
   const loadCapabilities = useCallback(async () => {
     setCapabilitiesLoading(true);
@@ -263,7 +273,15 @@ export function PreEncounterCheckin({
       />
     );
   }
-  if (!capabilities?.consultar_operacao) {
+  if (!canConsultOperation && canLocatePhoto) {
+    return (
+      <PreEncounterPhotoLookup
+        encontroId={encontroId}
+        onReloadCapabilities={onReloadCapabilities ?? loadCapabilities}
+      />
+    );
+  }
+  if (!canConsultOperation) {
     return (
       <section className="rounded-2xl border border-gray-200 bg-white p-6" aria-label="Pré-Encontro">
         <h2 className="text-xl font-bold text-gray-900">Pré-Encontro</h2>
@@ -281,7 +299,7 @@ export function PreEncounterCheckin({
           <p className="text-sm text-gray-600">Credenciamento do Encontro atual · {count} atendimento(s)</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <button type="button" disabled={downloadBusy !== null} onClick={() => void downloadPdf("operacional")} className="inline-flex items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm font-semibold disabled:opacity-50"><Download size={16} /> Baixar lista operacional</button>
+          {capabilities.baixar_pdf_operacional && <button type="button" disabled={downloadBusy !== null} onClick={() => void downloadPdf("operacional")} className="inline-flex items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm font-semibold disabled:opacity-50"><Download size={16} /> Baixar lista operacional</button>}
           {capabilities.consultar_cuidados && <button type="button" disabled={downloadBusy !== null} onClick={() => void downloadPdf("cuidados")} className="inline-flex items-center justify-center gap-2 rounded-lg border border-red-200 px-3 py-2 text-sm font-semibold text-red-800 disabled:opacity-50"><Download size={16} /> Baixar dados de cuidado</button>}
           {capabilities.registrar_checkin && (
             <button
@@ -359,6 +377,209 @@ export function PreEncounterCheckin({
           onActionError={handleActionError}
         />
       )}
+    </section>
+  );
+}
+
+function PreEncounterPhotoLookup({ encontroId, onReloadCapabilities }: {
+  encontroId: string;
+  onReloadCapabilities: () => Promise<void>;
+}) {
+  const [items, setItems] = useState<PreEncounterPhotoItem[]>([]);
+  const [count, setCount] = useState(0);
+  const [page, setPage] = useState(1);
+  const [hasNext, setHasNext] = useState(false);
+  const [hasPrevious, setHasPrevious] = useState(false);
+  const [queryInput, setQueryInput] = useState("");
+  const [query, setQuery] = useState("");
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [resultsEncontroId, setResultsEncontroId] = useState(encontroId);
+  const requestId = useRef(0);
+
+  const invalidateResults = useCallback(() => {
+    requestId.current += 1;
+    setItems([]);
+    setCount(0);
+    setHasNext(false);
+    setHasPrevious(false);
+    setSelectedId(null);
+    setError(null);
+    setLoading(true);
+  }, []);
+
+  const loadItems = useCallback(async (preserveCurrent = false) => {
+    const currentRequestId = requestId.current + 1;
+    requestId.current = currentRequestId;
+    setResultsEncontroId(encontroId);
+    setLoading(true);
+    setError(null);
+    if (!preserveCurrent) {
+      setItems([]);
+      setCount(0);
+      setHasNext(false);
+      setHasPrevious(false);
+      setSelectedId(null);
+    }
+    try {
+      const response = await siaFetch(buildPhotoListPath(encontroId, page, query));
+      if (!response.ok) {
+        throw new Error(await responseError(
+          response,
+          "Não foi possível localizar os atendimentos para fotografia.",
+        ));
+      }
+      const body = parsePreEncounterPhotoItems(await response.json());
+      if (requestId.current !== currentRequestId) return;
+      setItems(body.results);
+      setCount(body.count);
+      setHasNext(Boolean(body.next));
+      setHasPrevious(Boolean(body.previous));
+      setSelectedId((current) => (
+        current !== null && body.results.some((item) => item.id === current)
+          ? current
+          : null
+      ));
+    } catch (caught: unknown) {
+      if (requestId.current !== currentRequestId) return;
+      setItems([]);
+      setCount(0);
+      setHasNext(false);
+      setHasPrevious(false);
+      setSelectedId(null);
+      setError(errorMessage(
+        caught,
+        "Não foi possível localizar os atendimentos para fotografia.",
+      ));
+    } finally {
+      if (requestId.current === currentRequestId) setLoading(false);
+    }
+  }, [encontroId, page, query]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => void loadItems(), 0);
+    return () => {
+      window.clearTimeout(timer);
+      requestId.current += 1;
+    };
+  }, [loadItems]);
+
+  const resultsAreCurrent = resultsEncontroId === encontroId;
+  const currentItems = resultsAreCurrent ? items : [];
+  const currentCount = resultsAreCurrent ? count : 0;
+  const currentHasNext = resultsAreCurrent && hasNext;
+  const currentHasPrevious = resultsAreCurrent && hasPrevious;
+  const currentError = resultsAreCurrent ? error : null;
+  const currentLoading = resultsAreCurrent ? loading : true;
+  const selected = currentItems.find((item) => item.id === selectedId) ?? null;
+
+  const handleActionError = useCallback(async (response: Response, fallback: string) => {
+    invalidateResults();
+    toast.error(await responseError(response, fallback));
+    if ([403, 409].includes(response.status)) await onReloadCapabilities();
+    await loadItems();
+  }, [invalidateResults, loadItems, onReloadCapabilities]);
+
+  return (
+    <section className="space-y-4" aria-label="Pré-Encontro · Fotografias">
+      <header>
+        <h2 className="text-2xl font-bold text-gray-900">Fotografias do Pré-Encontro</h2>
+        <p className="text-sm text-gray-600">
+          Localize por nome e confirme presencialmente a identidade antes de fotografar.
+        </p>
+      </header>
+
+      <form
+        className="flex gap-2 rounded-xl border border-gray-200 bg-white p-4"
+        onSubmit={(event) => {
+          event.preventDefault();
+          const nextQuery = queryInput.trim();
+          invalidateResults();
+          if (page === 1 && query === nextQuery) {
+            void loadItems();
+            return;
+          }
+          setPage(1);
+          setQuery(nextQuery);
+        }}
+      >
+        <label className="relative flex-1">
+          <span className="sr-only">Buscar atendimento para fotografia</span>
+          <Search className="absolute left-3 top-3 text-gray-400" size={18} />
+          <input
+            value={queryInput}
+            onChange={(event) => setQueryInput(event.target.value)}
+            placeholder="Nome ou identificação"
+            className="w-full rounded-lg border border-gray-300 py-2.5 pl-10 pr-3 outline-none focus:ring-2 focus:ring-escalada-azul"
+          />
+        </label>
+        <button type="submit" className="rounded-lg border border-escalada-azul px-4 font-semibold text-escalada-azul">Buscar</button>
+      </form>
+
+      {currentError && (
+        <div className="flex items-center justify-between rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+          <span>{currentError}</span>
+          <button type="button" onClick={() => void loadItems()} className="font-semibold underline">Tentar novamente</button>
+        </div>
+      )}
+
+      <div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1fr)_24rem]">
+        <div className="min-w-0 rounded-xl border border-gray-200 bg-white">
+          {currentLoading ? (
+            <p className="p-8 text-center text-sm text-gray-500">Carregando atendimentos...</p>
+          ) : currentItems.length ? (
+            <ul className="divide-y">
+              {currentItems.map((item) => (
+                <li key={item.id}>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedId(item.id)}
+                    className={`flex w-full items-center justify-between gap-3 p-4 text-left hover:bg-blue-50 ${selectedId === item.id ? "bg-blue-50" : ""}`}
+                  >
+                    <span>
+                      <strong className="block text-gray-900">{item.identificacao}</strong>
+                      <span className="mt-1 block text-xs text-gray-500">{label(item.origem)}</span>
+                    </span>
+                    <span className="text-sm text-gray-600">{item.possui_foto ? "Com foto" : "Sem foto"}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="p-8 text-center text-sm text-gray-500">Nenhum atendimento encontrado.</p>
+          )}
+          <p className="border-t px-3 pt-3 text-xs text-gray-500">{currentCount} atendimento(s)</p>
+          <Pagination
+            page={page}
+            hasNext={currentHasNext}
+            hasPrevious={currentHasPrevious}
+            loading={currentLoading}
+            onChange={(nextPage) => {
+              invalidateResults();
+              setPage(nextPage);
+            }}
+          />
+        </div>
+
+        {selected && (
+          <aside className="rounded-xl border border-gray-200 bg-white p-5" aria-label="Fotografia do atendimento">
+            <div className="mb-4 flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-xl font-bold text-gray-900">{selected.identificacao}</h3>
+                <p className="text-sm text-gray-500">{label(selected.origem)}</p>
+              </div>
+              <button type="button" aria-label="Fechar fotografia" onClick={() => setSelectedId(null)} className="text-gray-500"><X size={18} /></button>
+            </div>
+            <PhotoSection
+              encontroId={encontroId}
+              detail={selected}
+              onRefresh={() => loadItems(true)}
+              onActionError={handleActionError}
+            />
+          </aside>
+        )}
+      </div>
     </section>
   );
 }
@@ -661,7 +882,19 @@ function CareSection({ encontroId, detail, onRefresh, onActionError }: ActionSec
   );
 }
 
-function PhotoSection({ encontroId, detail, onRefresh, onActionError }: ActionSectionProps) {
+type PhotoSectionProps = {
+  encontroId: string;
+  detail: {
+    id: number;
+    identificacao: string;
+    possui_foto: boolean;
+    capabilities: PreEncounterPhotoCapabilities;
+  };
+  onRefresh: () => Promise<void>;
+  onActionError: (response: Response, fallback: string) => Promise<void>;
+};
+
+function PhotoSection({ encontroId, detail, onRefresh, onActionError }: PhotoSectionProps) {
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);

@@ -183,19 +183,29 @@ def pode_aumentar_capacidade_pre_encontro(user, encontro):
     return pode_gerir_configuracao_encontristas(user)
 
 
-def pode_consultar_operacao_pre_encontro(user, encontro):
+def pode_consultar_operacao_completa_pre_encontro(user, encontro):
     return bool(
         _usuario_ativo(user)
         and (
             user.is_superuser
-            or user_has_any_role(
-                user,
-                *FICHAS_MANAGEMENT_ROLES,
-                SiaRole.COMUNICACAO,
-            )
+            or user_has_any_role(user, *FICHAS_MANAGEMENT_ROLES)
             or pertence_coordenacao_geral_encontro(user, encontro)
         )
     )
+
+
+def pode_localizar_atendimento_foto_pre_encontro(user, encontro):
+    return bool(
+        pode_consultar_operacao_completa_pre_encontro(user, encontro)
+        or (
+            _usuario_ativo(user)
+            and user_has_any_role(user, SiaRole.COMUNICACAO)
+        )
+    )
+
+
+def pode_baixar_pdf_operacional_pre_encontro(user, encontro):
+    return pode_consultar_operacao_completa_pre_encontro(user, encontro)
 
 
 def pode_operar_foto_pre_encontro(user, encontro):
@@ -229,11 +239,11 @@ def pode_consultar_cuidados_pre_encontro(user, encontro):
 
 
 def pode_consultar_resumo_workspace_encontro(user, encontro):
-    return pode_consultar_operacao_pre_encontro(user, encontro)
+    return pode_localizar_atendimento_foto_pre_encontro(user, encontro)
 
 
 def pode_consultar_encontristas_workspace(user, encontro):
-    return pode_consultar_operacao_pre_encontro(user, encontro)
+    return pode_localizar_atendimento_foto_pre_encontro(user, encontro)
 
 
 def pode_consultar_contato_workspace(user, encontro):

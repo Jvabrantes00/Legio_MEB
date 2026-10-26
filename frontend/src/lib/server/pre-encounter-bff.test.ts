@@ -13,6 +13,7 @@ const base = ["encontros", "12", "pre-encontro"] as const;
 
 describe("allowlist BFF do Pré-Encontro", () => {
   it.each([
+    ["GET", [...base, "fotos", "atendimentos"]],
     ["GET", [...base, "atendimentos"]],
     ["GET", [...base, "capabilities"]],
     ["GET", [...base, "lookups", "inscricoes"]],
@@ -53,6 +54,59 @@ describe("allowlist BFF do Pré-Encontro", () => {
     expect(isAllowedPreEncounterRequest("GET", ["api", "sia", "encontros"])).toBe(false);
   });
 
+  it("limita a localização para fotografia ao path exato e às queries page/q", () => {
+    const path = [...base, "fotos", "atendimentos"];
+    for (const query of ["", "page=2", "q=Pessoa", "page=2&q=Pessoa"]) {
+      const params = new URLSearchParams(query);
+      expect(isAllowedPreEncounterRequest("GET", path, params)).toBe(true);
+      expect(() => validateProxyPath(path, params, "GET")).not.toThrow();
+    }
+    for (const query of ["page=0", "page=-1", "cpf=123", "pagamento=pago", "q=A&q=B"]) {
+      const params = new URLSearchParams(query);
+      expect(isAllowedPreEncounterRequest("GET", path, params)).toBe(false);
+      expect(() => validateProxyPath(path, params, "GET")).toThrow();
+    }
+    for (const method of ["POST", "PUT", "PATCH", "DELETE"]) {
+      expect(isAllowedPreEncounterRequest(method, path)).toBe(false);
+    }
+    expect(isAllowedPreEncounterRequest("GET", [...path, "extra"])).toBe(false);
+    expect(isAllowedPreEncounterRequest(
+      "GET",
+      ["encontros", "../12", "pre-encontro", "fotos", "atendimentos"],
+    )).toBe(false);
+  });
+
+  it("preserva as queries legítimas da listagem operacional existente", () => {
+    const path = [...base, "atendimentos"];
+    const params = new URLSearchParams(
+      "page=2&presente=true&pagamento=pago&aptidao=apto&situacao_vaga=aprovado",
+    );
+
+    expect(isAllowedPreEncounterRequest("GET", path, params)).toBe(true);
+    expect(() => validateProxyPath(path, params, "GET")).not.toThrow();
+  });
+
+  it("preserva a busca operacional existente com q", () => {
+    const path = [...base, "atendimentos", "busca"];
+    const params = new URLSearchParams("q=Pessoa");
+
+    expect(isAllowedPreEncounterRequest("GET", path, params)).toBe(true);
+    expect(() => validateProxyPath(path, params, "GET")).not.toThrow();
+  });
+
+  it.each(["url", "target", "host", "URL", "Target", "HOST"])(
+    "mantém o bloqueio global do parâmetro de destino %s nas rotas existentes",
+    (key) => {
+      const params = new URLSearchParams({ [key]: "https://evil.example" });
+
+      expect(() => validateProxyPath(
+        [...base, "atendimentos"],
+        params,
+        "GET",
+      )).toThrow("Parâmetro de destino não permitido.");
+    },
+  );
+
   it.each(["POST", "PUT", "PATCH", "DELETE"])(
     "nega %s no endpoint contextual de capabilities",
     (method) => {
@@ -78,7 +132,9 @@ describe("allowlist BFF do Pré-Encontro", () => {
   it("valida os dois contratos de capabilities sem expor identidade", () => {
     const contexto = parsePreEncounterContextCapabilities({
       pre_encontro_configurado: false,
+      localizar_atendimento_foto: true,
       consultar_operacao: true,
+      baixar_pdf_operacional: true,
       consultar_cuidados: true,
       registrar_checkin: false,
       aumentar_capacidade: false,
@@ -96,6 +152,8 @@ describe("allowlist BFF do Pré-Encontro", () => {
     });
 
     expect(contexto.consultar_operacao).toBe(true);
+    expect(contexto.localizar_atendimento_foto).toBe(true);
+    expect(contexto.baixar_pdf_operacional).toBe(true);
     expect(contexto.configurar_pre_encontro).toBe(true);
     expect(atendimento.alterar_foto).toBe(true);
     expect("roles" in contexto).toBe(false);
@@ -104,7 +162,9 @@ describe("allowlist BFF do Pré-Encontro", () => {
   it("rejeita capability ausente ou não booleana", () => {
     expect(() => parsePreEncounterContextCapabilities({
       pre_encontro_configurado: false,
+      localizar_atendimento_foto: true,
       consultar_operacao: true,
+      baixar_pdf_operacional: true,
       consultar_cuidados: true,
       registrar_checkin: "sim",
       aumentar_capacidade: false,

@@ -20,6 +20,7 @@ from .views import (
     PropostaVioleirosViewSet,
     SessaoFormativaCommandViewSet,
     CalendarioEncontroCommandViewSet,
+    AtendimentoPreEncontroFotoListaAPIView,
     AtendimentoPreEncontroListaAPIView,
     AtendimentoPreEncontroBuscaAPIView,
     AtendimentoPreEncontroDetalheAPIView,
@@ -189,6 +190,11 @@ urlpatterns = [
         'encontros/<int:encontro_id>/pre-encontro/configurar/',
         ConfiguracaoInicialPreEncontroAPIView.as_view(),
         name='pre-encontro-configurar',
+    ),
+    path(
+        'encontros/<int:encontro_id>/pre-encontro/fotos/atendimentos/',
+        AtendimentoPreEncontroFotoListaAPIView.as_view(),
+        name='pre-encontro-fotos-atendimentos',
     ),
     path(
         'encontros/<int:encontro_id>/pre-encontro/atendimentos/',

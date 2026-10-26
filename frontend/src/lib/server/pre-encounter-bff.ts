@@ -2,14 +2,26 @@ import { preEncounterMediaOperation } from "./pre-encounter-media";
 import { preEncounterPdfKind } from "./pre-encounter-pdf";
 
 const POSITIVE_INTEGER = /^[1-9]\d*$/;
+const PHOTO_LOOKUP_QUERY_KEYS = new Set(["page", "q"]);
 
 function isId(value: string | undefined): boolean {
   return Boolean(value && POSITIVE_INTEGER.test(value));
 }
 
+function hasOnlyPhotoLookupQuery(searchParams: URLSearchParams): boolean {
+  for (const key of searchParams.keys()) {
+    if (!PHOTO_LOOKUP_QUERY_KEYS.has(key) || searchParams.getAll(key).length !== 1) {
+      return false;
+    }
+  }
+  const page = searchParams.get("page");
+  return page === null || isId(page);
+}
+
 export function isAllowedPreEncounterRequest(
   method: string,
   path: readonly string[],
+  searchParams = new URLSearchParams(),
 ): boolean {
   if (preEncounterMediaOperation(method, path) !== null) return true;
   if (preEncounterPdfKind(method, path) !== null) return true;
@@ -20,6 +32,13 @@ export function isAllowedPreEncounterRequest(
   const tail = path.slice(3);
   if (method === "GET") {
     return (
+      (
+        tail.length === 2
+        && tail[0] === "fotos"
+        && tail[1] === "atendimentos"
+        && hasOnlyPhotoLookupQuery(searchParams)
+      )
+      ||
       (tail.length === 1 && (tail[0] === "atendimentos" || tail[0] === "capabilities"))
       || (
         tail.length === 2

@@ -287,7 +287,15 @@ class EncontroWorkspaceApiTests(TestCase):
 
     def test_capabilities_sao_granulares_e_server_driven(self):
         self._auth(self.comunicacao)
+        summary = self.client.get(self._url())
+        encontristas = self.client.get(self._url('encontristas/'))
         comunicacao = self.client.get(self._url('capabilities/')).data
+        self.assertEqual(summary.status_code, status.HTTP_200_OK)
+        self.assertEqual(encontristas.status_code, status.HTTP_200_OK)
+        self.assertNotIn('cpf', str(summary.data).lower())
+        self.assertNotIn('telefone', str(encontristas.data).lower())
+        self.assertNotIn('cuidados', str(encontristas.data).lower())
+        self.assertNotIn('foto', str(encontristas.data).lower())
         self.assertTrue(comunicacao['consultar_resumo'])
         self.assertTrue(comunicacao['consultar_encontristas'])
         self.assertFalse(comunicacao['consultar_contato'])

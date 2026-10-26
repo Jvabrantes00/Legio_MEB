@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -13,14 +13,46 @@ vi.mock("../lib/sia-api", () => ({ siaFetch: siaFetchMock }));
 vi.mock("react-hot-toast", () => ({ default: { success: toastSuccess, error: toastError } }));
 
 import { PreEncounterCheckin } from "./PreEncounterCheckin";
+import { type PreEncounterPhotoItem } from "../lib/pre-encounter-contract";
 
 const contextCapabilities = {
   pre_encontro_configurado: true,
+  localizar_atendimento_foto: true,
   consultar_operacao: true,
+  baixar_pdf_operacional: true,
   consultar_cuidados: true,
   registrar_checkin: true,
   aumentar_capacidade: false,
   configurar_pre_encontro: false,
+};
+const photoOnlyCapabilities = {
+  ...contextCapabilities,
+  consultar_operacao: false,
+  baixar_pdf_operacional: false,
+  consultar_cuidados: false,
+  registrar_checkin: false,
+};
+const photoItem: PreEncounterPhotoItem = {
+  id: 7,
+  identificacao: "Pessoa Exemplo",
+  origem: "inscricao",
+  possui_foto: true,
+  capabilities: {
+    visualizar_foto: true,
+    alterar_foto: true,
+    associar_foto_pessoa: true,
+  },
+};
+const anotherPhotoItem: PreEncounterPhotoItem = {
+  ...photoItem,
+  id: 8,
+  identificacao: "Outra Pessoa",
+  origem: "pessoa",
+};
+const encounterThirteenPhotoItem: PreEncounterPhotoItem = {
+  ...photoItem,
+  id: 13,
+  identificacao: "Pessoa do Encontro 13",
 };
 const item = {
   id: 7, identificacao: "Pessoa Exemplo", origem: "inscricao", presente: true,
@@ -37,7 +69,23 @@ function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 }
 
+function deferredResponse() {
+  let resolve: (response: Response) => void = () => undefined;
+  const promise = new Promise<Response>((innerResolve) => {
+    resolve = innerResolve;
+  });
+  return { promise, resolve };
+}
+
 function page(results = [item], next: string | null = null, previous: string | null = null) {
+  return { count: results.length, next, previous, results };
+}
+
+function photoPage(
+  results: PreEncounterPhotoItem[] = [photoItem],
+  next: string | null = null,
+  previous: string | null = null,
+) {
   return { count: results.length, next, previous, results };
 }
 
@@ -99,6 +147,17 @@ describe("workspace operacional do Pré-Encontro", () => {
     expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:foto");
     expect(anchorClick).toHaveBeenCalledOnce();
     anchorClick.mockRestore();
+  });
+
+  it("mantém a operação completa, mas oculta o PDF operacional sem capability", async () => {
+    render(<PreEncounterCheckin encontroId="12" initialCapabilities={{
+      ...contextCapabilities,
+      baixar_pdf_operacional: false,
+    }} />);
+
+    expect((await screen.findAllByText("Pessoa Exemplo")).length).toBeGreaterThan(0);
+    expect(screen.getByLabelText("Pagamento")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Baixar lista operacional" })).toBeNull();
   });
 
   it("oculta PDF restrito sem capability e preserva a tela após erro de download", async () => {
@@ -329,8 +388,508 @@ describe("workspace operacional do Pré-Encontro", () => {
     expect(toastSuccess).not.toHaveBeenCalled();
   });
 
+  it("seleciona o modo mínimo por capability sem carregar dados operacionais", async () => {
+    siaFetchMock.mockImplementation((path: string) => {
+      if (path.endsWith("/fotos/atendimentos/?page=1")) {
+        return Promise.resolve(json(photoPage()));
+      }
+      throw new Error(`Request inesperado: ${path}`);
+    });
+    const user = userEvent.setup();
+    render(<PreEncounterCheckin encontroId="12" initialCapabilities={{
+      ...contextCapabilities,
+      consultar_operacao: false,
+      baixar_pdf_operacional: false,
+      consultar_cuidados: false,
+      registrar_checkin: false,
+    }} />);
+
+    expect(await screen.findByText("Fotografias do Pré-Encontro")).toBeTruthy();
+    expect(screen.getByText(/confirme presencialmente a identidade/)).toBeTruthy();
+    await user.click(await screen.findByRole("button", { name: /Pessoa Exemplo/ }));
+    expect(await screen.findByText("Foto disponível")).toBeTruthy();
+    expect(screen.queryByText("Pagamento")).toBeNull();
+    expect(screen.queryByText("Aptidão e vaga")).toBeNull();
+    expect(screen.queryByText("Cuidados")).toBeNull();
+    expect(screen.queryByText("Presença")).toBeNull();
+    expect(screen.queryByRole("button", { name: /Baixar lista operacional/ })).toBeNull();
+    expect(siaFetchMock.mock.calls.some(([path]) => String(path).includes("/atendimentos/busca/"))).toBe(false);
+    expect(siaFetchMock.mock.calls.some(([path]) => /\/atendimentos\/7\/$/.test(String(path)))).toBe(false);
+  });
+
+  it("busca por identificação somente no endpoint mínimo de fotografia", async () => {
+    siaFetchMock.mockImplementation((path: string) => {
+      if (path.endsWith("/fotos/atendimentos/?page=1")) {
+        return Promise.resolve(json(photoPage()));
+      }
+      if (path.endsWith("/fotos/atendimentos/?page=1&q=Outra")) {
+        return Promise.resolve(json(photoPage([anotherPhotoItem])));
+      }
+      throw new Error(`Request inesperado: ${path}`);
+    });
+    const user = userEvent.setup();
+    render(<PreEncounterCheckin encontroId="12" initialCapabilities={photoOnlyCapabilities} />);
+
+    await screen.findByText("Fotografias do Pré-Encontro");
+    await screen.findByText("Pessoa Exemplo");
+    await user.type(screen.getByLabelText("Buscar atendimento para fotografia"), "Outra");
+    await user.click(screen.getByRole("button", { name: "Buscar" }));
+    await waitFor(() => expect(siaFetchMock).toHaveBeenCalledWith(
+      "/encontros/12/pre-encontro/fotos/atendimentos/?page=1&q=Outra",
+    ));
+    expect(await screen.findByText("Outra Pessoa")).toBeTruthy();
+    expect(screen.queryByText("Pessoa Exemplo")).toBeNull();
+    expect(siaFetchMock.mock.calls.some(([path]) => String(path).includes("/atendimentos/busca/"))).toBe(false);
+  });
+
+  it("invalida a seleção em busca falha e tenta novamente com o critério atual", async () => {
+    let currentSearchAttempts = 0;
+    siaFetchMock.mockImplementation((path: string) => {
+      if (path.endsWith("/fotos/atendimentos/?page=1")) {
+        return Promise.resolve(json(photoPage()));
+      }
+      if (path.endsWith("/fotos/atendimentos/?page=1&q=Outra")) {
+        currentSearchAttempts += 1;
+        return Promise.resolve(currentSearchAttempts === 1
+          ? json({ detail: "Busca indisponível." }, 502)
+          : json(photoPage([anotherPhotoItem])));
+      }
+      throw new Error(`Request inesperado: ${path}`);
+    });
+    const user = userEvent.setup();
+    render(<PreEncounterCheckin encontroId="12" initialCapabilities={photoOnlyCapabilities} />);
+
+    await user.click(await screen.findByRole("button", { name: /Pessoa Exemplo/ }));
+    expect(screen.getByRole("button", { name: "Abrir preview privado" })).toBeTruthy();
+    await user.type(screen.getByLabelText("Buscar atendimento para fotografia"), "Outra");
+    await user.click(screen.getByRole("button", { name: "Buscar" }));
+
+    expect(await screen.findByText("Busca indisponível.")).toBeTruthy();
+    expect(screen.queryByText("Pessoa Exemplo")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Abrir preview privado" })).toBeNull();
+    expect(screen.queryByLabelText("Selecionar ou capturar foto")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Usar esta como foto da Pessoa" })).toBeNull();
+
+    await user.click(screen.getByRole("button", { name: "Tentar novamente" }));
+    expect(await screen.findByText("Outra Pessoa")).toBeTruthy();
+    expect(currentSearchAttempts).toBe(2);
+    expect(siaFetchMock).toHaveBeenLastCalledWith(
+      "/encontros/12/pre-encontro/fotos/atendimentos/?page=1&q=Outra",
+    );
+  });
+
+  it("pagina para frente e para trás somente pelo endpoint mínimo", async () => {
+    siaFetchMock.mockImplementation((path: string) => {
+      if (path.endsWith("/fotos/atendimentos/?page=1")) {
+        return Promise.resolve(json(photoPage([photoItem], "?page=2")));
+      }
+      if (path.endsWith("/fotos/atendimentos/?page=2")) {
+        return Promise.resolve(json(photoPage([anotherPhotoItem], null, "?page=1")));
+      }
+      throw new Error(`Request inesperado: ${path}`);
+    });
+    const user = userEvent.setup();
+    render(<PreEncounterCheckin encontroId="12" initialCapabilities={photoOnlyCapabilities} />);
+
+    await screen.findByText("Pessoa Exemplo");
+    await user.click(screen.getByRole("button", { name: "Próxima página" }));
+    expect(await screen.findByText("Outra Pessoa")).toBeTruthy();
+    expect(screen.queryByText("Pessoa Exemplo")).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Página anterior" }));
+    expect(await screen.findByText("Pessoa Exemplo")).toBeTruthy();
+    expect(siaFetchMock).toHaveBeenCalledWith(
+      "/encontros/12/pre-encontro/fotos/atendimentos/?page=2",
+    );
+    expect(siaFetchMock).toHaveBeenLastCalledWith(
+      "/encontros/12/pre-encontro/fotos/atendimentos/?page=1",
+    );
+  });
+
+  it("não mantém a página nem a seleção anteriores quando a paginação falha", async () => {
+    let pageTwoAttempts = 0;
+    siaFetchMock.mockImplementation((path: string) => {
+      if (path.endsWith("/fotos/atendimentos/?page=1")) {
+        return Promise.resolve(json(photoPage([photoItem], "?page=2")));
+      }
+      if (path.endsWith("/fotos/atendimentos/?page=2")) {
+        pageTwoAttempts += 1;
+        return Promise.resolve(pageTwoAttempts === 1
+          ? json({ detail: "Página indisponível." }, 502)
+          : json(photoPage([anotherPhotoItem], null, "?page=1")));
+      }
+      throw new Error(`Request inesperado: ${path}`);
+    });
+    const user = userEvent.setup();
+    render(<PreEncounterCheckin encontroId="12" initialCapabilities={photoOnlyCapabilities} />);
+
+    await user.click(await screen.findByRole("button", { name: /Pessoa Exemplo/ }));
+    expect(screen.getByRole("button", { name: "Abrir preview privado" })).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "Próxima página" }));
+
+    expect(await screen.findByText("Página indisponível.")).toBeTruthy();
+    expect(screen.queryByText("Pessoa Exemplo")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Abrir preview privado" })).toBeNull();
+    expect(screen.getByText("0 atendimento(s)")).toBeTruthy();
+
+    await user.click(screen.getByRole("button", { name: "Tentar novamente" }));
+    expect(await screen.findByText("Outra Pessoa")).toBeTruthy();
+    expect(pageTwoAttempts).toBe(2);
+    expect(siaFetchMock).toHaveBeenLastCalledWith(
+      "/encontros/12/pre-encontro/fotos/atendimentos/?page=2",
+    );
+  });
+
+  it("ignora resposta antiga recebida depois da busca mais recente", async () => {
+    const oldRequest = deferredResponse();
+    siaFetchMock.mockImplementation((path: string) => {
+      if (path.endsWith("/fotos/atendimentos/?page=1")) {
+        return Promise.resolve(json(photoPage()));
+      }
+      if (path.endsWith("/fotos/atendimentos/?page=1&q=Primeira")) {
+        return oldRequest.promise;
+      }
+      if (path.endsWith("/fotos/atendimentos/?page=1&q=Segunda")) {
+        return Promise.resolve(json(photoPage([anotherPhotoItem])));
+      }
+      throw new Error(`Request inesperado: ${path}`);
+    });
+    const user = userEvent.setup();
+    render(<PreEncounterCheckin encontroId="12" initialCapabilities={photoOnlyCapabilities} />);
+
+    await screen.findByText("Pessoa Exemplo");
+    const search = screen.getByLabelText("Buscar atendimento para fotografia");
+    await user.type(search, "Primeira");
+    await user.click(screen.getByRole("button", { name: "Buscar" }));
+    await waitFor(() => expect(siaFetchMock).toHaveBeenCalledWith(
+      "/encontros/12/pre-encontro/fotos/atendimentos/?page=1&q=Primeira",
+    ));
+    await user.clear(search);
+    await user.type(search, "Segunda");
+    await user.click(screen.getByRole("button", { name: "Buscar" }));
+    expect(await screen.findByText("Outra Pessoa")).toBeTruthy();
+
+    await act(async () => {
+      oldRequest.resolve(json(photoPage([{
+        ...photoItem,
+        id: 9,
+        identificacao: "Resposta antiga",
+      }])));
+      await oldRequest.promise;
+    });
+
+    expect(screen.getByText("Outra Pessoa")).toBeTruthy();
+    expect(screen.queryByText("Resposta antiga")).toBeNull();
+  });
+
+  it("ignora dados do Encontro anterior recebidos antes da nova resposta", async () => {
+    const encounterTwelveRequest = deferredResponse();
+    const encounterThirteenRequest = deferredResponse();
+    siaFetchMock.mockImplementation((path: string) => {
+      if (path === "/encontros/12/pre-encontro/fotos/atendimentos/?page=1") {
+        return encounterTwelveRequest.promise;
+      }
+      if (path === "/encontros/13/pre-encontro/fotos/atendimentos/?page=1") {
+        return encounterThirteenRequest.promise;
+      }
+      throw new Error(`Request inesperado: ${path}`);
+    });
+    const { rerender } = render(
+      <PreEncounterCheckin encontroId="12" initialCapabilities={photoOnlyCapabilities} />,
+    );
+    await waitFor(() => expect(siaFetchMock).toHaveBeenCalledWith(
+      "/encontros/12/pre-encontro/fotos/atendimentos/?page=1",
+    ));
+
+    rerender(<PreEncounterCheckin encontroId="13" initialCapabilities={photoOnlyCapabilities} />);
+    await waitFor(() => expect(siaFetchMock).toHaveBeenCalledWith(
+      "/encontros/13/pre-encontro/fotos/atendimentos/?page=1",
+    ));
+    await act(async () => {
+      encounterTwelveRequest.resolve(json(photoPage()));
+      await encounterTwelveRequest.promise;
+    });
+    expect(screen.queryByText("Pessoa Exemplo")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Abrir preview privado" })).toBeNull();
+
+    await act(async () => {
+      encounterThirteenRequest.resolve(json(photoPage([encounterThirteenPhotoItem])));
+      await encounterThirteenRequest.promise;
+    });
+    expect(await screen.findByText("Pessoa do Encontro 13")).toBeTruthy();
+    expect(screen.queryByText("Pessoa Exemplo")).toBeNull();
+  });
+
+  it("mantém o estado do novo Encontro quando a resposta antiga chega depois", async () => {
+    const encounterTwelveRequest = deferredResponse();
+    const encounterThirteenRequest = deferredResponse();
+    siaFetchMock.mockImplementation((path: string) => {
+      if (path === "/encontros/12/pre-encontro/fotos/atendimentos/?page=1") {
+        return encounterTwelveRequest.promise;
+      }
+      if (path === "/encontros/13/pre-encontro/fotos/atendimentos/?page=1") {
+        return encounterThirteenRequest.promise;
+      }
+      throw new Error(`Request inesperado: ${path}`);
+    });
+    const user = userEvent.setup();
+    const { rerender } = render(
+      <PreEncounterCheckin encontroId="12" initialCapabilities={photoOnlyCapabilities} />,
+    );
+    await waitFor(() => expect(siaFetchMock).toHaveBeenCalledWith(
+      "/encontros/12/pre-encontro/fotos/atendimentos/?page=1",
+    ));
+
+    rerender(<PreEncounterCheckin encontroId="13" initialCapabilities={photoOnlyCapabilities} />);
+    await waitFor(() => expect(siaFetchMock).toHaveBeenCalledWith(
+      "/encontros/13/pre-encontro/fotos/atendimentos/?page=1",
+    ));
+    await act(async () => {
+      encounterThirteenRequest.resolve(json(photoPage(
+        [encounterThirteenPhotoItem],
+        "?page=2",
+      )));
+      await encounterThirteenRequest.promise;
+    });
+    await user.click(await screen.findByRole("button", { name: /Pessoa do Encontro 13/ }));
+
+    await act(async () => {
+      encounterTwelveRequest.resolve(json({ detail: "Falha antiga." }, 502));
+      await encounterTwelveRequest.promise;
+    });
+
+    expect(screen.getAllByText("Pessoa do Encontro 13").length).toBeGreaterThan(0);
+    expect(screen.getByRole("button", { name: "Abrir preview privado" })).toBeTruthy();
+    expect(screen.getByText("1 atendimento(s)")).toBeTruthy();
+    expect(screen.getByText("Página 1")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Próxima página" }).hasAttribute("disabled")).toBe(false);
+    expect(screen.queryByText("Falha antiga.")).toBeNull();
+    expect(screen.queryByText("Carregando atendimentos...")).toBeNull();
+  });
+
+  it("invalida a requisição pendente ao desmontar o modo mínimo", async () => {
+    const pendingRequest = deferredResponse();
+    siaFetchMock.mockReturnValue(pendingRequest.promise);
+    const { unmount } = render(
+      <PreEncounterCheckin encontroId="12" initialCapabilities={photoOnlyCapabilities} />,
+    );
+    await waitFor(() => expect(siaFetchMock).toHaveBeenCalledWith(
+      "/encontros/12/pre-encontro/fotos/atendimentos/?page=1",
+    ));
+
+    unmount();
+    await act(async () => {
+      pendingRequest.resolve(json(photoPage()));
+      await pendingRequest.promise;
+    });
+
+    expect(screen.queryByText("Pessoa Exemplo")).toBeNull();
+    expect(toastError).not.toHaveBeenCalled();
+  });
+
+  it("mantém resultados indisponíveis se o refresh mínimo falha após upload", async () => {
+    let listRequests = 0;
+    siaFetchMock.mockImplementation((path: string, init?: RequestInit) => {
+      if (path.endsWith("/fotos/atendimentos/?page=1")) {
+        listRequests += 1;
+        return Promise.resolve(listRequests === 1
+          ? json(photoPage())
+          : json({ detail: "Atualização indisponível." }, 502));
+      }
+      if (path.endsWith("/atendimentos/7/foto/") && init?.method === "PUT") {
+        return Promise.resolve(json({ possui_foto: true }));
+      }
+      throw new Error(`Request inesperado: ${init?.method ?? "GET"} ${path}`);
+    });
+    const user = userEvent.setup();
+    render(<PreEncounterCheckin encontroId="12" initialCapabilities={photoOnlyCapabilities} />);
+
+    await user.click(await screen.findByRole("button", { name: /Pessoa Exemplo/ }));
+    await user.upload(
+      screen.getByLabelText("Selecionar ou capturar foto"),
+      new File(["nova"], "foto.jpg", { type: "image/jpeg" }),
+    );
+    await user.click(screen.getByRole("button", { name: "Substituir foto" }));
+
+    expect(await screen.findByText("Atualização indisponível.")).toBeTruthy();
+    expect(screen.queryByText("Pessoa Exemplo")).toBeNull();
+    expect(screen.queryByLabelText("Selecionar ou capturar foto")).toBeNull();
+    expect(listRequests).toBe(2);
+  });
+
+  it("mantém resultados indisponíveis se o refresh mínimo falha após associação", async () => {
+    let listRequests = 0;
+    siaFetchMock.mockImplementation((path: string, init?: RequestInit) => {
+      if (path.endsWith("/fotos/atendimentos/?page=1")) {
+        listRequests += 1;
+        return Promise.resolve(listRequests === 1
+          ? json(photoPage())
+          : json({ detail: "Atualização indisponível." }, 502));
+      }
+      if (path.endsWith("/atendimentos/7/foto/usar-na-pessoa/") && init?.method === "POST") {
+        return Promise.resolve(json({ foto_pessoa_atualizada: true }));
+      }
+      throw new Error(`Request inesperado: ${init?.method ?? "GET"} ${path}`);
+    });
+    const user = userEvent.setup();
+    render(<PreEncounterCheckin encontroId="12" initialCapabilities={photoOnlyCapabilities} />);
+
+    await user.click(await screen.findByRole("button", { name: /Pessoa Exemplo/ }));
+    await user.click(screen.getByRole("button", { name: "Usar esta como foto da Pessoa" }));
+
+    expect(await screen.findByText("Atualização indisponível.")).toBeTruthy();
+    expect(screen.queryByText("Pessoa Exemplo")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Usar esta como foto da Pessoa" })).toBeNull();
+    expect(listRequests).toBe(2);
+  });
+
+  it("oculta somente o preview quando visualizar_foto é falsa", async () => {
+    siaFetchMock.mockResolvedValueOnce(json(photoPage([{
+      ...photoItem,
+      capabilities: {
+        visualizar_foto: false,
+        alterar_foto: true,
+        associar_foto_pessoa: true,
+      },
+    }])));
+    const user = userEvent.setup();
+    render(<PreEncounterCheckin encontroId="12" initialCapabilities={photoOnlyCapabilities} />);
+
+    await user.click(await screen.findByRole("button", { name: /Pessoa Exemplo/ }));
+    expect(screen.queryByRole("button", { name: "Abrir preview privado" })).toBeNull();
+    expect(screen.getByLabelText("Selecionar ou capturar foto")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Usar esta como foto da Pessoa" })).toBeTruthy();
+  });
+
+  it("oculta somente o upload quando alterar_foto é falsa", async () => {
+    siaFetchMock.mockResolvedValueOnce(json(photoPage([{
+      ...photoItem,
+      capabilities: {
+        visualizar_foto: true,
+        alterar_foto: false,
+        associar_foto_pessoa: true,
+      },
+    }])));
+    const user = userEvent.setup();
+    render(<PreEncounterCheckin encontroId="12" initialCapabilities={photoOnlyCapabilities} />);
+
+    await user.click(await screen.findByRole("button", { name: /Pessoa Exemplo/ }));
+    expect(screen.getByRole("button", { name: "Abrir preview privado" })).toBeTruthy();
+    expect(screen.queryByLabelText("Selecionar ou capturar foto")).toBeNull();
+    expect(screen.getByRole("button", { name: "Usar esta como foto da Pessoa" })).toBeTruthy();
+  });
+
+  it("oculta somente a associação quando associar_foto_pessoa é falsa", async () => {
+    siaFetchMock.mockResolvedValueOnce(json(photoPage([{
+      ...photoItem,
+      capabilities: {
+        visualizar_foto: true,
+        alterar_foto: true,
+        associar_foto_pessoa: false,
+      },
+    }])));
+    const user = userEvent.setup();
+    render(<PreEncounterCheckin encontroId="12" initialCapabilities={photoOnlyCapabilities} />);
+
+    await user.click(await screen.findByRole("button", { name: /Pessoa Exemplo/ }));
+    expect(screen.getByRole("button", { name: "Abrir preview privado" })).toBeTruthy();
+    expect(screen.getByLabelText("Selecionar ou capturar foto")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Usar esta como foto da Pessoa" })).toBeNull();
+  });
+
+  it("remove a seleção quando o refresh válido não contém o atendimento", async () => {
+    let listRequests = 0;
+    siaFetchMock.mockImplementation((path: string, init?: RequestInit) => {
+      if (path.endsWith("/fotos/atendimentos/?page=1")) {
+        listRequests += 1;
+        return Promise.resolve(json(listRequests === 1
+          ? photoPage()
+          : photoPage([anotherPhotoItem])));
+      }
+      if (path.endsWith("/atendimentos/7/foto/usar-na-pessoa/") && init?.method === "POST") {
+        return Promise.resolve(json({ foto_pessoa_atualizada: true }));
+      }
+      throw new Error(`Request inesperado: ${init?.method ?? "GET"} ${path}`);
+    });
+    const user = userEvent.setup();
+    render(<PreEncounterCheckin encontroId="12" initialCapabilities={photoOnlyCapabilities} />);
+
+    await user.click(await screen.findByRole("button", { name: /Pessoa Exemplo/ }));
+    await user.click(screen.getByRole("button", { name: "Usar esta como foto da Pessoa" }));
+
+    expect(await screen.findByText("Outra Pessoa")).toBeTruthy();
+    expect(screen.queryByText("Pessoa Exemplo")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Abrir preview privado" })).toBeNull();
+    expect(screen.queryByLabelText("Selecionar ou capturar foto")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Usar esta como foto da Pessoa" })).toBeNull();
+    expect(siaFetchMock.mock.calls.some(([path]) => (
+      String(path).includes("/atendimentos/busca/")
+      || /\/atendimentos\/7\/$/.test(String(path))
+    ))).toBe(false);
+  });
+
+  it("preserva preview, upload e associação protegidos no modo mínimo", async () => {
+    let listRequests = 0;
+    siaFetchMock.mockImplementation((path: string, init?: RequestInit) => {
+      if (path.includes("/fotos/atendimentos/")) {
+        listRequests += 1;
+        return Promise.resolve(json(photoPage()));
+      }
+      if (path.endsWith("/foto/") && !init?.method) {
+        return Promise.resolve(new Response("imagem", { headers: { "Content-Type": "image/jpeg" } }));
+      }
+      if (path.endsWith("/foto/") && init?.method === "PUT") {
+        return Promise.resolve(json({ possui_foto: true }));
+      }
+      if (path.endsWith("/foto/usar-na-pessoa/") && init?.method === "POST") {
+        return Promise.resolve(json({ foto_pessoa_atualizada: true }));
+      }
+      throw new Error(`Request inesperado: ${init?.method ?? "GET"} ${path}`);
+    });
+    const user = userEvent.setup();
+    render(<PreEncounterCheckin encontroId="12" initialCapabilities={photoOnlyCapabilities} />);
+
+    await user.click(await screen.findByRole("button", { name: /Pessoa Exemplo/ }));
+    await user.click(screen.getByRole("button", { name: "Abrir preview privado" }));
+    expect(await screen.findByAltText("Foto de Pessoa Exemplo")).toBeTruthy();
+    await user.upload(
+      screen.getByLabelText("Selecionar ou capturar foto"),
+      new File(["nova"], "foto.jpg", { type: "image/jpeg" }),
+    );
+    await user.click(screen.getByRole("button", { name: "Substituir foto" }));
+    await waitFor(() => expect(siaFetchMock).toHaveBeenCalledWith(
+      "/encontros/12/pre-encontro/atendimentos/7/foto/",
+      expect.objectContaining({ method: "PUT", body: expect.any(FormData) }),
+    ));
+    await waitFor(() => expect(toastSuccess).toHaveBeenCalledWith("Foto atualizada"));
+    await waitFor(() => expect(listRequests).toBe(2));
+    const associateButton = screen.getByRole("button", { name: "Usar esta como foto da Pessoa" });
+    await waitFor(() => expect(associateButton.hasAttribute("disabled")).toBe(false));
+    await user.click(associateButton);
+    await waitFor(() => expect(siaFetchMock).toHaveBeenCalledWith(
+      "/encontros/12/pre-encontro/atendimentos/7/foto/usar-na-pessoa/",
+      expect.objectContaining({ method: "POST", body: "{}" }),
+    ));
+    await waitFor(() => expect(listRequests).toBe(3));
+    expect(siaFetchMock.mock.calls.some(([path]) => String(path).includes("/media"))).toBe(false);
+  });
+
+  it("prioriza operação completa quando capabilities de múltiplos papéis a permitem", async () => {
+    render(<PreEncounterCheckin encontroId="12" initialCapabilities={contextCapabilities} />);
+    expect((await screen.findAllByText("Pessoa Exemplo")).length).toBeGreaterThan(0);
+    expect(siaFetchMock).toHaveBeenCalledWith(
+      "/encontros/12/pre-encontro/atendimentos/?page=1",
+    );
+    expect(siaFetchMock.mock.calls.some(([path]) => String(path).includes("/fotos/atendimentos/"))).toBe(false);
+  });
+
   it("apresenta lifecycle/capability bloqueado e não busca dados operacionais", () => {
-    render(<PreEncounterCheckin encontroId="12" initialCapabilities={{ ...contextCapabilities, consultar_operacao: false, registrar_checkin: false }} />);
+    render(<PreEncounterCheckin encontroId="12" initialCapabilities={{
+      ...contextCapabilities,
+      localizar_atendimento_foto: false,
+      consultar_operacao: false,
+      baixar_pdf_operacional: false,
+      registrar_checkin: false,
+    }} />);
     expect(screen.getByText("A operação não está disponível neste contexto.")).toBeTruthy();
     expect(siaFetchMock).not.toHaveBeenCalled();
   });
