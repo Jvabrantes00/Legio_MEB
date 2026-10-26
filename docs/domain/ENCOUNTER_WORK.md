@@ -5,6 +5,14 @@ trabalho em Encontros. Decisões técnicas, progresso e histórico da Fase
 1B.3D.3 pertencem ao
 [[../workplans/PHASE_1B_D3|workplan da fase]].
 
+> **Nota de contexto histórico — D.3.** Este documento preserva as regras
+> canônicas aprovadas para equipes e trabalho em Encontros. Referências no
+> futuro à análise D.3A, ao fechamento técnico ou à implementação em bloco
+> próprio pertencem ao contexto original de planejamento; sua evolução está
+> registrada no [[../workplans/PHASE_1B_D3|workplan da Fase 1B.3D.3]]. A
+> implementação posterior não elimina ressalvas, compatibilidade ou débitos
+> ainda mantidos no workplan, nem altera as regras abaixo.
+
 ## Separação conceitual
 
 - Template de equipe não é equipe de uma edição específica.

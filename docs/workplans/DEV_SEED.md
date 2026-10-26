@@ -74,6 +74,42 @@ preservar esse usuário como cenário de default deny.
 Executar novamente substitui apenas o dataset reconhecido e o recria, evitando
 duplicatas e mantendo o resultado determinístico.
 
+### Configuração demonstrativa de inscrições
+
+Os quatro Encontros do dataset recebem uma
+`ConfiguracaoEncontristasEncontro`: as Escaladas Serra Azul e Vale Verde e os
+ESPPAs Horizonte e Caminho. Os valores definidos pelo seed são:
+
+| Tipo | Capacidade | Idade mínima | Idade máxima |
+|---|---:|---:|---:|
+| Escalada | 40 | 15 | 18 |
+| ESPPA | 50 | 18 | 80 |
+
+A janela usa o primeiro `DiaEncontro` do calendário vigente, ordenado por
+ordem e data. A abertura fica 210 dias antes, às 08:00, e o encerramento 14
+dias antes, às 23:59, no timezone configurado pelo Django.
+
+A criação usa o service canônico `criar_configuracao_encontristas`; quando a
+rotina de configuração recebe um registro já existente, usa
+`alterar_configuracao_encontristas`. Assim, validações, autorização, auditoria
+e constraints do domínio não são contornadas. O `public_id` é um UUID gerado
+automaticamente pelo model e não é definido pelo seed. A reconciliação de uma
+configuração existente preserva seu registro e seu `public_id`.
+
+A reexecução do comando completo tem uma semântica mais ampla: primeiro remove
+o dataset reconhecido pelas allowlists e depois o recria. Ela converge para as
+mesmas quantidades e valores demonstrativos sem duplicatas, mas não garante a
+preservação de PKs ou `public_id` entre recriações completas.
+
+> **Limite dos valores demo.** Os valores descritos pertencem exclusivamente
+> ao dataset de demonstração. Não constituem regras institucionais gerais nem
+> valores obrigatórios para Encontros reais ou ambientes de produção.
+
+Essa configuração é apenas suporte parcial ao novo fluxo. A R.3I.26 permanece
+planejada e ainda prevê cenários de inscrição, cuidado, campanha, espera,
+Pré-Encontro, pagamento, disputa e autorização que este dataset não demonstra
+integralmente.
+
 ## Limitações
 
 - O dataset tem exatamente quatro Encontros. Como o domínio permite um único

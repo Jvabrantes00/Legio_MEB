@@ -2,13 +2,92 @@
 
 ## Status
 
-A arquitetura, a ficha pública e a modelagem conceitual foram aprovadas. Este
-documento decompõe a implementação futura, mas não inicia código, migrations,
-infraestrutura, testes ou cutover.
+A arquitetura, a ficha pública e a modelagem conceitual foram aprovadas, e a
+R.3C foi encerrada como checkpoint de arquitetura e planejamento. A
+implementação R.3I foi iniciada posteriormente e permanece em andamento.
 
-R.3C pode ser encerrada como checkpoint de arquitetura e planejamento depois
-desta decomposição. R.3 permanece aberta. O primeiro bloco futuro será
-`R.3I.1`.
+[[../PROJECT_STATE|PROJECT_STATE]] é a fonte principal do estado corrente.
+Este documento preserva a decomposição original e funciona como ledger
+histórico e detalhado dos blocos, suas evidências, validações e pendências.
+Registros redigidos no futuro devem ser lidos no contexto em que foram
+escritos; estados individuais abaixo usam somente a evidência versionada
+disponível ou decisões externas explicitamente identificadas.
+
+### Panorama da implementação
+
+- R.3I.1–I.9 estão implementadas e possuem testes automatizados, mas a
+  validação executada e o fechamento formal não estão comprovados no registro
+  versionado.
+- R.3I.10 permanece planejada como pós-MVP.
+- R.3I.11–I.15 e R.3I.21–I.22 estão concluídas conforme os registros de seus
+  blocos.
+- R.3I.16 está implementada, mas os 11 cenários PostgreSQL aguardam
+  revalidação depois das correções; não há resultado final comprovado.
+- R.3I.17–I.20 estão implementadas e validadas de forma focada, sem evidência
+  suficiente para inventar um fechamento formal adicional.
+- R.3I.23 permanece planejada e obrigatória antes do cutover. Implementações
+  posteriores não encerram implicitamente esse checkpoint.
+- R.3I.24 está implementada e validada de forma focada.
+- R.3I.25 — Bloco 1 está concluído por confirmação expressa do usuário;
+  R.3I.25 — Bloco 2 ainda não foi iniciado.
+- R.3I.26 e R.3I.27 permanecem planejadas. Suporte parcial de seed não
+  equivale à conclusão da R.3I.26.
+- A ordem das próximas execuções funcionais não é definida por esta
+  reconciliação documental.
+
+### Correção de segurança F-01 — 5D a 5E.3
+
+A auditoria de pré-publicação 5D identificou o bloqueador de segurança F-01:
+Comunicação podia alcançar o contrato operacional completo do Pré-Encontro,
+embora sua necessidade fosse somente localizar atendimentos e operar
+fotografias.
+
+- **5E.1 — backend:** segregou as policies de localização mínima, operação
+  completa e PDF operacional; criou serializer e endpoint mínimos; restringiu
+  lista, busca, detalhe e PDF completos, preservando fotografia privada,
+  Workspace summary e Encontristas summary.
+- **5E.2 — frontend/BFF:** introduziu contrato mínimo independente, allowlist
+  exata no BFF, seleção de modo por capabilities, precedência da operação
+  completa para múltiplos papéis e controle específico do PDF operacional.
+- **5E.2A:** corrigiu tipagem, invalidação de resultados obsoletos e ampliou a
+  cobertura focada.
+- **5E.2B:** protegeu a concorrência de respostas na troca de Encontro e na
+  desmontagem do componente.
+- **5E.3 — auditoria integrada:** não identificou bloqueadores P0/P1 e emitiu
+  parecer tecnicamente apto com ressalvas não bloqueantes.
+
+As evidências registradas incluem suíte backend focada aprovada pelo usuário,
+101 testes frontend/BFF aprovados e TypeScript e ESLint sem diagnósticos
+reportados. No smoke test humano, A–D e F–H foram aprovados. O cenário E,
+Coordenação Geral contextual, foi adiado por ausência de conta demo contextual
+e não é registrado como aprovado; suas policies foram inspecionadas e possuem
+cobertura automatizada.
+
+Riscos residuais não bloqueantes:
+
+- possível custo de `storage.exists()` por atendimento na listagem mínima;
+- ausência de teste automatizado único atravessando browser, BFF e backend.
+
+**Decisão humana de 26/10/2026: F-01 encerrada tecnicamente com ressalva,
+preservando o cenário E como pendência de validação manual.**
+
+Na decisão de encerramento técnico, nenhuma operação Git de escrita foi
+autorizada. Posteriormente, o Bloco 5G.4 autorizou e criou exclusivamente o
+commit local F-01 `a44518c8b76143319974032150950d14d8b9fab8`, com a
+mensagem `fix: restrict communication pre-encounter access`, sem alterar os
+commits anteriores.
+
+Os estados permanecem distintos:
+
+- **implementado:** correções backend, BFF e frontend presentes;
+- **validado:** verificações focadas e sete cenários manuais aprovados;
+- **encerrado tecnicamente:** decisão humana com a ressalva contextual acima;
+- **commitado localmente:** sim, no commit F-01 acima;
+- **publicado:** não; push, merge, deploy e publicação não foram realizados
+  nem autorizados, e o commit documental permanece pendente.
+
+O encerramento técnico do F-01 não encerra R.3I nem conclui R.3I.23,
+R.3I.25 ou R.3I.27.
 
 ## Estratégia
 
@@ -69,6 +148,10 @@ desta decomposição. R.3 permanece aberta. O primeiro bloco futuro será
 
 ### R.3I.1 — Fundação de auditoria estruturada
 
+**Estado:** implementada no commit `161c966`; testes automatizados presentes.
+Validação executada e fechamento formal não comprovados no registro
+versionado.
+
 **Prioridade:** FUNDACIONAL.
 
 **Objetivo:** criar a entidade imutável e o service mínimo de auditoria de
@@ -104,6 +187,10 @@ sem alterar `LogSistema` ou consumidores legados.
 
 ### R.3I.2 — Configuração estrutural de encontristas
 
+**Estado:** implementada no commit `b6bf6d9`; testes automatizados presentes.
+Validação executada e fechamento formal não comprovados no registro
+versionado.
+
 **Prioridade:** FUNDACIONAL.
 
 **Objetivo:** implementar `ConfiguracaoEncontristasEncontro` com capacidade,
@@ -137,6 +224,10 @@ backfill automático.
 **Riscos:** inserir regras cross-model em constraints frágeis.
 
 ### R.3I.3 — Services de configuração e elegibilidade
+
+**Estado:** implementada no commit `a48627e`; testes automatizados presentes.
+Validação executada e fechamento formal não comprovados no registro
+versionado.
 
 **Prioridade:** NECESSÁRIO PARA MVP.
 
@@ -176,6 +267,10 @@ automaticamente.
 
 ### R.3I.4 — Models da ficha e InscricaoEncontro
 
+**Estado:** implementada no commit `60e653e`; testes automatizados presentes.
+Validação executada e fechamento formal não comprovados no registro
+versionado.
+
 **Prioridade:** FUNDACIONAL.
 
 **Objetivo:** criar inscrição, dados declarados/snapshot, responsável, ESPPA,
@@ -213,6 +308,10 @@ exposição acidental de cuidado.
 
 ### R.3I.5 — Services de submissão e manutenção da ficha
 
+**Estado:** implementada no commit `bc14d81`; testes automatizados presentes.
+Validação executada e fechamento formal não comprovados no registro
+versionado.
+
 **Prioridade:** NECESSÁRIO PARA MVP.
 
 **Objetivo:** implementar finalização atômica, validações da R.3C.4, snapshot
@@ -249,6 +348,10 @@ em estado do frontend.
 
 ### R.3I.6 — Resolução cadastral interna
 
+**Estado:** implementada no commit `caf8c3a`; testes automatizados presentes.
+Validação executada e fechamento formal não comprovados no registro
+versionado.
+
 **Prioridade:** NECESSÁRIO PARA MVP.
 
 **Objetivo:** permitir a Fichas comparar, rejeitar, vincular, criar Pessoa e
@@ -283,6 +386,10 @@ consolidar fichas incompatíveis silenciosamente.
 
 ### R.3I.7 — API pública inicial de inscrição
 
+**Estado:** implementada a partir do commit `57183af`, com correções
+posteriores; testes automatizados presentes. Validação executada e fechamento
+formal não comprovados no registro versionado.
+
 **Prioridade:** NECESSÁRIO PARA MVP; SEGURANÇA OBRIGATÓRIA.
 
 **Objetivo:** expor somente leitura mínima do Encontro e submissão final.
@@ -316,6 +423,10 @@ nenhuma API interna pública.
 **Riscos:** `AllowAny` amplo, enumeração de encontros ou PII em respostas.
 
 ### R.3I.8 — BFF público e fronteira de segurança
+
+**Estado:** implementada no commit `a4e7043`; testes automatizados presentes.
+Validação executada e fechamento formal não comprovados no registro
+versionado.
 
 **Prioridade:** NECESSÁRIO PARA MVP; SEGURANÇA OBRIGATÓRIA.
 
@@ -352,6 +463,10 @@ o BFF, sem relaxar a fronteira autenticada.
 
 ### R.3I.9 — Frontend público da ficha
 
+**Estado:** implementada a partir do commit `062be50`, com correções
+posteriores; testes automatizados presentes. Validação executada e fechamento
+formal não comprovados no registro versionado.
+
 **Prioridade:** NECESSÁRIO PARA MVP.
 
 **Objetivo:** implementar preenchimento, condicionais, revisão e confirmação
@@ -386,6 +501,8 @@ e não exibe dados internos.
 **Riscos:** persistir rascunho, duplicar regra etária ou misturar layout privado.
 
 ### R.3I.10 — Edição e cancelamento públicos
+
+**Estado:** planejada/pós-MVP; implementação não identificada nesta revisão.
 
 **Prioridade:** PÓS-MVP / pode esperar após validação da submissão inicial.
 
@@ -801,8 +918,10 @@ permanecem para validação manual/checkpoint.
 
 ### R.3I.16 — Checkpoint PostgreSQL de campanha e capacidade
 
-**Estado:** preparado em 10 de outubro de 2026; execução PostgreSQL manual
-pendente de revalidação após correções do primeiro checkpoint.
+**Estado:** implementada em 10 de outubro de 2026; os 11 cenários PostgreSQL
+aguardam revalidação manual depois das correções do primeiro checkpoint. O
+resultado final dessa revalidação não está comprovado no registro versionado,
+e a execução posterior de outros blocos não encerra esta etapa.
 
 **Prioridade:** NECESSÁRIO PARA MVP; CHECKPOINT.
 
@@ -1316,6 +1435,11 @@ migration foi necessária.
 
 ### R.3I.23 — Auditoria das correções históricas existentes
 
+**Estado:** planejada e obrigatória antes do cutover; não foi localizada
+implementação ou conclusão específica nesta revisão. O escopo original e sua
+dependência permanecem abertos, independentemente dos blocos executados
+posteriormente.
+
 **Prioridade:** NECESSÁRIO ANTES DO CUTOVER.
 
 **Objetivo:** integrar auditoria estruturada a participação, trabalho/equipe,
@@ -1407,12 +1531,14 @@ Pré-Encontro. Comunicação permanece no contrato summary; autorizações de
 Pré, Equipes, Formação e Agenda são projetadas separadamente e o frontend não
 infere papéis.
 
-A Visão geral integra apenas agregados dos domínios atuais de Equipes e
-Formação. Agenda usa exclusivamente o `CalendarioEncontro` vigente, inclusive
-`pre_encontro_data`, sem fallback em `data_referencia`, `data_exato`, rótulo ou
-Preparatória. Lifecycle histórico continua consultável. Nenhuma leitura usa
-`Alpinista.status` ou `VinculoEncontroLegado`, e mutations permanecem nos
-commands canônicos dos respectivos domínios.
+A projeção do backend disponibiliza agregados separados dos domínios atuais
+de Equipes e Formação. Isso não obriga o frontend a apresentar aba, card ou
+métrica de Formação na Visão geral. Agenda usa exclusivamente o
+`CalendarioEncontro` vigente, inclusive `pre_encontro_data`, sem fallback em
+`data_referencia`, `data_exato`, rótulo ou Preparatória. Lifecycle histórico
+continua consultável. Nenhuma leitura usa `Alpinista.status` ou
+`VinculoEncontroLegado`, e mutations permanecem nos commands canônicos dos
+respectivos domínios.
 
 O BFF aceita somente `GET` nos três paths exatos do Workspace. Apenas a lista
 aceita `page`, `search`, `situacao` e `origem`; método, path, traversal, URL
@@ -1456,27 +1582,38 @@ check e `git diff --check`, sem suíte completa, build ou PostgreSQL.
 
 ### R.3I.25 — Frontend do Workspace de Encontros
 
+**Estado:** parcialmente concluída. O Bloco 1 está concluído por confirmação
+expressa do usuário; o Bloco 2 permanece planejado e não iniciado. A R.3I.25
+como um todo não está concluída.
+
 **Prioridade:** NECESSÁRIO PARA MVP de produto.
 
-**Objetivo:** substituir incrementalmente a página monolítica por Visão geral,
-Encontristas, Equipe, Formação aplicável e Agenda.
+**Objetivo:** substituir incrementalmente a página monolítica pelo Workspace
+com quatro abas principais: Visão geral, Encontristas, Pré-Encontro e Equipe.
+Calendário/Agenda permanece no topo, fora dessas abas. Formação não possui aba
+própria nem card na Visão geral.
 
 **Depende de:** R.3I.20 e I.24.
 
 **Alterações:** decomposição em componentes/contratos, capabilities e ações
-canônicas; MME/Formação mantêm visões restritas próprias.
+canônicas. A apresentação futura de palestrantes pode ser agrupada
+visualmente no contexto de Equipe, sem fundir Formação com
+`EquipeEncontro`/`TrabalhoEncontro`; essa evolução não está implementada por
+este registro.
 
 **Arquivos prováveis:** `app/(painel)/encontros/[id]/page.tsx`, novos
 componentes, contracts/capabilities e testes.
 
-**Testes a escrever:** áreas por papel/tipo/lifecycle, ações visíveis,
-Encontristas canônicos, Equipe/Formação/Agenda preservadas, erros e mobile.
+**Cobertura:** o Bloco 1 possui testes da estrutura, navegação, Visão geral,
+Agenda superior, ausência de aba/card de Formação, capabilities, erros e
+mobile. O Bloco 2 deverá cobrir os fluxos canônicos de Encontristas sem
+dependências visuais legadas.
 
 **Validação manual:**
 
 ```bash
 cd /home/vinicius/projects/Legio_MEB/frontend
-npm test -- src/lib/encounter-workspace.test.ts src/components/EncounterWorkspace.test.tsx
+npm test -- src/lib/encounter-workspace-contract.test.ts src/components/EncounterWorkspace.test.tsx
 npx tsc --noEmit --incremental false
 npm run lint
 ```
@@ -1488,7 +1625,28 @@ para representar encontristas/equipe.
 
 **Riscos:** cutover visual antecipado ou quebra das áreas D.3–D.6.
 
+#### Bloco 1 — Estrutura do Workspace e Visão geral
+
+- **Estado:** implementado e concluído conforme confirmação expressa do
+  usuário, incorporada à documentação nesta reconciliação.
+- **Referência histórica:** commit
+  `e06849d feat: add canonical encounter workspace`.
+- Entregou a estrutura do Workspace, as quatro abas aprovadas conforme
+  capabilities, Agenda no topo e a Visão geral baseada na projeção canônica.
+- Formação não possui aba nem card na Visão geral.
+
+#### Bloco 2 — Encontristas
+
+- **Estado:** planejado; prompt preparado, mas ainda não enviado ao Codex para
+  implementação. O bloco não foi iniciado.
+- **Objetivo:** substituir as dependências visuais legadas pelos fluxos,
+  projeções e contratos canônicos de Encontristas.
+
 ### R.3I.26 — Dataset de demonstração do novo fluxo
+
+**Estado:** planejada. Existe suporte parcial de seed implementado, mas ele
+não satisfaz isoladamente o escopo e os critérios deste bloco nem autoriza
+classificá-lo como concluído.
 
 **Prioridade:** NECESSÁRIO PARA VALIDAÇÃO MANUAL; após models/services.
 
@@ -1522,6 +1680,9 @@ demonstráveis sem alterar autorização.
 **Riscos:** seed contornar services ou conceder capability indevida.
 
 ### R.3I.27 — Cutover controlado e fechamento
+
+**Estado:** planejada e condicionada aos checkpoints e dependências definidos
+neste plano; não iniciada.
 
 **Prioridade:** NECESSÁRIO APÓS MVP VALIDADO.
 
@@ -1709,6 +1870,10 @@ Mailpit locais.
 
 ## Critério de encerramento da R.3C
 
+> **Registro histórico:** esta seção descreve o encerramento documental da
+> R.3C antes do início da implementação R.3I. O estado corrente pertence a
+> [[../PROJECT_STATE|PROJECT_STATE]] e ao panorama no início deste plano.
+
 R.3C está suficientemente fechada para encerrar como checkpoint documental:
 
 - regras funcionais e arquitetura aprovadas;
@@ -1717,5 +1882,6 @@ R.3C está suficientemente fechada para encerrar como checkpoint documental:
 - blocos, validações, checkpoints e cutover definidos;
 - nenhuma decisão de produto bloqueia a fundação.
 
-Isso não encerra R.3 nem declara implementação iniciada. O próximo checkpoint
-é R.3I.1 — fundação de auditoria estruturada.
+Naquele momento, isso não encerrava R.3 nem declarava implementação iniciada.
+O próximo checkpoint então definido era R.3I.1 — fundação de auditoria
+estruturada.

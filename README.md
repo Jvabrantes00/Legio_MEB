@@ -36,8 +36,11 @@ A suíte usa um banco SQLite em memória, separado do PostgreSQL local:
 
 `python manage.py test --settings=setup.test_settings`
 
-Alguns testes documentam regressões conhecidas e devem falhar até que as
-correções funcionais correspondentes sejam implementadas.
+A suíte contém testes automatizados de regressão. Uma falha deve ser
+investigada; não presuma que ela seja esperada sem registro explícito no
+workplan correspondente. Cenários condicionados a PostgreSQL ou concorrência
+podem ser ignorados no SQLite e permanecem sujeitos aos checkpoints manuais
+descritos nos workplans aplicáveis e à política de testes do `AGENTS.md`.
 
 ## Operação da autenticação
 

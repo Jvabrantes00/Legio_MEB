@@ -2,6 +2,21 @@
 
 ## Status
 
+### Atualização documental
+
+R.3C foi encerrada como checkpoint documental de arquitetura e planejamento.
+A implementação R.3I foi iniciada posteriormente e permanece em andamento.
+O estado corrente está em [[../PROJECT_STATE|PROJECT_STATE]], e os registros
+detalhados dos blocos estão em
+[[R3C_IMPLEMENTATION_PLAN|R.3C.7 — Plano de implementação]].
+
+Os registros históricos abaixo devem ser lidos no contexto em que foram
+escritos. Referências a próximos checkpoints ou à ausência de implementação
+descrevem o estado daquele momento e não substituem as duas fontes atuais
+indicadas acima.
+
+### Registro histórico anterior
+
 R.1 concluída e validada humanamente. R.2 concluída documentalmente em
 2026-10-07. R.3A concluiu a auditoria do gap entre o domínio atual de
 Encontros e o frontend operacional. R.3B consolidou a especificação funcional
@@ -1070,8 +1085,8 @@ schemas, contratos e mecanismos ainda pendentes. A nova `InscricaoEncontro`
 será expansiva e específica de um Encontro; a `Inscricao` atual permanece
 durante o cutover.
 
-As regras de produto relevantes estão fechadas, a modelagem conceitual foi
-aprovada e a implementação foi decomposta, sem qualquer código iniciado. R.3C
-encerra seu checkpoint documental; R.3 continua aberta. O próximo checkpoint é
-R.3I.1 — fundação de auditoria estruturada, sujeito a solicitação explícita de
-implementação.
+As regras de produto relevantes estavam fechadas, a modelagem conceitual havia
+sido aprovada e a implementação estava decomposta, sem código iniciado naquele
+checkpoint. R.3C encerrava seu checkpoint documental; R.3 continuava aberta.
+O próximo checkpoint então definido era R.3I.1 — fundação de auditoria
+estruturada, sujeito a solicitação explícita de implementação.

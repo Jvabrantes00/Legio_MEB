@@ -1,5 +1,16 @@
 # R.3C — Arquitetura do Workspace/Encontristas
 
+> **Nota de contexto histórico — baseline R.3C.** Este documento preserva a
+> arquitetura funcional aprovada na R.3C. Partes desse desenho foram
+> implementadas posteriormente durante a R.3I; por isso, expressões como
+> “futuro”, “será criado” e “a implementar” devem ser lidas conforme a data e
+> o contexto deste baseline, e não como estado atual de execução. A fonte
+> principal do estado corrente é [[../PROJECT_STATE|Estado do projeto]], e o
+> acompanhamento detalhado da implementação está em
+> [[R3C_IMPLEMENTATION_PLAN|Plano de implementação R.3I]]. Esta nota não
+> substitui nem altera os contratos e limites arquiteturais registrados
+> abaixo.
+
 ## Status e escopo
 
 R.3C.1 auditou a modelagem atual de convites e R.3C.2 auditou a ficha de
@@ -313,8 +324,34 @@ sucesso e falha. Nenhum provedor real foi escolhido.
 - Fichas administra inscrições, resolução cadastral, campanha, oportunidades,
   regularizações e presença no Pré-Encontro, dentro dos comandos aprovados.
 - Diretoria e Suporte podem alterar capacidade; Fichas não pode.
+
+> **Supersessão parcial — gestão da configuração de inscrições.** A restrição
+> acima preserva a decisão histórica do baseline R.3C, mas foi superada pela
+> decisão institucional vigente. Conforme a
+> [[../AUTHORIZATION_MATRIX#Configuração de inscrições de Encontro|matriz de autorização atual]],
+> Diretoria, Fichas e Suporte podem gerir a configuração de inscrições,
+> inclusive capacidade, faixa etária e janela. A mesma supersessão está
+> registrada no
+> [[R3C_ENCONTRISTAS_TECHNICAL_MODEL|modelo técnico de Encontristas]].
+> Essa autorização específica não amplia automaticamente permissões de
+> fotografia ou de acesso aos dados sensíveis de cuidados.
+
 - Dados de cuidado são acessíveis a Fichas, Diretoria, Suporte e coordenadores
   contextualmente autorizados no Encontro correspondente.
+
+> **Supersessão parcial — acesso a dados sensíveis de cuidados.** A atribuição
+> acima preserva a decisão original do baseline R.3C, mas sua autorização foi
+> refinada posteriormente. Conforme a
+> [[../AUTHORIZATION_MATRIX#Pré-Encontro operacional|matriz de autorização vigente]],
+> consultar o conteúdo sensível é distinto de realizar sua conferência
+> operacional: o conteúdo está restrito a Fichas, à Coordenação Geral no
+> contexto autorizado do mesmo Encontro e ao superuser como bypass técnico.
+> Diretoria, Suporte e coordenadores em geral não recebem essa consulta
+> automaticamente por seus papéis. A conferência operacional segue policy
+> própria e pode expor indicadores de preenchimento ou pendências, sem
+> retornar indevidamente o conteúdo sensível. A matriz vigente permanece a
+> fonte canônica para essas permissões.
+
 - O coordenador contextual é membro da EquipeEncontro **Coordenação Geral** e
   seu acesso deriva da cadeia canônica de identidade e `TrabalhoEncontro`, sem
   cadastro paralelo. A capability não é global, termina em `FINALIZADO` ou

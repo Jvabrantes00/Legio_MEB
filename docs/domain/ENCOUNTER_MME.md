@@ -5,6 +5,14 @@ para possíveis equipes de Violeiros em Encontros. Decisões técnicas, progress
 e histórico da Fase 1B.3D.5 pertencem ao
 [[../workplans/PHASE_1B_D5|workplan da fase]].
 
+> **Nota de contexto histórico — D.5.** Este documento preserva as regras
+> canônicas aprovadas para MME e Propostas de Violeiros. Referências no futuro
+> à análise D.5A ou ao desenho técnico pertencem ao contexto original de
+> planejamento; sua evolução está registrada no
+> [[../workplans/PHASE_1B_D5|workplan da Fase 1B.3D.5]]. A implementação
+> posterior não elimina ressalvas, compatibilidade ou débitos ainda mantidos
+> no workplan, nem altera as regras abaixo.
+
 ## Natureza das propostas
 
 - O MME prepara propostas de possíveis equipes de Violeiros para um Encontro.

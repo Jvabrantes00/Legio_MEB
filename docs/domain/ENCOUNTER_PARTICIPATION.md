@@ -5,6 +5,14 @@ participação e conclusão de Encontros. Decisões de implementação, progress
 histórico da Fase 1B.3D.2 pertencem ao
 [[../workplans/PHASE_1B_D2|workplan da fase]].
 
+> **Nota de contexto histórico — D.2.** Este documento preserva as regras
+> canônicas aprovadas para inscrição, convite e participação. Referências no
+> futuro à análise D.2A ou à definição posterior de implementação pertencem ao
+> contexto original de planejamento; a análise e os blocos posteriores foram
+> registrados no [[../workplans/PHASE_1B_D2|workplan da Fase 1B.3D.2]]. A
+> implementação posterior não apaga ressalvas, compatibilidade ou débitos que
+> o próprio workplan ainda preserve, nem modifica as regras abaixo.
+
 ## Separação conceitual
 
 - Inscrição não é convite.
@@ -115,4 +123,3 @@ O legado deve ser migrado incrementalmente:
 
 Existe comportamento legado conhecido que pode criar ou ativar Alpinista cedo
 demais. Sua localização técnica será registrada no workplan durante a D.2A.
-

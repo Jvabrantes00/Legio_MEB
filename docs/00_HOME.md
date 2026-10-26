@@ -5,38 +5,29 @@ substitui os documentos de referência nem os `AGENTS.md` aplicáveis.
 
 ## Estado atual
 
-- Fase 0 concluída.
-- Fase 1 em andamento.
-- 1B.3B — Pessoa e backfill inicial concluída.
-- 1B.3C — Grupo e Frequência concluída; o profiling do grupo legado não
-  sustenta backfill automático.
-- Backfills de `PerfilAlpinista` e do histórico de Grupo continuam bloqueados
-  até a reconciliação das fontes legadas.
-- 1B.3D.0 concluiu a decisão do Calendário Institucional como HUB.
-- 1B.3D.1 concluiu o núcleo de Encontros com lifecycle, calendários e dias,
-  preservando o contrato legado da API.
-- 1B.3D.2 concluiu Inscrição, Convite e Participação, com services
-  transacionais, cutover lógico e validação real em PostgreSQL.
-- 1B.3D.3 concluiu Equipes e Trabalho em Encontro, incluindo cutover lógico e
-  validação de concorrência em PostgreSQL.
-- 1B.3D.4 — Formação em Encontros concluída, com catálogo real, services, API,
-  autorização e validação PostgreSQL.
-- 1B.3D.5 — MME e Propostas de Violeiros concluída, com services, API,
-  autorização, compatibilidade e validação de concorrência em PostgreSQL.
-- 1B.3D.6 — Calendário Institucional concluída, incluindo frontend, Agenda,
-  PDFs, publicação privada, regressão final e checkpoint de concorrência em
-  PostgreSQL 16 com 6/6 cenários aprovados.
-- Roadmap Re-baseline em andamento. R.1 e R.2 foram concluídas.
-- Checkpoint atual: R.3C.7 — implementação decomposta.
-- Referências principais:
-  [[workplans/R3C_ENCONTROS_ARCHITECTURE|R.3C — Arquitetura do Workspace/Encontristas]].
-  [[workplans/R3C_PUBLIC_REGISTRATION_SPEC|R.3C — Ficha pública de Escalada e ESPPA]].
-  [[workplans/R3C_ENCONTRISTAS_TECHNICAL_MODEL|R.3C.5 — Modelagem técnica de Encontristas]].
-  [[workplans/R3C_IMPLEMENTATION_PLAN|R.3C.7 — Plano de implementação]].
-- Próximo checkpoint: R.3I.1 — primeiro bloco de implementação, pois não restou
-  decisão de produto bloqueante. A implementação exige solicitação explícita.
+- A Fase 0 está formalmente concluída.
+- O Roadmap Re-baseline e sua implementação R.3I estão em andamento.
+- R.3I.24 está implementada e validada de forma focada.
+- R.3I.25 — Bloco 1 está concluído conforme confirmação do usuário; o
+  Bloco 2, Encontristas, ainda não foi iniciado.
+- A revalidação PostgreSQL da R.3I.16 e a R.3I.23 continuam abertas.
+- A ordem das próximas execuções funcionais ainda não foi definida.
 
-O estado vivo e o roadmap estão em [[PROJECT_STATE]].
+Consulte:
+
+- [[PROJECT_STATE]] — fonte principal do estado corrente;
+- [[workplans/R3C_IMPLEMENTATION_PLAN|R.3C.7 — Plano de implementação]] —
+  plano detalhado dos estados comprovados, das validações registradas e das
+  pendências ainda abertas;
+- [[ARCHITECTURE]] — arquitetura corrente;
+- [[AUTHORIZATION_MATRIX]] — permissões implementadas;
+- [[AGENTS_INDEX]] — alcance das instruções dos agentes.
+
+O contexto arquitetural aprovado da R.3C permanece em:
+
+- [[workplans/R3C_ENCONTROS_ARCHITECTURE|R.3C — Arquitetura do Workspace/Encontristas]];
+- [[workplans/R3C_PUBLIC_REGISTRATION_SPEC|R.3C — Ficha pública de Escalada e ESPPA]];
+- [[workplans/R3C_ENCONTRISTAS_TECHNICAL_MODEL|R.3C.5 — Modelagem técnica de Encontristas]].
 
 ## Como carregar contexto
 

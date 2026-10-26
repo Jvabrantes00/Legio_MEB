@@ -1,5 +1,16 @@
 # R.3C.5 — Modelagem técnica de Encontristas
 
+> **Nota de contexto histórico — baseline técnico R.3C.5.** Esta modelagem foi
+> aprovada antes de diversas implementações da R.3I. Models, migrations,
+> services e APIs aqui descritos no futuro podem ter sido implementados
+> posteriormente, de modo que este documento não deve ser usado isoladamente
+> para determinar o que permanece pendente. Consulte
+> [[R3C_IMPLEMENTATION_PLAN|Plano de implementação R.3I]] para o estado de
+> execução detalhado e [[../PROJECT_STATE|Estado do projeto]] para o estado
+> corrente. Decisões posteriores explicitamente documentadas prevalecem
+> somente nos pontos em que refinaram este baseline; as demais decisões e
+> ressalvas permanecem preservadas.
+
 ## Status e alcance
 
 Esta modelagem traduz a arquitetura funcional e a ficha pública aprovadas. A
@@ -47,6 +58,19 @@ R.3 permanece aberta. Nenhuma estrutura legada é removida nesta etapa.
 Os estados conceituais são os mínimos aprovados para distinguir transições de
 negócio ou transporte. Seus nomes e campos concretos ainda serão revisados no
 schema Django; nada nesta tabela está implementado.
+
+> **Supersessão parcial — autorização da configuração de inscrições.** A
+> atribuição original acima, que reservava a alteração da
+> `ConfiguracaoEncontristasEncontro` a Diretoria/Suporte e deixava Fichas em
+> consulta, foi refinada posteriormente no complemento operacional da
+> [[R3C_IMPLEMENTATION_PLAN#R.3I.24 — Projeção canônica do Workspace e BFF interno|R.3I.24]].
+> Conforme a [[../AUTHORIZATION_MATRIX#Configuração de inscrições de Encontro|matriz de autorização vigente]],
+> Diretoria, Fichas e Suporte podem consultar, criar e editar especificamente
+> capacidade, faixa etária e janela de inscrições; o superuser conserva o
+> tratamento próprio de bypass técnico. A supersessão limita-se a essa
+> configuração: não transfere outras capacidades institucionais e não altera
+> as regras próprias para decisões excepcionais de vagas, excedentes ou
+> matérias reservadas à Diretoria.
 
 ## Relações
 

@@ -33,14 +33,12 @@ Frontend:
 
 ## Estado atual
 
-- Fase 0 concluída.
-- Etapas 0A a 0J concluídas.
-- 0G, integração frontend/API, concluída.
-- 0I, limpeza dos débitos técnicos restantes, concluída.
-- 0J, gate e auditoria final, concluída; Fase 1 em andamento.
-- 1B.3B, fundação de Pessoa e backfill inicial, concluída.
-- Próxima implementação: 1B.3C, Grupo e Frequência.
-- Consulte `docs/PROJECT_STATE.md`; não replique o roadmap inteiro aqui.
+- A Fase 0 está concluída e a implementação R.3I do Roadmap
+  Re-baseline está em andamento.
+- Antes de propor ou executar novos blocos, consulte
+  `docs/PROJECT_STATE.md` e o plano detalhado correspondente.
+- Pendências e prioridades não devem ser inferidas a partir de snapshots
+  históricos. Não replique o roadmap inteiro neste arquivo.
 
 ## Regras críticas
 

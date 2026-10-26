@@ -5,6 +5,14 @@ bate-papos, sessões formativas e palestrantes em Encontros. Decisões técnicas
 progresso e histórico da Fase 1B.3D.4 pertencem ao
 [[../workplans/PHASE_1B_D4|workplan da fase]].
 
+> **Nota de contexto histórico — D.4.** Este documento preserva as regras
+> canônicas aprovadas para Formação em Encontros. Referências no futuro à
+> análise D.4A ou ao desenho técnico pertencem ao contexto original de
+> planejamento; sua evolução está registrada no
+> [[../workplans/PHASE_1B_D4|workplan da Fase 1B.3D.4]]. A implementação
+> posterior não elimina ressalvas, compatibilidade ou débitos ainda mantidos
+> no workplan, nem altera as regras abaixo.
+
 ## Tipos de conteúdo por Encontro
 
 | Tipo de Encontro | Conteúdo formativo |

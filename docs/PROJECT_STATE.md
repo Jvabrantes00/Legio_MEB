@@ -2,10 +2,16 @@
 
 ## Estado atual
 
-- Data: 7 de outubro de 2026.
-- Branch: `sia/fase-1-modelagem-dominio`.
+- Snapshot documental atualizado em 26 de outubro de 2026, sem nova
+  verificação geral de todo o projeto.
+- Branch observada: `sia/roadmap-rebaseline`.
+- HEAD observado: `a44518c8b76143319974032150950d14d8b9fab8`
+  (`fix: restrict communication pre-encounter access`).
+- Branch e HEAD registram somente o snapshot desta reconciliação; não são
+  identificadores permanentes do estado do projeto.
 - **FASE 0 — ESTABILIZAÇÃO: CONCLUÍDA**
 - **FASE 1 — REMODELAGEM DE DOMÍNIO: EM ANDAMENTO**
+- **ROADMAP RE-BASELINE / IMPLEMENTAÇÃO R.3I: EM ANDAMENTO**
 
 ## Roadmap
 
@@ -21,7 +27,60 @@
 | 0H PostgreSQL e legado | ✅ Concluída |
 | 0I Débitos técnicos restantes | ✅ Concluída |
 | 0J Gate e auditoria final | ✅ Concluída |
-| Fase 1 Remodelagem de domínio | Em andamento; 1B.3D.6 Calendário Institucional concluída; próxima fase a definir em checkpoint de produto/arquitetura |
+| Fase 1 Remodelagem de domínio | Em andamento; 1B.3D.6 Calendário Institucional concluída; Roadmap Re-baseline e implementação R.3I em andamento |
+
+## Estado corrente do Roadmap Re-baseline
+
+### Marcos recentes
+
+- R.3I.24 está implementada e validada de forma focada, conforme os registros
+  disponíveis.
+- R.3I.25 — Bloco 1 está implementado. Sua conclusão foi confirmada pelo
+  usuário e passa a integrar o registro documental neste bloco.
+- R.3I.25 — Bloco 2, Encontristas, está planejado. O prompt foi preparado,
+  mas ainda não foi enviado para execução.
+- R.3I.26 e R.3I.27 permanecem planejadas. Suporte parcial eventualmente já
+  existente não equivale à conclusão desses blocos.
+
+### Correção de segurança F-01
+
+- **F-01 foi encerrada tecnicamente com ressalva por decisão humana de 26 de
+  outubro de 2026.** A correção segregou o acesso mínimo de Comunicação dos
+  contratos operacionais completos do Pré-Encontro.
+- Backend, BFF e frontend foram implementados e validados nas verificações
+  focadas: a suíte backend focada e 101 testes frontend/BFF foram aprovados, e
+  TypeScript e ESLint terminaram sem diagnósticos reportados.
+- Sete dos oito cenários do smoke test humano foram aprovados: A–D e F–H. O
+  cenário E, Coordenação Geral contextual, permanece **adiado e pendente de
+  validação manual** por ausência de conta demo contextual preparada; suas
+  policies foram inspecionadas e possuem cobertura automatizada.
+- A decisão de encerramento técnico, por si só, não autorizou operação Git de
+  escrita. Posteriormente, o Bloco 5G.4 autorizou e criou exclusivamente o
+  commit local F-01 `a44518c8b76143319974032150950d14d8b9fab8`, com a
+  mensagem `fix: restrict communication pre-encounter access` e os 16 arquivos
+  de código e testes da correção.
+- O commit F-01 ainda não foi publicado. Os oito commits funcionais anteriores
+  e o F-01 aguardam publicação controlada; nenhum push, merge ou deploy foi
+  realizado ou autorizado.
+- Os 13 Markdown da reconciliação documental permanecem modificados e sem
+  commit. `docs/design/` continua não rastreado e fora da estratégia atual.
+
+### Pendências preservadas
+
+- R.3I.16 aguarda revalidação dos 11 cenários PostgreSQL depois das correções;
+  não há resultado final comprovado no registro disponível.
+- R.3I.23 permanece planejada e obrigatória antes do cutover, sem conclusão
+  comprovada.
+- R.3I.25 — Bloco 2 ainda não foi iniciado.
+- A homologação ou o fechamento formal de R.3I.1 a R.3I.9 permanece
+  documentalmente indeterminado. A existência de implementação e testes não
+  permite promovê-las automaticamente a concluídas.
+- A ordem das próximas execuções funcionais ainda não foi definida.
+
+A reconciliação V.2 já está aplicada ao working tree, mas ainda não foi
+commitada nem publicada. O ledger histórico e detalhado dos blocos permanece
+em [[workplans/R3C_IMPLEMENTATION_PLAN|R.3C.7 — Plano de implementação]], sem
+substituir este documento como fonte principal do estado vigente.
 
 ## Estado da Fase 1
 
@@ -74,8 +133,10 @@
   contextual e elegibilidade foram implementados sem misturar convite,
   alocação e trabalho realizado.
 - Novos writes passam por services transacionais. A API canônica exige escopo
-  de Encontro, mantém avisos explícitos e preserva default deny para Suporte,
-  Diretoria e Fichas; saúde permanece fora do domínio.
+  de Encontro, mantém avisos explícitos e aplica default deny como política de
+  base. Suporte, Diretoria e Fichas recebem somente as capacidades de Equipes
+  expressamente concedidas para cada operação, sem liberação geral baseada no
+  papel; saúde permanece fora do domínio.
 - Somente `TrabalhoEncontro(status=TRABALHOU)` alimenta `historico_equipes`.
   Rotas e tabelas antigas permanecem temporariamente disponíveis, sem
   dual-write, backfill heurístico ou inferência de trabalho concluído.
@@ -139,8 +200,9 @@
 - Permanecem explícitos o risco de arquivo órfão numa interrupção abrupta
   entre storage e commit, sem atomicidade distribuída, e a inexistência do
   domínio de Eventos; a extensibilidade conceitual não representa integração.
-- A próxima fase ainda não possui numeração ou escopo formalizados. Ela deve
-  ser definida em checkpoint de produto/arquitetura antes da execução.
+- Após a conclusão da D.6, o projeto iniciou o Roadmap Re-baseline e a
+  implementação R.3I. O estado corrente dessa execução está consolidado na
+  seção específica acima.
 
 ## Histórico — Fase 0
 
