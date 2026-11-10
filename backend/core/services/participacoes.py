@@ -220,8 +220,8 @@ def criar_convite(
     if finalidade not in ConviteEncontro.Finalidade.values:
         raise ValidationError('Finalidade de convite inválida.')
 
-    pessoa_bloqueada = _bloquear_pessoa(pessoa)
     encontro_bloqueado = _bloquear_encontro(encontro)
+    pessoa_bloqueada = _bloquear_pessoa(pessoa)
     convite_existente = (
         ConviteEncontro.objects
         .select_for_update()
@@ -346,8 +346,8 @@ def registrar_resultado_participacao(
     if resultado not in ParticipacaoEncontro.Resultado.values:
         raise ValidationError('Resultado de participação inválido.')
 
-    pessoa_bloqueada = _bloquear_pessoa(pessoa)
     encontro_bloqueado = _bloquear_encontro(encontro)
+    pessoa_bloqueada = _bloquear_pessoa(pessoa)
     convite_bloqueado = None
     if convite is not None:
         convite_bloqueado = _bloquear_convite(convite)

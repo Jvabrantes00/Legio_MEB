@@ -1,4 +1,4 @@
-from datetime import date, timedelta
+from datetime import date, time, timedelta
 from hashlib import sha256
 from unittest.mock import patch
 
@@ -9,6 +9,7 @@ from django.utils import timezone
 from rest_framework import status
 
 from core.models import (
+    AtendimentoPreEncontro,
     CalendarioEncontro,
     ConfiguracaoEncontristasEncontro,
     ConviteEncontro,
@@ -16,6 +17,8 @@ from core.models import (
     InscricaoEncontro,
     OportunidadeConviteEncontro,
     Pessoa,
+    PreEncontro,
+    PreSelecaoEncontrista,
 )
 from core.roles import SiaRole
 from core.services import campanhas_convites as services
@@ -368,8 +371,88 @@ class CampanhaConvitesApiTests(AuthenticatedAPITestCase):
         self.assertTrue(payload['lista_espera_ativa'])
         self.assertTrue(payload['sem_prioridade'])
         self.assertTrue(payload['candidatos'][0]['sem_canal'])
+        self.assertIsInstance(payload['candidatos'][0]['inscricao_id'], int)
+        self.assertEqual(payload['candidatos'][0]['origem_tipo'], 'INSCRICAO')
+        self.assertIsNone(payload['candidatos'][0]['preselecao_id'])
         self.assertNotIn('posicao', payload['candidatos'][0])
         conteudo = str(payload).lower()
         self.assertNotIn('email', conteudo)
         self.assertNotIn('telefone', conteudo)
         self.assertNotIn('token', conteudo)
+
+    def test_projecao_publica_aceita_pessoa_e_avulso_sem_inscricao(self):
+        pre_encontro = PreEncontro.objects.create(
+            encontro=self.encontro,
+            data=date(2030, 5, 1),
+            horario=time(14),
+            local='Local do Pré-Encontro',
+        )
+        for indice, origem_tipo in enumerate((
+            PreSelecaoEncontrista.OrigemTipo.PESSOA,
+            PreSelecaoEncontrista.OrigemTipo.AVULSO,
+        )):
+            pessoa = Pessoa.objects.create(
+                nome=f'Pessoa encaminhada {indice}',
+                data_nascimento=date(2010, 1, indice + 2),
+            )
+            atendimento = AtendimentoPreEncontro.objects.create(
+                pre_encontro=pre_encontro,
+                pessoa=pessoa,
+                nome_informado=(
+                    'Origem avulsa preservada'
+                    if origem_tipo == PreSelecaoEncontrista.OrigemTipo.AVULSO
+                    else ''
+                ),
+                data_nascimento_informada=(
+                    date(2010, 1, indice + 2)
+                    if origem_tipo == PreSelecaoEncontrista.OrigemTipo.AVULSO
+                    else None
+                ),
+                telefone_informado=(
+                    '61999990000'
+                    if origem_tipo == PreSelecaoEncontrista.OrigemTipo.AVULSO
+                    else ''
+                ),
+                registrado_por=self.user,
+            )
+            ConviteEncontro.objects.create(
+                pessoa=pessoa,
+                encontro=self.encontro,
+                finalidade=ConviteEncontro.Finalidade.PARTICIPAR,
+            )
+            PreSelecaoEncontrista.objects.create(
+                encontro=self.encontro,
+                origem_tipo=origem_tipo,
+                atendimento_origem=atendimento,
+                pessoa_resolvida=pessoa,
+                estado=PreSelecaoEncontrista.Estado.ENCAMINHADA,
+                registrada_por=self.user,
+                encaminhada_por=self.user,
+                encaminhada_em=self.agora,
+            )
+        configuracao = self.encontro.configuracao_encontristas
+        configuracao.capacidade = 1
+        configuracao.save(update_fields=['capacidade'])
+        pessoa_confirmada = Pessoa.objects.create(
+            nome='Pessoa confirmada para ativar a lista',
+            data_nascimento=date(2010, 1, 10),
+        )
+        ConviteEncontro.objects.create(
+            pessoa=pessoa_confirmada,
+            encontro=self.encontro,
+            finalidade=ConviteEncontro.Finalidade.PARTICIPAR,
+            status=ConviteEncontro.Status.CONFIRMADO,
+        )
+
+        resposta = self.client.get(reverse(
+            'campanha-convites-encontro-projecao',
+            kwargs={'pk': self.encontro.pk},
+        ))
+        candidatos = resposta.json()['candidatos']
+        por_origem = {item['origem_tipo']: item for item in candidatos}
+
+        self.assertEqual(resposta.status_code, status.HTTP_200_OK)
+        self.assertIsNone(por_origem['PESSOA']['inscricao_id'])
+        self.assertIsInstance(por_origem['PESSOA']['preselecao_id'], int)
+        self.assertIsNone(por_origem['AVULSO']['inscricao_id'])
+        self.assertIsInstance(por_origem['AVULSO']['preselecao_id'], int)

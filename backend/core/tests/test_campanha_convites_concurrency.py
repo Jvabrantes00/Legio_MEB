@@ -265,6 +265,11 @@ class CampanhaConvitesConcurrencyCheckpointTests(TransactionTestCase):
             momento=self.momento + timedelta(hours=1),
         ).estado.value
 
+    def _confirmar_candidatos_diretamente(self):
+        ConviteEncontro.objects.filter(
+            pk__in=[convite.pk for _, convite in self.candidatos],
+        ).update(status=ConviteEncontro.Status.CONFIRMADO)
+
     def test_resposta_duplicada_confirmar_confirmar(self):
         convite_id = self.candidatos[0][1].pk
         resultados = self._corrida(
@@ -640,4 +645,224 @@ class CampanhaConvitesConcurrencyCheckpointTests(TransactionTestCase):
             if oportunidade.status
             == OportunidadeConviteEncontro.Status.SUSPENSA
             else 0,
+        )
+
+    def test_capacidade_concorre_com_processamento_de_prazo(self):
+        self._confirmar_candidatos_diretamente()
+        instante = self.prazo + timedelta(seconds=1)
+
+        resultados = self._corrida(
+            lambda: alterar_configuracao_encontristas(
+                usuario=get_user_model().objects.get(pk=self.superuser.pk),
+                configuracao=ConfiguracaoEncontristasEncontro.objects.get(
+                    pk=self.configuracao.pk,
+                ),
+                capacidade=3,
+            ).capacidade,
+            lambda: campanhas_convites.processar_prazo(
+                usuario=get_user_model().objects.get(pk=self.usuario.pk),
+                campanha=CampanhaConvitesEncontro.objects.get(
+                    pk=self.campanha.pk,
+                ),
+                momento=instante,
+            ).status,
+        )
+
+        self._assert_erros_somente(resultados)
+        self.configuracao.refresh_from_db()
+        self.campanha.refresh_from_db()
+        self.assertEqual(self.configuracao.capacidade, 3)
+        self.assertEqual(
+            self.campanha.status,
+            CampanhaConvitesEncontro.Status.AGUARDANDO_DECISAO,
+        )
+        self.assertLessEqual(SinalReposicaoCampanha.objects.count(), 1)
+
+    def test_capacidade_concorre_com_encerramento(self):
+        self._confirmar_candidatos_diretamente()
+        campanhas_convites.processar_prazo(
+            usuario=self.usuario,
+            campanha=self.campanha,
+            momento=self.prazo + timedelta(seconds=1),
+        )
+
+        resultados = self._corrida(
+            lambda: alterar_configuracao_encontristas(
+                usuario=get_user_model().objects.get(pk=self.superuser.pk),
+                configuracao=ConfiguracaoEncontristasEncontro.objects.get(
+                    pk=self.configuracao.pk,
+                ),
+                capacidade=3,
+            ).capacidade,
+            lambda: campanhas_convites.encerrar_campanha(
+                usuario=get_user_model().objects.get(pk=self.usuario.pk),
+                campanha=CampanhaConvitesEncontro.objects.get(
+                    pk=self.campanha.pk,
+                ),
+                momento=self.prazo + timedelta(minutes=1),
+            ).status,
+        )
+
+        self._assert_erros_somente(resultados)
+        self.configuracao.refresh_from_db()
+        self.campanha.refresh_from_db()
+        self.assertEqual(self.configuracao.capacidade, 3)
+        self.assertEqual(
+            self.campanha.status,
+            CampanhaConvitesEncontro.Status.ENCERRADA,
+        )
+        self.assertFalse(SinalReposicaoCampanha.objects.exists())
+
+    def test_recusa_administrativa_concorre_com_reprogramacao(self):
+        oportunidade = OportunidadeConviteEncontro.objects.get(
+            convite=self.candidatos[0][1],
+        )
+
+        resultados = self._corrida(
+            lambda: campanhas_convites.registrar_recusa(
+                usuario=get_user_model().objects.get(pk=self.usuario.pk),
+                oportunidade=OportunidadeConviteEncontro.objects.get(
+                    pk=oportunidade.pk,
+                ),
+                momento=self.momento + timedelta(hours=1),
+            ).status,
+            lambda: comandos_calendario.reprogramar_agenda(
+                Encontro.objects.get(pk=self.encontro.pk),
+                dias=[{'ordem': 1, 'data': date(2030, 6, 2)}],
+                ator=get_user_model().objects.get(pk=self.usuario.pk),
+            ).pk,
+        )
+
+        self._assert_erros_somente(resultados, (ValidationError,))
+        oportunidade.refresh_from_db()
+        convite = ConviteEncontro.objects.get(pk=oportunidade.convite_id)
+        self.assertIn(
+            (convite.status, oportunidade.status),
+            {
+                (
+                    ConviteEncontro.Status.RECUSADO,
+                    OportunidadeConviteEncontro.Status.CONSUMIDA,
+                ),
+                (
+                    ConviteEncontro.Status.CONVIDADO,
+                    OportunidadeConviteEncontro.Status.SUSPENSA,
+                ),
+            },
+        )
+
+    def test_recusa_administrativa_concorre_com_processamento_de_prazo(self):
+        oportunidade = OportunidadeConviteEncontro.objects.get(
+            convite=self.candidatos[0][1],
+        )
+
+        resultados = self._corrida(
+            lambda: campanhas_convites.registrar_recusa(
+                usuario=get_user_model().objects.get(pk=self.usuario.pk),
+                oportunidade=OportunidadeConviteEncontro.objects.get(
+                    pk=oportunidade.pk,
+                ),
+                momento=self.prazo - timedelta(seconds=1),
+            ).status,
+            lambda: campanhas_convites.processar_prazo(
+                usuario=get_user_model().objects.get(pk=self.usuario.pk),
+                campanha=CampanhaConvitesEncontro.objects.get(
+                    pk=self.campanha.pk,
+                ),
+                momento=self.prazo + timedelta(seconds=1),
+            ).status,
+        )
+
+        self._assert_erros_somente(resultados, (ValidationError,))
+        oportunidade.refresh_from_db()
+        convite = ConviteEncontro.objects.get(pk=oportunidade.convite_id)
+        self.campanha.refresh_from_db()
+        self.assertEqual(
+            self.campanha.status,
+            CampanhaConvitesEncontro.Status.AGUARDANDO_DECISAO,
+        )
+        self.assertIn(
+            (convite.status, oportunidade.status),
+            {
+                (
+                    ConviteEncontro.Status.RECUSADO,
+                    OportunidadeConviteEncontro.Status.CONSUMIDA,
+                ),
+                (
+                    ConviteEncontro.Status.SEM_RESPOSTA,
+                    OportunidadeConviteEncontro.Status.EXPIRADA,
+                ),
+            },
+        )
+
+    def test_processamento_de_sinal_concorre_com_reposicao_direta(self):
+        _, convite, sinal = self._preparar_reposicao()
+
+        resultados = self._corrida(
+            lambda: processar_sinal_reposicao_campanha(sinal_id=sinal.pk),
+            lambda: campanhas_convites.abrir_reposicao_nova_vaga(
+                usuario=get_user_model().objects.get(pk=self.usuario.pk),
+                campanha=CampanhaConvitesEncontro.objects.get(
+                    pk=self.campanha.pk,
+                ),
+                momento=self.momento + timedelta(hours=1),
+            ),
+        )
+
+        self._assert_erros_somente(resultados)
+        sinal.refresh_from_db()
+        reposicoes = RodadaConvitesEncontro.objects.filter(
+            campanha=self.campanha,
+            tipo=RodadaConvitesEncontro.Tipo.REPOSICAO,
+        )
+        self.assertEqual(reposicoes.count(), 1)
+        self.assertEqual(
+            OportunidadeConviteEncontro.objects.filter(
+                rodada=reposicoes.get(),
+                convite=convite,
+            ).count(),
+            1,
+        )
+        self.assertEqual(sinal.status, SinalReposicaoCampanha.Status.PROCESSADO)
+
+    def test_prorrogacao_concorre_com_encerramento(self):
+        campanhas_convites.processar_prazo(
+            usuario=self.usuario,
+            campanha=self.campanha,
+            momento=self.prazo + timedelta(seconds=1),
+        )
+        novo_prazo = self.prazo + timedelta(days=5)
+
+        resultados = self._corrida(
+            lambda: campanhas_convites.prorrogar_campanha(
+                usuario=get_user_model().objects.get(pk=self.usuario.pk),
+                campanha=CampanhaConvitesEncontro.objects.get(
+                    pk=self.campanha.pk,
+                ),
+                novo_prazo=novo_prazo,
+                momento=self.prazo + timedelta(minutes=1),
+            ).campanha.status,
+            lambda: campanhas_convites.encerrar_campanha(
+                usuario=get_user_model().objects.get(pk=self.usuario.pk),
+                campanha=CampanhaConvitesEncontro.objects.get(
+                    pk=self.campanha.pk,
+                ),
+                momento=self.prazo + timedelta(minutes=1),
+            ).status,
+        )
+
+        self._assert_erros_somente(resultados, (ValidationError,))
+        self.campanha.refresh_from_db()
+        self.assertIn(
+            self.campanha.status,
+            {
+                CampanhaConvitesEncontro.Status.ATIVA,
+                CampanhaConvitesEncontro.Status.ENCERRADA,
+            },
+        )
+        rodadas = RodadaConvitesEncontro.objects.filter(campanha=self.campanha)
+        self.assertEqual(
+            rodadas.count(),
+            2
+            if self.campanha.status == CampanhaConvitesEncontro.Status.ATIVA
+            else 1,
         )

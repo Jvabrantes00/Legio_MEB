@@ -98,6 +98,42 @@ def _usuario_ativo(user):
     )
 
 
+def pode_preselecionar_encontrista(user, encontro):
+    return bool(
+        _usuario_ativo(user)
+        and encontro is not None
+        and encontro.pk is not None
+        and encontro.status not in (
+            Encontro.Status.CANCELADO,
+            Encontro.Status.FINALIZADO,
+        )
+        and (
+            user.is_superuser
+            or user_has_any_role(user, *FICHAS_MANAGEMENT_ROLES)
+        )
+    )
+
+
+def pode_encerrar_preselecao_encontrista(user, encontro):
+    return pode_preselecionar_encontrista(user, encontro)
+
+
+def pode_aprovar_encaminhamento_encontrista(user, encontro):
+    return bool(
+        _usuario_ativo(user)
+        and encontro is not None
+        and encontro.pk is not None
+        and encontro.status not in (
+            Encontro.Status.CANCELADO,
+            Encontro.Status.FINALIZADO,
+        )
+        and (
+            user.is_superuser
+            or user_has_any_role(user, SiaRole.FICHAS)
+        )
+    )
+
+
 def pertence_coordenacao_geral_encontro(user, encontro):
     if not (
         _usuario_ativo(user)

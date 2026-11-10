@@ -1,5 +1,6 @@
 from dataclasses import dataclass, field
 from datetime import datetime
+from enum import StrEnum
 from hashlib import sha256
 from secrets import token_urlsafe
 
@@ -17,6 +18,8 @@ from core.models import (
     InscricaoEncontro,
     OportunidadeConviteEncontro,
     ParticipacaoEncontro,
+    Pessoa,
+    PreSelecaoEncontrista,
     RodadaConvitesEncontro,
 )
 from core.permissions import (
@@ -38,12 +41,21 @@ class ErroCampanhaConvites(ValidationError):
     pass
 
 
+class OrigemCandidatoCampanha(StrEnum):
+    INSCRICAO = 'INSCRICAO'
+    PESSOA = 'PESSOA'
+    AVULSO = 'AVULSO'
+
+
 @dataclass(frozen=True)
 class CandidatoCampanha:
-    inscricao: InscricaoEncontro
+    pessoa: Pessoa
     convite: ConviteEncontro
     elegibilidade: ResultadoElegibilidadeEncontrista
     canais: tuple[str, ...]
+    origem_tipo: OrigemCandidatoCampanha
+    inscricao: InscricaoEncontro | None = None
+    preselecao: PreSelecaoEncontrista | None = None
 
     @property
     def sem_canal(self):
@@ -51,12 +63,14 @@ class CandidatoCampanha:
 
     def as_dict(self):
         return {
-            'inscricao_id': self.inscricao.pk,
-            'pessoa_id': self.inscricao.pessoa_id,
+            'inscricao_id': self.inscricao.pk if self.inscricao else None,
+            'pessoa_id': self.pessoa.pk,
             'convite_id': self.convite.pk,
             'elegibilidade': self.elegibilidade.value,
             'canais_disponiveis': list(self.canais),
             'sem_canal': self.sem_canal,
+            'origem_tipo': self.origem_tipo.value,
+            'preselecao_id': self.preselecao.pk if self.preselecao else None,
         }
 
 
@@ -197,6 +211,65 @@ def _campanha_bloqueada(campanha):
         _erro('campanha', 'Campanha não encontrada.')
 
 
+def _contexto_campanha_bloqueado(campanha):
+    if campanha is None or campanha.pk is None:
+        _erro('campanha', 'Campanha deve estar persistida.')
+    referencia = (
+        CampanhaConvitesEncontro.objects
+        .filter(pk=campanha.pk)
+        .values('encontro_id')
+        .first()
+    )
+    if referencia is None:
+        _erro('campanha', 'Campanha não encontrada.')
+
+    encontro = _encontro_bloqueado(
+        Encontro(pk=referencia['encontro_id'])
+    )
+    configuracao = _configuracao(encontro, bloquear=True)
+    campanha = _campanha_bloqueada(campanha)
+    if campanha.encontro_id != encontro.pk:
+        _erro('campanha', 'Campanha não pertence ao Encontro informado.')
+    campanha.encontro = encontro
+    return encontro, configuracao, campanha
+
+
+def _contexto_oportunidade_bloqueado(oportunidade):
+    if oportunidade is None or oportunidade.pk is None:
+        _erro('oportunidade', 'Oportunidade deve estar persistida.')
+    referencia = (
+        OportunidadeConviteEncontro.objects
+        .filter(pk=oportunidade.pk)
+        .values(
+            'rodada__campanha_id',
+            'rodada__campanha__encontro_id',
+        )
+        .first()
+    )
+    if referencia is None:
+        _erro('oportunidade', 'Oportunidade não encontrada.')
+
+    encontro, configuracao, campanha = _contexto_campanha_bloqueado(
+        CampanhaConvitesEncontro(
+            pk=referencia['rodada__campanha_id'],
+            encontro_id=referencia['rodada__campanha__encontro_id'],
+        )
+    )
+    try:
+        oportunidade = (
+            OportunidadeConviteEncontro.objects
+            .select_for_update(of=('self',))
+            .select_related('rodada__campanha__encontro', 'convite')
+            .get(
+                pk=oportunidade.pk,
+                rodada__campanha=campanha,
+            )
+        )
+    except OportunidadeConviteEncontro.DoesNotExist:
+        _erro('oportunidade', 'Oportunidade não encontrada.')
+    return encontro, configuracao, campanha, oportunidade
+
+
 def _ocupacao_confirmada(encontro):
     return ConviteEncontro.objects.filter(
         encontro=encontro,
@@ -217,30 +290,128 @@ def _canais_da_pessoa(pessoa):
     return tuple(canais)
 
 
-def _candidatos(
-    *,
-    encontro,
-    convites_recusados_permitidos=frozenset(),
-    bloquear=False,
-):
-    inscricoes = list(
+_ORIGENS_PRESELECAO = {
+    PreSelecaoEncontrista.OrigemTipo.INSCRICAO: (
+        OrigemCandidatoCampanha.INSCRICAO
+    ),
+    PreSelecaoEncontrista.OrigemTipo.PESSOA: OrigemCandidatoCampanha.PESSOA,
+    PreSelecaoEncontrista.OrigemTipo.AVULSO: OrigemCandidatoCampanha.AVULSO,
+}
+
+
+def _origem_preselecionada_valida(preselecao, encontro):
+    pessoa_id = preselecao.pessoa_resolvida_id
+    if pessoa_id is None:
+        return False
+
+    if preselecao.origem_tipo == PreSelecaoEncontrista.OrigemTipo.INSCRICAO:
+        inscricao = preselecao.inscricao_origem
+        return bool(
+            inscricao is not None
+            and inscricao.encontro_id == encontro.pk
+            and inscricao.status == InscricaoEncontro.Status.ENVIADA
+            and inscricao.pessoa_id == pessoa_id
+        )
+
+    if preselecao.origem_tipo not in (
+        PreSelecaoEncontrista.OrigemTipo.PESSOA,
+        PreSelecaoEncontrista.OrigemTipo.AVULSO,
+    ):
+        return False
+    atendimento = preselecao.atendimento_origem
+    if atendimento is None:
+        return False
+    origem_consistente = bool(
+        atendimento.pre_encontro.encontro_id == encontro.pk
+        and atendimento.pessoa_id == pessoa_id
+    )
+    if (
+        origem_consistente
+        and preselecao.origem_tipo == PreSelecaoEncontrista.OrigemTipo.AVULSO
+    ):
+        origem_consistente = bool(
+            atendimento.nome_informado
+            and atendimento.data_nascimento_informada is not None
+            and atendimento.telefone_informado
+        )
+    return origem_consistente
+
+
+def _fontes_candidatos(encontro):
+    fontes = {}
+    inscricoes = (
         InscricaoEncontro.objects
         .filter(
             encontro=encontro,
             status=InscricaoEncontro.Status.ENVIADA,
             pessoa__isnull=False,
         )
-        .select_related('pessoa')
-        .prefetch_related('pessoa__telefones')
-        .order_by('pessoa_id')
+        .order_by('pessoa_id', 'pk')
     )
-    if not inscricoes:
+    for inscricao in inscricoes:
+        fontes[inscricao.pessoa_id] = {
+            'inscricao': inscricao,
+            'preselecao': None,
+            'origem_tipo': OrigemCandidatoCampanha.INSCRICAO,
+        }
+
+    preselecao_queryset = (
+        PreSelecaoEncontrista.objects
+        .filter(
+            encontro=encontro,
+            estado=PreSelecaoEncontrista.Estado.ENCAMINHADA,
+            pessoa_resolvida__isnull=False,
+        )
+        .select_related(
+            'inscricao_origem',
+            'atendimento_origem__pre_encontro',
+        )
+        .order_by('pessoa_resolvida_id', 'pk')
+    )
+    for preselecao in preselecao_queryset:
+        if not _origem_preselecionada_valida(preselecao, encontro):
+            continue
+        pessoa_id = preselecao.pessoa_resolvida_id
+        fonte = fontes.setdefault(pessoa_id, {
+            'inscricao': (
+                preselecao.inscricao_origem
+                if preselecao.origem_tipo
+                == PreSelecaoEncontrista.OrigemTipo.INSCRICAO
+                else None
+            ),
+            'preselecao': None,
+            'origem_tipo': OrigemCandidatoCampanha.INSCRICAO,
+        })
+        fonte['preselecao'] = preselecao
+        fonte['origem_tipo'] = _ORIGENS_PRESELECAO[preselecao.origem_tipo]
+    return fontes
+
+
+def _candidatos(
+    *,
+    encontro,
+    convites_recusados_permitidos=frozenset(),
+    bloquear=False,
+):
+    fontes = _fontes_candidatos(encontro)
+    if not fontes:
         return ()
+
+    pessoas = {
+        pessoa.pk: pessoa
+        for pessoa in (
+            Pessoa.objects
+            .filter(pk__in=fontes)
+            .prefetch_related('telefones')
+            .order_by('pk')
+        )
+    }
+    pessoa_ids = tuple(pessoas)
 
     convites_queryset = ConviteEncontro.objects.filter(
         encontro=encontro,
         finalidade=ConviteEncontro.Finalidade.PARTICIPAR,
-        pessoa_id__in=[item.pessoa_id for item in inscricoes],
+        pessoa_id__in=pessoa_ids,
     )
     if bloquear:
         convites_queryset = convites_queryset.select_for_update()
@@ -251,13 +422,15 @@ def _candidatos(
     pessoas_com_participacao = set(
         ParticipacaoEncontro.objects.filter(
             encontro=encontro,
-            pessoa_id__in=[item.pessoa_id for item in inscricoes],
+            pessoa_id__in=pessoa_ids,
         ).values_list('pessoa_id', flat=True)
     )
     candidatos = []
-    for inscricao in inscricoes:
-        convite = convites.get(inscricao.pessoa_id)
-        if convite is None or inscricao.pessoa_id in pessoas_com_participacao:
+    for pessoa_id in pessoa_ids:
+        pessoa = pessoas[pessoa_id]
+        fonte = fontes[pessoa_id]
+        convite = convites.get(pessoa_id)
+        if convite is None or pessoa_id in pessoas_com_participacao:
             continue
         status_permitido = convite.status in _STATUS_AUTOMATICOS_CONVITE
         if (
@@ -268,16 +441,19 @@ def _candidatos(
         if not status_permitido:
             continue
         avaliacao = avaliar_elegibilidade_encontrista(
-            pessoa=inscricao.pessoa,
+            pessoa=pessoa,
             encontro=encontro,
         )
         if avaliacao.resultado not in _RESULTADOS_ELEGIVEIS:
             continue
         candidatos.append(CandidatoCampanha(
-            inscricao=inscricao,
+            pessoa=pessoa,
             convite=convite,
             elegibilidade=avaliacao.resultado,
-            canais=_canais_da_pessoa(inscricao.pessoa),
+            canais=_canais_da_pessoa(pessoa),
+            origem_tipo=fonte['origem_tipo'],
+            inscricao=fonte['inscricao'],
+            preselecao=fonte['preselecao'],
         ))
     return tuple(candidatos)
 
@@ -324,12 +500,18 @@ def _encerrar_rodadas_abertas(
         RodadaConvitesEncontro.objects
         .select_for_update()
         .filter(campanha=campanha, status=RodadaConvitesEncontro.Status.ABERTA)
+        .order_by('pk')
     )
     if not rodadas:
         return
-    oportunidades = OportunidadeConviteEncontro.objects.select_for_update().filter(
-        rodada__in=rodadas,
-        status=OportunidadeConviteEncontro.Status.PENDENTE,
+    oportunidades = (
+        OportunidadeConviteEncontro.objects
+        .select_for_update()
+        .filter(
+            rodada__in=rodadas,
+            status=OportunidadeConviteEncontro.Status.PENDENTE,
+        )
+        .order_by('pk')
     )
     convite_ids = list(oportunidades.values_list('convite_id', flat=True))
     oportunidades.update(
@@ -523,8 +705,7 @@ def iniciar_campanha(
 
 def _processar_prazo(*, campanha, momento, usuario, origem):
     instante = _momento(momento)
-    campanha = _campanha_bloqueada(campanha)
-    _configuracao(campanha.encontro, bloquear=True)
+    _, _, campanha = _contexto_campanha_bloqueado(campanha)
     if campanha.status in {
         CampanhaConvitesEncontro.Status.AGUARDANDO_DECISAO,
         CampanhaConvitesEncontro.Status.ENCERRADA,
@@ -586,8 +767,7 @@ def encerrar_campanha(
 ):
     _exigir_gestao(usuario)
     instante = _momento(momento)
-    campanha = _campanha_bloqueada(campanha)
-    _configuracao(campanha.encontro, bloquear=True)
+    _, _, campanha = _contexto_campanha_bloqueado(campanha)
     if campanha.status == CampanhaConvitesEncontro.Status.ENCERRADA:
         return campanha
     if campanha.status != CampanhaConvitesEncontro.Status.AGUARDANDO_DECISAO:
@@ -630,8 +810,7 @@ def prorrogar_campanha(
     _exigir_gestao(usuario)
     instante = _momento(momento)
     prazo = _prazo_futuro(novo_prazo, momento=instante)
-    campanha = _campanha_bloqueada(campanha)
-    _configuracao(campanha.encontro, bloquear=True)
+    _, _, campanha = _contexto_campanha_bloqueado(campanha)
     if campanha.status != CampanhaConvitesEncontro.Status.AGUARDANDO_DECISAO:
         _erro('status', 'Somente campanha aguardando decisão pode ser prorrogada.')
     prazo_anterior = campanha.prazo_confirmacao
@@ -685,19 +864,9 @@ def registrar_recusa(
 ):
     _exigir_gestao(usuario)
     instante = _momento(momento)
-    if oportunidade is None or oportunidade.pk is None:
-        _erro('oportunidade', 'Oportunidade deve estar persistida.')
-    try:
-        oportunidade = (
-            OportunidadeConviteEncontro.objects
-            .select_for_update()
-            .select_related('rodada__campanha__encontro', 'convite')
-            .get(pk=oportunidade.pk)
-        )
-    except OportunidadeConviteEncontro.DoesNotExist:
-        _erro('oportunidade', 'Oportunidade não encontrada.')
-    campanha = _campanha_bloqueada(oportunidade.rodada.campanha)
-    _configuracao(campanha.encontro, bloquear=True)
+    _, _, campanha, oportunidade = _contexto_oportunidade_bloqueado(
+        oportunidade
+    )
     convite = oportunidade.convite
     if (
         oportunidade.status == OportunidadeConviteEncontro.Status.CONSUMIDA
@@ -753,8 +922,7 @@ def reabrir_recusa(
     if not justificativa:
         _erro('justificativa', 'Informe a justificativa da reabertura.')
     instante = _momento(momento)
-    campanha = _campanha_bloqueada(campanha)
-    _configuracao(campanha.encontro, bloquear=True)
+    _, _, campanha = _contexto_campanha_bloqueado(campanha)
     if campanha.status != CampanhaConvitesEncontro.Status.ATIVA:
         _erro('status', 'A campanha precisa estar ativa para reabrir recusa.')
     if instante >= campanha.prazo_confirmacao:
@@ -821,8 +989,7 @@ def _abrir_reposicao_nova_vaga(
     origem,
 ):
     instante = _momento(momento)
-    campanha = _campanha_bloqueada(campanha)
-    configuracao = _configuracao(campanha.encontro, bloquear=True)
+    _, configuracao, campanha = _contexto_campanha_bloqueado(campanha)
     if campanha.status != CampanhaConvitesEncontro.Status.ATIVA:
         _erro('status', 'A campanha precisa estar ativa para repor vaga.')
     if instante >= campanha.prazo_confirmacao:

@@ -1152,6 +1152,182 @@ class AtendimentoPreEncontro(models.Model):
         return f'Atendimento {self.pk or "novo"} — Pré {self.pre_encontro_id}'
 
 
+class PreSelecaoEncontrista(models.Model):
+    class OrigemTipo(models.TextChoices):
+        INSCRICAO = 'inscricao', 'Inscrição'
+        PESSOA = 'pessoa', 'Pessoa'
+        AVULSO = 'avulso', 'Avulso'
+
+    class Estado(models.TextChoices):
+        PRESELECIONADA = 'preselecionada', 'Pré-selecionada'
+        ENCAMINHADA = 'encaminhada', 'Encaminhada'
+        ENCERRADA = 'encerrada', 'Encerrada'
+
+    encontro = models.ForeignKey(
+        Encontro,
+        on_delete=models.PROTECT,
+        related_name='preselecoes_encontristas',
+    )
+    origem_tipo = models.CharField(max_length=20, choices=OrigemTipo.choices)
+    inscricao_origem = models.ForeignKey(
+        InscricaoEncontro,
+        on_delete=models.PROTECT,
+        related_name='preselecoes_encontristas',
+        null=True,
+        blank=True,
+    )
+    atendimento_origem = models.ForeignKey(
+        AtendimentoPreEncontro,
+        on_delete=models.PROTECT,
+        related_name='preselecoes_encontristas',
+        null=True,
+        blank=True,
+    )
+    pessoa_resolvida = models.ForeignKey(
+        Pessoa,
+        on_delete=models.PROTECT,
+        related_name='preselecoes_encontristas',
+        null=True,
+        blank=True,
+    )
+    estado = models.CharField(
+        max_length=20,
+        choices=Estado.choices,
+        default=Estado.PRESELECIONADA,
+    )
+    registrada_por = models.ForeignKey(
+        User,
+        on_delete=models.PROTECT,
+        related_name='preselecoes_encontristas_registradas',
+    )
+    registrada_em = models.DateTimeField(default=timezone.now)
+    encaminhada_por = models.ForeignKey(
+        User,
+        on_delete=models.PROTECT,
+        related_name='preselecoes_encontristas_encaminhadas',
+        null=True,
+        blank=True,
+    )
+    encaminhada_em = models.DateTimeField(null=True, blank=True)
+    encerrada_por = models.ForeignKey(
+        User,
+        on_delete=models.PROTECT,
+        related_name='preselecoes_encontristas_encerradas',
+        null=True,
+        blank=True,
+    )
+    encerrada_em = models.DateTimeField(null=True, blank=True)
+    atualizada_em = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        indexes = [
+            models.Index(
+                fields=['encontro', 'estado'],
+                name='pre_sel_enc_estado_idx',
+            ),
+            models.Index(
+                fields=['pessoa_resolvida', 'estado'],
+                name='pre_sel_pessoa_estado_idx',
+            ),
+            models.Index(
+                fields=['registrada_em'],
+                name='pre_sel_registrada_idx',
+            ),
+        ]
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    models.Q(
+                        origem_tipo='inscricao',
+                        inscricao_origem__isnull=False,
+                        atendimento_origem__isnull=True,
+                    )
+                    | models.Q(
+                        origem_tipo='pessoa',
+                        inscricao_origem__isnull=True,
+                        atendimento_origem__isnull=False,
+                        pessoa_resolvida__isnull=False,
+                    )
+                    | models.Q(
+                        origem_tipo='avulso',
+                        inscricao_origem__isnull=True,
+                        atendimento_origem__isnull=False,
+                    )
+                ),
+                name='pre_sel_origem_coerente',
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(
+                        estado='preselecionada',
+                        encaminhada_por__isnull=True,
+                        encaminhada_em__isnull=True,
+                        encerrada_por__isnull=True,
+                        encerrada_em__isnull=True,
+                    )
+                    | models.Q(
+                        estado='encaminhada',
+                        encaminhada_por__isnull=False,
+                        encaminhada_em__isnull=False,
+                        encerrada_por__isnull=True,
+                        encerrada_em__isnull=True,
+                    )
+                    | (
+                        models.Q(
+                            estado='encerrada',
+                            encerrada_por__isnull=False,
+                            encerrada_em__isnull=False,
+                        )
+                        & (
+                            models.Q(
+                                encaminhada_por__isnull=True,
+                                encaminhada_em__isnull=True,
+                            )
+                            | models.Q(
+                                encaminhada_por__isnull=False,
+                                encaminhada_em__isnull=False,
+                            )
+                        )
+                    )
+                ),
+                name='pre_sel_estado_coerente',
+            ),
+            models.UniqueConstraint(
+                fields=['encontro', 'inscricao_origem'],
+                condition=(
+                    models.Q(
+                        estado__in=('preselecionada', 'encaminhada'),
+                        inscricao_origem__isnull=False,
+                    )
+                ),
+                name='pre_sel_insc_aberta_unica',
+            ),
+            models.UniqueConstraint(
+                fields=['encontro', 'atendimento_origem'],
+                condition=(
+                    models.Q(
+                        estado__in=('preselecionada', 'encaminhada'),
+                        atendimento_origem__isnull=False,
+                    )
+                ),
+                name='pre_sel_atend_aberto_unico',
+            ),
+            models.UniqueConstraint(
+                fields=['encontro', 'pessoa_resolvida'],
+                condition=(
+                    models.Q(
+                        estado__in=('preselecionada', 'encaminhada'),
+                        pessoa_resolvida__isnull=False,
+                    )
+                ),
+                name='pre_sel_pessoa_aberta_unica',
+            ),
+        ]
+
+    def __str__(self):
+        return f'Pré-seleção {self.pk or "nova"} — Encontro {self.encontro_id}'
+
+
 class PagamentoPreEncontro(models.Model):
     class Status(models.TextChoices):
         PENDENTE = 'pendente', 'Pendente'

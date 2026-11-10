@@ -888,7 +888,7 @@ class ReabrirRecusaCampanhaSerializer(StrictCommandSerializer):
 
 
 class CandidatoCampanhaSerializer(serializers.Serializer):
-    inscricao_id = serializers.IntegerField(read_only=True)
+    inscricao_id = serializers.IntegerField(read_only=True, allow_null=True)
     pessoa_id = serializers.IntegerField(read_only=True)
     convite_id = serializers.IntegerField(read_only=True)
     elegibilidade = serializers.CharField(read_only=True)
@@ -897,6 +897,11 @@ class CandidatoCampanhaSerializer(serializers.Serializer):
         read_only=True,
     )
     sem_canal = serializers.BooleanField(read_only=True)
+    origem_tipo = serializers.ChoiceField(
+        choices=('INSCRICAO', 'PESSOA', 'AVULSO'),
+        read_only=True,
+    )
+    preselecao_id = serializers.IntegerField(read_only=True, allow_null=True)
 
 
 class ProjecaoCampanhaConvitesSerializer(serializers.Serializer):

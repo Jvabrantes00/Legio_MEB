@@ -99,8 +99,8 @@ def _bloquear_role(role_equipe):
 
 def _bloquear_contexto_trabalho(trabalho):
     trabalho_id = _pk(trabalho, 'Trabalho')
-    pessoa = _bloquear_pessoa(trabalho.pessoa)
     encontro = _bloquear_encontro(trabalho.encontro)
+    pessoa = _bloquear_pessoa(trabalho.pessoa)
     convite = _bloquear_convite(trabalho.convite)
     try:
         trabalho_bloqueado = (
@@ -243,8 +243,8 @@ def criar_convite_trabalho(
     role_proposta=None,
     confirmar_avisos=False,
 ):
-    pessoa_bloqueada = _bloquear_pessoa(pessoa)
     encontro_bloqueado = _bloquear_encontro(encontro)
+    pessoa_bloqueada = _bloquear_pessoa(pessoa)
     avaliacao = avaliar_elegibilidade_trabalho(
         pessoa_bloqueada,
         encontro_bloqueado,
@@ -280,8 +280,8 @@ def criar_convite_trabalho(
 
 @transaction.atomic
 def iniciar_trabalho_confirmado(convite, *, confirmar_avisos=False):
-    pessoa_bloqueada = _bloquear_pessoa(convite.pessoa)
     encontro_bloqueado = _bloquear_encontro(convite.encontro)
+    pessoa_bloqueada = _bloquear_pessoa(convite.pessoa)
     convite_bloqueado = _bloquear_convite(convite)
     _validar_convite_do_trabalho(
         convite_bloqueado,
@@ -497,19 +497,6 @@ def substituir_trabalho(
     if anterior_id == novo_id:
         raise ValidationError('A substituição exige dois trabalhos distintos.')
 
-    pessoa_ids = sorted({
-        trabalho_anterior.pessoa_id,
-        trabalho_novo.pessoa_id,
-    })
-    pessoas = list(
-        Pessoa.objects
-        .select_for_update()
-        .filter(pk__in=pessoa_ids)
-        .order_by('pk')
-    )
-    if len(pessoas) != len(pessoa_ids):
-        raise ValidationError('Pessoa do trabalho não encontrada.')
-
     encontro_ids = {
         trabalho_anterior.encontro_id,
         trabalho_novo.encontro_id,
@@ -524,6 +511,19 @@ def substituir_trabalho(
         )
     except Encontro.DoesNotExist as error:
         raise ValidationError('Encontro não encontrado.') from error
+
+    pessoa_ids = sorted({
+        trabalho_anterior.pessoa_id,
+        trabalho_novo.pessoa_id,
+    })
+    pessoas = list(
+        Pessoa.objects
+        .select_for_update()
+        .filter(pk__in=pessoa_ids)
+        .order_by('pk')
+    )
+    if len(pessoas) != len(pessoa_ids):
+        raise ValidationError('Pessoa do trabalho não encontrada.')
 
     convite_ids = sorted({
         trabalho_anterior.convite_id,

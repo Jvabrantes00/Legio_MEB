@@ -10,9 +10,12 @@ from django.test import TestCase, TransactionTestCase
 
 from core.models import (
     ConviteEncontro,
+    EntregaConviteEncontro,
     Encontro,
     Frequencia,
     Inscricao,
+    OportunidadeConviteEncontro,
+    OutboxEntregaConvite,
     ParticipacaoEncontro,
     PerfilAlpinista,
     Pessoa,
@@ -85,6 +88,10 @@ class EncounterParticipationServiceTests(TestCase):
         self.assertEqual(convite.inscricao, inscricao)
         self.assertEqual(repetido.pk, convite.pk)
         self.assertEqual(ConviteEncontro.objects.count(), 1)
+        self.assertFalse(OportunidadeConviteEncontro.objects.exists())
+        self.assertFalse(OutboxEntregaConvite.objects.exists())
+        self.assertFalse(EntregaConviteEncontro.objects.exists())
+        self.assertFalse(ParticipacaoEncontro.objects.exists())
 
     def test_cria_convite_avc_sem_inscricao_quando_elegivel(self):
         ParticipacaoEncontro.objects.create(

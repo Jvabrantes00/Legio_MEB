@@ -166,6 +166,7 @@ class EncounterWorkServiceTests(TestCase):
 
         self.assertEqual(convite.pk, repetido.pk)
         self.assertEqual(convite.finalidade, ConviteEncontro.Finalidade.TRABALHAR)
+        self.assertEqual(convite.status, ConviteEncontro.Status.CONVIDADO)
         self.assertFalse(TrabalhoEncontro.objects.exists())
 
     def test_convite_com_role_proposta_valida_contexto_e_e_idempotente(self):
