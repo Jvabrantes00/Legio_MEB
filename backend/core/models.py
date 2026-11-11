@@ -2439,7 +2439,10 @@ class EntregaConviteEncontro(models.Model):
         ENVIANDO = 'enviando', 'Enviando'
         ENTREGUE = 'entregue', 'Entregue'
         FALHOU = 'falhou', 'Falhou'
+        INCERTA = 'incerta', 'Incerta'
+        SUSPENSA = 'suspensa', 'Suspensa'
 
+    protocolo = models.CharField(max_length=10, null=True, blank=True, editable=False)
     oportunidade = models.ForeignKey(
         OportunidadeConviteEncontro,
         on_delete=models.PROTECT,
@@ -2488,10 +2491,12 @@ class EntregaConviteEncontro(models.Model):
             ),
             models.CheckConstraint(
                 condition=models.Q(
-                    status__in=('pendente', 'enviando', 'entregue', 'falhou')
+                    status__in=('pendente', 'enviando', 'entregue', 'falhou', 'incerta', 'suspensa')
                 ),
                 name='ent_conv_status_valido',
             ),
+            models.CheckConstraint(condition=models.Q(protocolo__isnull=True) | models.Q(protocolo='v2'), name='ent_conv_protocolo_valido'),
+            models.CheckConstraint(condition=~models.Q(status__in=('enviando', 'incerta')) | models.Q(tentativas__gt=0), name='ent_conv_ativa_com_tentativa'),
             models.CheckConstraint(
                 condition=(
                     models.Q(
@@ -2564,6 +2569,13 @@ class EntregaConviteEncontro(models.Model):
                 name='ent_conv_retry_ordem',
             ),
         ]
+
+    def save(self, *args, **kwargs):
+        if not self._state.adding:
+            protocolo = type(self).objects.values_list('protocolo', flat=True).get(pk=self.pk)
+            if protocolo != self.protocolo:
+                raise ValidationError('Protocolo da entrega é imutável.')
+        return super().save(*args, **kwargs)
 
     def __str__(self):
         return f'{self.get_canal_display()} — Oportunidade {self.oportunidade_id}'
@@ -3381,3 +3393,144 @@ class LogSistema(models.Model):
         def __str__(self):
             nome_usuario = self.usuario.username if self.usuario else "Sistema"
             return f"[{ self.criado_em.strftime('%d/%m/%Y %H:%M')}] { nome_usuario }: {self.descricao}"
+
+
+class RegistroEntregaProtegidoQuerySet(models.QuerySet):
+    def update(self, **kwargs):
+        raise ValidationError('Atualização em massa não é permitida.')
+
+    def bulk_update(self, objs, fields, batch_size=None):
+        raise ValidationError('Atualização em massa não é permitida.')
+
+    def delete(self):
+        raise ValidationError('Registros de entrega não podem ser removidos.')
+
+
+class RegistroEntregaProtegido(models.Model):
+    objects = RegistroEntregaProtegidoQuerySet.as_manager()
+
+    class Meta:
+        abstract = True
+
+    def delete(self, *args, **kwargs):
+        raise ValidationError('Registros de entrega não podem ser removidos.')
+
+    def _anterior(self):
+        if self._state.adding:
+            return None
+        return type(self).objects.get(pk=self.pk)
+
+    def _inalterados(self, anterior, campos):
+        if any(getattr(self, c) != getattr(anterior, c) for c in campos):
+            raise ValidationError('Campos de identidade são imutáveis.')
+
+
+class PendenciaEntregaConvite(RegistroEntregaProtegido):
+    encontro = models.ForeignKey(Encontro, on_delete=models.PROTECT)
+    entrega = models.ForeignKey(EntregaConviteEncontro, on_delete=models.PROTECT)
+    tipo = models.CharField(max_length=30, choices=[('incerta', 'Incerta'), ('falhou', 'Falhou'), ('legado_sem_prova', 'Legado sem prova')])
+    motivo = models.CharField(max_length=100)
+    status = models.CharField(max_length=20, choices=[('aberta', 'Aberta'), ('encerrada', 'Encerrada')], default='aberta')
+    aberta_em = models.DateTimeField(default=timezone.now)
+    ultima_evidencia_em = models.DateTimeField(null=True, blank=True)
+    encerrada_em = models.DateTimeField(null=True, blank=True)
+    encerrada_por = models.ForeignKey(User, null=True, blank=True, on_delete=models.PROTECT)
+    decisao = models.CharField(max_length=100, blank=True, default='')
+    reaberturas = models.PositiveIntegerField(default=0)
+    versao = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=['entrega'], condition=models.Q(status='aberta'), name='pend_conv_aberta_unica'),
+            models.CheckConstraint(condition=(models.Q(status='aberta', encerrada_em__isnull=True, encerrada_por__isnull=True, decisao='') | (models.Q(status='encerrada', encerrada_em__isnull=False, encerrada_por__isnull=False) & ~models.Q(decisao=''))), name='pend_conv_encerramento_coerente'),
+        ]
+
+    def save(self, *args, **kwargs):
+        anterior = self._anterior()
+        if anterior:
+            self._inalterados(anterior, ('id', 'encontro_id', 'entrega_id', 'tipo', 'aberta_em'))
+        return super().save(*args, **kwargs)
+
+
+class EvidenciaEntregaConvite(RegistroEntregaProtegido):
+    pendencia = models.ForeignKey(PendenciaEntregaConvite, on_delete=models.PROTECT)
+    autor = models.ForeignKey(User, null=True, blank=True, on_delete=models.PROTECT)
+    tipo = models.CharField(max_length=40, choices=[(v, v) for v in ('suporte_nota', 'prova_nao_inicio', 'provedor_confirmou_nao_aceitacao', 'provedor_confirmou_aceitacao', 'provedor_desconhecido', 'resultado_tardio_adapter')])
+    origem = models.CharField(max_length=20, choices=[('interna', 'Interna'), ('externa', 'Externa')])
+    referencia = models.CharField(max_length=200, blank=True, default='')
+    texto = models.CharField(max_length=1000, blank=True, default='')
+    criado_em = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        constraints = [models.CheckConstraint(condition=~models.Q(tipo__in=('prova_nao_inicio', 'provedor_confirmou_nao_aceitacao', 'provedor_confirmou_aceitacao')) | ~models.Q(referencia=''), name='evid_conv_referencia_exigida')]
+
+    def save(self, *args, **kwargs):
+        if self._anterior():
+            raise ValidationError('Evidências são imutáveis.')
+        return super().save(*args, **kwargs)
+
+
+class AutorizacaoEnvioEntregaConvite(RegistroEntregaProtegido):
+    entrega = models.ForeignKey(EntregaConviteEncontro, on_delete=models.PROTECT)
+    pendencia = models.ForeignKey(PendenciaEntregaConvite, null=True, blank=True, on_delete=models.PROTECT)
+    evidencia_base = models.ForeignKey(EvidenciaEntregaConvite, null=True, blank=True, on_delete=models.PROTECT)
+    autorizada_por = models.ForeignKey(User, on_delete=models.PROTECT)
+    autorizada_em = models.DateTimeField(default=timezone.now)
+    fundamento = models.CharField(max_length=40, choices=[(v, v) for v in ('nao_aceitacao_confirmada', 'falha_comprovada', 'reenvio_excepcional', 'legado_prova_nao_inicio', 'legado_nao_aceitacao_confirmada', 'legado_sem_prova_reconciliado')])
+    justificativa = models.TextField()
+    ciencia_duplicidade = models.BooleanField(default=False)
+    consumida_em = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=['entrega'], condition=models.Q(consumida_em__isnull=True), name='aut_conv_aberta_unica'),
+            models.CheckConstraint(condition=~models.Q(justificativa=''), name='aut_conv_justificativa'),
+            models.CheckConstraint(condition=~models.Q(fundamento__in=('reenvio_excepcional', 'legado_sem_prova_reconciliado')) | models.Q(ciencia_duplicidade=True), name='aut_conv_ciencia'),
+            models.CheckConstraint(condition=~models.Q(fundamento__in=('nao_aceitacao_confirmada', 'legado_prova_nao_inicio', 'legado_nao_aceitacao_confirmada')) | models.Q(evidencia_base__isnull=False), name='aut_conv_evidencia_exigida'),
+        ]
+
+    def save(self, *args, **kwargs):
+        anterior = self._anterior()
+        if anterior:
+            self._inalterados(anterior, tuple(f.attname for f in self._meta.concrete_fields if f.name != 'consumida_em'))
+            if anterior.consumida_em is not None or self.consumida_em is None:
+                raise ValidationError('Autorização só pode ser consumida uma vez.')
+        return super().save(*args, **kwargs)
+
+
+class TentativaEntregaConvite(RegistroEntregaProtegido):
+    entrega = models.ForeignKey(EntregaConviteEncontro, on_delete=models.PROTECT)
+    numero = models.PositiveIntegerField()
+    origem = models.CharField(max_length=20, choices=[('automatica', 'Automática'), ('autorizada', 'Autorizada')])
+    autorizacao = models.OneToOneField(AutorizacaoEnvioEntregaConvite, null=True, blank=True, on_delete=models.PROTECT)
+    chave_idempotencia = models.UUIDField()
+    provider = models.CharField(max_length=100)
+    iniciada_em = models.DateTimeField(default=timezone.now)
+    lease_expira_em = models.DateTimeField()
+    finalizada_em = models.DateTimeField(null=True, blank=True)
+    desfecho = models.CharField(max_length=20, choices=[(v, v) for v in ('iniciada', 'aceita', 'nao_aceita', 'ambigua', 'interrompida')], default='iniciada')
+    categoria_falha = models.CharField(max_length=100, blank=True, default='')
+    codigo_erro = models.CharField(max_length=100, blank=True, default='')
+    id_externo = models.CharField(max_length=200, blank=True, default='')
+    evidencia_tecnica = models.CharField(max_length=500, blank=True, default='')
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=['entrega', 'numero'], name='tent_conv_numero_unico'),
+            models.UniqueConstraint(fields=['entrega'], condition=models.Q(desfecho='iniciada'), name='tent_conv_aberta_unica'),
+            models.CheckConstraint(condition=models.Q(desfecho='iniciada', finalizada_em__isnull=True) | (~models.Q(desfecho='iniciada') & models.Q(finalizada_em__isnull=False)), name='tent_conv_finalizacao_coerente'),
+            models.CheckConstraint(condition=models.Q(origem='autorizada', autorizacao__isnull=False) | models.Q(origem='automatica', autorizacao__isnull=True), name='tent_conv_origem_autorizacao'),
+        ]
+
+    def save(self, *args, **kwargs):
+        anterior = self._anterior()
+        if anterior is None:
+            if self.entrega.protocolo is None and self.autorizacao_id is None:
+                raise ValidationError('Entrega legada exige autorização.')
+            if self.autorizacao_id and self.autorizacao.entrega_id != self.entrega_id:
+                raise ValidationError('Autorização pertence a outra entrega.')
+        if anterior:
+            self._inalterados(anterior, ('id', 'entrega_id', 'numero', 'origem', 'autorizacao_id', 'chave_idempotencia', 'provider', 'iniciada_em', 'lease_expira_em'))
+            if anterior.desfecho != 'iniciada' or self.desfecho == 'iniciada' or self.finalizada_em is None:
+                raise ValidationError('Tentativa só pode ser finalizada uma vez.')
+        return super().save(*args, **kwargs)
