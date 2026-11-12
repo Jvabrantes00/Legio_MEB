@@ -11,6 +11,10 @@ substitui os documentos de referência nem os `AGENTS.md` aplicáveis.
 - R.3I.25 — Bloco 1 está concluído conforme confirmação do usuário; o
   Bloco 2, Encontristas, ainda não foi iniciado.
 - A revalidação PostgreSQL da R.3I.16 e a R.3I.23 continuam abertas.
+- Commits locais, não publicados: C0 (Pré-seleção de Encontristas, backend,
+  `426b177`) e C1 (R.3I.16-C5 B1, schema e integridade de entrega,
+  `1c42f63`). O B1 está commitado, mas não ativado; B2–B4 não estão
+  autorizados. Detalhes em [[PROJECT_STATE]].
 - A ordem das próximas execuções funcionais ainda não foi definida.
 
 Consulte:
@@ -28,6 +32,12 @@ O contexto arquitetural aprovado da R.3C permanece em:
 - [[workplans/R3C_ENCONTROS_ARCHITECTURE|R.3C — Arquitetura do Workspace/Encontristas]];
 - [[workplans/R3C_PUBLIC_REGISTRATION_SPEC|R.3C — Ficha pública de Escalada e ESPPA]];
 - [[workplans/R3C_ENCONTRISTAS_TECHNICAL_MODEL|R.3C.5 — Modelagem técnica de Encontristas]].
+
+Entrega externa de convites e reconciliação (R.3I.16-C5; C5.3-B1, schema e
+integridade, aceito tecnicamente e sem ativação; B2–B4 não iniciados):
+
+- [[workplans/R3I16_C5_ENTREGA_RECONCILIACAO|R.3I.16-C5 — Entrega externa e reconciliação]];
+- [[operations/INVITATION_ASYNC|Convites assíncronos — operação]].
 
 ## Como carregar contexto
 

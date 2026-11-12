@@ -15,6 +15,45 @@
 - O estado local é idempotente. SMTP, porém, tem semântica at-least-once em
   falhas ambíguas: uma queda depois da aceitação externa e antes da gravação
   local pode provocar mensagem duplicada no retry.
+- **Comportamento vigente.** As garantias acima descrevem o código atual, no
+  qual a chamada externa ocorre dentro da transação do worker. O tratamento
+  planejado de resultado incerto, reconciliação e ativação segura está
+  especificado em
+  [[../workplans/R3I16_C5_ENTREGA_RECONCILIACAO|R.3I.16-C5]] e **não está
+  implementado**. Somente o schema e a integridade do B1 (migrations `0051` e
+  `0052`) estão commitados localmente (C1, `1c42f63`), sem ativação e sem
+  aplicação em banco persistente; não alteram o worker nem este comportamento.
+
+## Transição planejada da entrega externa (R.3I.16-C5, não implementada)
+
+Resumo operacional. A especificação, os estados e a distinção entre decisão
+aprovada e proposta estão no workplan citado e não são repetidos aqui.
+
+- **Ativação controlada, rollback fail-closed.** A entrega nova será ligada por
+  feature flag, desligada por padrão. Com a flag desligada nenhuma chamada
+  externa ocorre e não há retorno automático ao worker antigo.
+- **Sem workers antigos e novos na mesma fila.** Antes de ativar: parar worker
+  e Beat, confirmar que nenhum processo antigo consome, implantar, inventariar,
+  transitar o legado e só então ligar a flag. Worker antigo ativo bloqueia a
+  ativação.
+- **Inventário prévio obrigatório (ainda não realizado).** Contagem de
+  entregas por status e por número de tentativas, existência de entregas
+  `enviando`, outboxes pendentes com segredo e oportunidades expiradas com
+  entrega pendente. Exige acesso ao PostgreSQL com aprovação pontual.
+- **Legado.** Toda entrega `pendente` sem prova confiável de não envio, com
+  qualquer número de tentativas (inclusive zero), é identificada logicamente
+  como `LEGADO_SEM_PROVA`, com reenvio automático bloqueado no próprio serviço
+  (não apenas na fila ou na task) e liberação somente por evidência segura ou
+  reconciliação autorizada por Fichas, que é sempre exigida, mesmo com prova
+  conclusiva; prova exige evidência verificável de não início ou confirmação
+  inequívoca de não aceitação pelo provedor, e contador zero ou ausência de
+  registro não bastam; `entregue` e `falhou` são preservadas. Ausência de
+  registro de sucesso não prova que a mensagem não foi enviada.
+- **Segredo.** O ciphertext deixará de ser apagado apenas porque os canais
+  terminaram: será retido enquanto houver necessidade legítima e oportunidade
+  válida.
+- **Sem alertas externos.** Pendências e alertas de entrega incerta ou falha
+  são internos, na Central de Pendências.
 
 ## Variáveis
 

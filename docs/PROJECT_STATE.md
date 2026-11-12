@@ -2,10 +2,14 @@
 
 ## Estado atual
 
-- Snapshot documental atualizado em 26 de outubro de 2026, sem nova
+- Snapshot documental atualizado em 11 de novembro de 2026, sem nova
   verificação geral de todo o projeto.
 - Branch observada: `sia/roadmap-rebaseline`.
-- HEAD observado: `a44518c8b76143319974032150950d14d8b9fab8`
+- HEAD observado: `1c42f634cda238e476f4e9376f4db7b307df288a`
+  (`feat(entrega): adiciona reconciliacao e integridade de convites`, C1),
+  precedido pelo C0 `426b177dc0575711b87bffab58e01b189b14ccb9`
+  (`feat(preselecao): implementa pre-selecao de encontristas no backend`) e
+  pelo F-01 `a44518c8b76143319974032150950d14d8b9fab8`
   (`fix: restrict communication pre-encounter access`).
 - Branch e HEAD registram somente o snapshot desta reconciliação; não são
   identificadores permanentes do estado do projeto.
@@ -59,11 +63,173 @@
   commit local F-01 `a44518c8b76143319974032150950d14d8b9fab8`, com a
   mensagem `fix: restrict communication pre-encounter access` e os 16 arquivos
   de código e testes da correção.
-- O commit F-01 ainda não foi publicado. Os oito commits funcionais anteriores
-  e o F-01 aguardam publicação controlada; nenhum push, merge ou deploy foi
-  realizado ou autorizado.
+- O commit F-01 ainda não foi publicado. Os oito commits funcionais anteriores,
+  o F-01 e os commits locais C0 e C1 (ver as seções da Pré-seleção e do C5)
+  aguardam publicação controlada; nenhum push, merge ou deploy foi realizado ou
+  autorizado.
 - Os 13 Markdown da reconciliação documental permanecem modificados e sem
   commit. `docs/design/` continua não rastreado e fora da estratégia atual.
+
+### R.3I.16-C5 — Entrega externa de convites e reconciliação
+
+Checkpoint documental. **Somente o C5.3-B1 (schema e integridade) foi
+implementado, aceito tecnicamente (A1, abaixo) e commitado localmente no C1
+(`1c42f634cda238e476f4e9376f4db7b307df288a`); B2, B3 e B4 não foram iniciados.** O B1 está
+commitado, mas **não ativado**: o novo fluxo de entrega não está ativado e
+nenhuma migration foi aplicada em banco persistente.
+
+- **C1 — commit local B1:** `1c42f634cda238e476f4e9376f4db7b307df288a`
+  (`feat(entrega): adiciona reconciliacao e integridade de convites`), com 7
+  arquivos: `models.py` (hunks do B1), migrations `0051` e `0052` e quatro
+  arquivos de teste do B1. Foi autorizado após o aceite A1 (que não autorizava
+  commit); não foi publicado.
+- **Homologações do snapshot C1:**
+  - SQLite G-B1: 29 testes, 13 aprovados, 16 pulados por exigirem PostgreSQL.
+  - SQLite G-REG: 39 aprovados.
+  - SQLite G-PRE: 169 testes, 129 aprovados, 40 pulados.
+  - PostgreSQL descartável: 68 testes, 67 aprovados e 1 pulado, resultado
+    **relatado pelo operador humano e não observado diretamente pelo ARCH**.
+    Esta cobertura foi executada especificamente sobre o snapshot C1 e é
+    distinta da homologação PostgreSQL anterior da Pré-seleção (169 testes, ver
+    C0-A1) e do PG2-B pré-commit registrado no A1.
+
+- **C5.3-B1-A1 [APR] — aceite técnico humano:**
+  - Implementação aceita: models, constraints e migrations `0051` (schema
+    aditivo) e `0052` (triggers PostgreSQL reversíveis, no-op em SQLite), sem
+    alterar services, workers, tasks, adapters, API ou frontend.
+  - PG2-B: 68 testes, 67 aprovados, 1 pulado e nenhuma falha, em PostgreSQL 16
+    descartável. SQLite pós-T2: 29 testes, 13 aprovados e 16 pulados (PG).
+  - Revisão independente do QA: aprovada, sem defeito impeditivo.
+  - **D5-A [APR]:** a correspondência entre evidência, fundamento e entrega é
+    validação obrigatória do B3, sem trigger na `0052`; a ativação do novo
+    fluxo depende de sua implementação, testes negativos e homologação.
+  - **O1:** procedimento excepcional de auditoria/LGPD continua **pendente**.
+  - **Inventário do legado:** dispensado neste ambiente, pois o responsável
+    informou não haver dados legados (informação do responsável, não
+    verificada por consulta). Permanece verificação condicional antes de
+    aplicar a `0051` em base com registros anteriores.
+  - **Autorização:** o A1 em si não autorizou commit, implantação nem
+    ativação. O commit local C1 foi autorizado posteriormente e separadamente;
+    implantação e ativação continuam **sem autorização**.
+
+- **C5.1:** diagnóstico concluído por inspeção estática. O worker atual chama o
+  provedor dentro da transação; falha entre aceitação externa e persistência
+  pode duplicar o envio. É risco de projeto lido no código, não defeito
+  reproduzido.
+- **C5.2:** decisões funcionais e operacionais consolidadas (J1–J10, P1–P7,
+  R3–R6, R6.1, D1–D4 e O1–O5) em [[workplans/R3I16_C5_ENTREGA_RECONCILIACAO|R.3I.16-C5 — Entrega
+  externa e reconciliação]]. Reconciliação exclusiva de Fichas em condições
+  normais, com exceção limitada e formal por indisponibilidade de Fichas (P7):
+  aprovação cruzada Suporte/Diretoria, solicitante pode operar após aprovação
+  independente, prazo de espera por nível de urgência (valores não
+  homologados), retorno de Fichas não revoga automaticamente a autorização,
+  que vale só até o prazo concedido, e `INCERTA` desconhecida não pode ser
+  encerrada por operador emergencial. Resultado incerto suspende reenvios;
+  legado `LEGADO_SEM_PROVA` é bloqueado obrigatoriamente no serviço/backend,
+  sem reenvio automático; ativação por feature flag com rollback
+  *fail-closed*, sem retorno ao worker antigo.
+- **R6.1-A [APR]:** entregas legadas `PENDENTE` sem prova confiável de não
+  envio ficam bloqueadas **independentemente do contador de tentativas**;
+  zero tentativas não comprova ausência de envio no processamento antigo. O
+  bloqueio é obrigatório no serviço/backend; a liberação exige evidência
+  segura ou reconciliação autorizada por Fichas, com uma chamada por
+  autorização (J9-A). Substitui qualquer elegibilidade automática do legado
+  com zero tentativas.
+- **D1–D4 [APR]:** B1 limitado ao schema essencial (entregas, tentativas,
+  autorizações individuais, pendências e evidências), sem alterar workers,
+  services ou adapters; emergências, alertas agrupados e retomadas em lote no
+  B3. Toda liberação de entrega legada bloqueada exige autorização explícita e
+  auditada de Fichas, mesmo com prova conclusiva; Suporte só investiga.
+  Integridade protegida no ORM e no PostgreSQL por triggers, sem presumir
+  inviolabilidade contra administradores privilegiados. Prova confiável exige
+  evidência positiva e verificável de não início **ou** confirmação inequívoca
+  de não aceitação pelo provedor; ausência de sucesso, logs incompletos e
+  contador zero não são prova.
+- **C5.3:** blocos previstos B1 a B4; cada um exige autorização expressa. O B1
+  (seção 16 do workplan) está implementado e aceito (A1): duas migrations
+  (`0051` schema e `0052` triggers PostgreSQL, dependentes da `0050`),
+  marcador de protocolo nulo para legado, autorização individual consumida por
+  uma única tentativa, e trigger que impede tentativa de legado sem
+  autorização. B2, B3 e B4 **não iniciados e não autorizados**.
+- **O1–O5 [APR] (diretrizes, não homologam os detalhes [REC]):** auditoria
+  imutável nas operações normais, com tratamento excepcional de dados pessoais
+  apenas por procedimento separado, autorizado e auditado; evidências
+  conclusivas com referências verificáveis adequadas à origem interna ou
+  externa; separação futura de privilégios PostgreSQL de runtime e migrations,
+  sem alterar credenciais agora; conjunto mínimo suficiente de constraints e
+  triggers; convenções de nomenclatura existentes.
+- **Parecer técnico do B1 (revisão estática, anterior à implementação;
+  superado pelo A1):** gates então listados. Situação atual: `makemigrations
+  --check --dry-run` sem alterações; `0050` estável e preservada (um teste da
+  frente de Pré-seleção importa o módulo pelo nome); testes PostgreSQL
+  executados pelo responsável (PG2-B); inventário do legado dispensado neste
+  ambiente (ver A1).
+- **Risco registrado:** as triggers na auditoria existente impedem correção ou
+  anonimização de dados pessoais pela aplicação; o procedimento excepcional
+  (O1) ainda não está definido, mas não bloqueia o B1.
+- **Verificações não realizadas:** aplicação das migrations `0051`/`0052` em
+  banco persistente, inventário do legado (dispensado, condicional) e
+  homologação do fluxo completo (C5.4).
+- **C5.4:** homologação futura, incluindo PostgreSQL e cenários de falha.
+- **Dependência:** a migration `0050_preselecaoencontrista` pertence à frente
+  Pré-seleção e foi incluída no C0 (`426b177dc0575711b87bffab58e01b189b14ccb9`); as migrations `0051`/`0052` do C5
+  dependem dela. Não se presume a aplicação de nenhuma delas em banco
+  persistente.
+- **Pré-requisito operacional não realizado:** inventário do legado antes de
+  qualquer ativação ou geração de pendências.
+- **Recomendações técnicas [REC] pendentes de aprovação:** invariante de
+  commit da tentativa antes da chamada, estados `INCERTA` e `SUSPENSA`,
+  tabelas de tentativa, pendência, evidência, ocorrência técnica e autorização
+  emergencial, lease, nomes da flag e da fila. Nada disso foi homologado.
+- **Fora de escopo:** API interna de aprovação de encaminhamentos por Fichas e
+  provedor real de WhatsApp.
+- **Ponto de retomada:** autorização específica para B2, que continua não
+  iniciado e não autorizado. B3 (incluindo a validação D5-A) é pré-requisito
+  de qualquer ativação; B2–B4 permanecem sem implementação autorizada.
+
+### Pré-seleção de Encontristas (backend) — aceite técnico C0-A1 e commit C0
+
+- **C0 — commit local:** `426b177dc0575711b87bffab58e01b189b14ccb9`
+  (`feat(preselecao): implementa pre-selecao de encontristas no backend`), com
+  19 arquivos de backend, incluindo a migration `0050_preselecaoencontrista`.
+  O commit é local e não foi publicado. O registro C0-A1 abaixo é preservado
+  como histórico do aceite técnico, anterior ao commit.
+
+- **C0-A1 [APR]: APROVADO** — aceite técnico humano da frente Pré-seleção
+  (backend): `PreSelecaoEncontrista`, migration `0050_preselecaoencontrista`,
+  `services/preselecoes_encontristas.py`, novas policies em `permissions.py`,
+  projeção em `campanhas_convites.py` e `serializers.py`, e os testes
+  correspondentes.
+- **Homologação PostgreSQL 16 descartável:** 169 testes, resultado OK, sem
+  falhas ou skips reportados, executada pelo operador humano. O ARCH não
+  reproduziu essa execução.
+- **Revisão independente do QA:** concluída, sem defeitos confirmados; parecer
+  favorável consolidado pelo ARCH.
+- **Lock-order de participação e trabalho:** aceito (`Encontro` antes de
+  `Pessoa` em `participacoes.py` e `trabalhos.py`), com a **ressalva** de que
+  não há teste A/B individual por hunk; só o hunk de `criar_convite` tem
+  evidência direta de necessidade pelo encaminhamento.
+- **Staging seletivo exigido para o C0 (registro histórico; o C0 já foi
+  commitado):** `backend/core/models.py` hunk
+  1 (`PreSelecaoEncontrista`) pertence à Pré-seleção; os hunks 2–7 pertencem ao
+  C5.3-B1. Os demais arquivos compartilhados (`campanhas_convites.py`,
+  `serializers.py`, `participacoes.py`, `trabalhos.py`) e os testes modificados
+  devem ser conferidos antes do staging; o índice deve ser verificado por
+  export antes de qualquer commit.
+- **Fora do C0:** o frontend do R.3I.25 — Bloco 2, Encontristas
+  (`EncounterCandidatesPanel`, `EncounterWorkspace`, `page` e seus testes).
+- **Pendente, decisão separada:** a inconsistência sobre o estado do Bloco 2
+  (esta seção de marcos o descreve como planejado e não enviado, enquanto o
+  código do painel existe no working tree). Não alterada nesta etapa.
+- **Workplan:** não existe workplan específico da Pré-seleção em
+  `docs/workplans/`; o workplan do C5 (Entrega/Reconciliação) trata de outra
+  frente e não foi alterado para este registro.
+- **Limite do aceite:** o C0-A1 (autorização técnica) **não** autorizava stage,
+  commit, push, aplicação de migrations em banco persistente nem avanço para
+  C1, C2 ou B2. O commit C0 foi autorizado posteriormente, em decisão humana
+  separada, e a `0050` foi incluída nele. Push, aplicação de migrations em banco
+  persistente e B2 continuam não autorizados; a `0050` não é presumida aplicada
+  em banco.
 
 ### Pendências preservadas
 
