@@ -31,10 +31,9 @@ type EncounterWorkspaceProps = {
   encontroId: string;
   activeTab: EncounterWorkspaceTab;
   onTabChange: (tab: EncounterWorkspaceTab) => void;
-  children: ReactNode;
-  showEncontristas?: boolean;
-  showPreEncounter?: boolean;
-  showTeam?: boolean;
+  renderEncontristas?: (capabilities: EncounterWorkspaceCapabilities) => ReactNode;
+  renderPreEncounter?: () => ReactNode;
+  renderTeam?: () => ReactNode;
 };
 
 type WorkspaceTabDefinition = {
@@ -169,10 +168,9 @@ export function EncounterWorkspace({
   encontroId,
   activeTab,
   onTabChange,
-  children,
-  showEncontristas = true,
-  showPreEncounter = true,
-  showTeam = true,
+  renderEncontristas,
+  renderPreEncounter,
+  renderTeam,
 }: EncounterWorkspaceProps) {
   const [capabilities, setCapabilities] = useState<EncounterWorkspaceCapabilities | null>(null);
   const [summary, setSummary] = useState<EncounterWorkspaceSummary | null>(null);
@@ -238,17 +236,17 @@ export function EncounterWorkspace({
       capabilities.consultar_resumo
         ? { id: "visao-geral", label: "Visão geral", icon: LayoutDashboard }
         : null,
-      capabilities.consultar_encontristas && showEncontristas
+      capabilities.consultar_encontristas && renderEncontristas
         ? { id: "encontristas", label: "Encontristas", icon: Users }
         : null,
-      capabilities.acessar_pre_encontro && showPreEncounter
+      capabilities.acessar_pre_encontro && renderPreEncounter
         ? { id: "pre-encontro", label: "Pré-Encontro", icon: ShieldCheck }
         : null,
-      capabilities.acessar_equipes && showTeam
+      capabilities.acessar_equipes && renderTeam
         ? { id: "equipe", label: "Equipe", icon: Briefcase }
         : null,
     ].filter((tab): tab is WorkspaceTabDefinition => tab !== null);
-  }, [capabilities, showEncontristas, showPreEncounter, showTeam]);
+  }, [capabilities, renderEncontristas, renderPreEncounter, renderTeam]);
 
   useEffect(() => {
     if (tabs.length && !tabs.some((tab) => tab.id === activeTab)) {
@@ -316,7 +314,10 @@ export function EncounterWorkspace({
               </div>
             ) : summary ? <EncounterWorkspaceOverview summary={summary} capabilities={capabilities} />
               : <p className="rounded-xl border bg-white p-6 text-slate-500">Visão geral indisponível.</p>
-        ) : children}
+        ) : activeTab === "encontristas" ? renderEncontristas?.(capabilities)
+          : activeTab === "pre-encontro" ? renderPreEncounter?.()
+            : activeTab === "equipe" ? renderTeam?.()
+              : null}
       </main>
     </div>
   );

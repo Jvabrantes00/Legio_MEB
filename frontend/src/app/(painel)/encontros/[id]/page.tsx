@@ -7,6 +7,7 @@ import { useParams } from "next/navigation";
 import { siaFetch } from "../../../../lib/sia-api";
 import { useSiaSession } from "../../../../components/SiaSessionProvider";
 import { ConfirmedAlpinistasTable } from "../../../../components/ConfirmedAlpinistasTable";
+import { EncounterCandidatesPanel } from "../../../../components/EncounterCandidatesPanel";
 import { PreEncounterCheckin } from "../../../../components/PreEncounterCheckin";
 import { EncounterRegistrationConfigCard } from "../../../../components/EncounterRegistrationConfigCard";
 import {
@@ -86,11 +87,13 @@ function EncounterSummaryDetails({ preCapabilities, preCapabilitiesError, onRelo
             encontroId={encontroId}
             activeTab={section}
             onTabChange={setSection}
-            showEncontristas={false}
-            showTeam={false}
-        >
-            <PreEncounterCheckin encontroId={encontroId} initialCapabilities={preCapabilities} capabilitiesError={preCapabilitiesError} onReloadCapabilities={onReloadPreCapabilities} />
-        </EncounterWorkspace>
+            renderEncontristas={(workspaceCapabilities) => (
+                <EncounterCandidatesPanel encontroId={encontroId} capabilities={workspaceCapabilities} />
+            )}
+            renderPreEncounter={() => (
+                <PreEncounterCheckin encontroId={encontroId} initialCapabilities={preCapabilities} capabilitiesError={preCapabilitiesError} onReloadCapabilities={onReloadPreCapabilities} />
+            )}
+        />
     );
 }
 
@@ -377,10 +380,15 @@ function ManagedEncounterDetails({ preCapabilities, preCapabilitiesError, onRelo
     };
 
     return (
-        <EncounterWorkspace encontroId={encontroId} activeTab={abaAtiva} onTabChange={setAbaAtiva}>
-            {abaAtiva === "pre-encontro" && <PreEncounterCheckin encontroId={encontroId} initialCapabilities={preCapabilities} capabilitiesError={preCapabilitiesError} onReloadCapabilities={onReloadPreCapabilities} />}
-            {abaAtiva !== "pre-encontro" && <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 min-h-[400px]">
-                {abaAtiva === "equipe" && (
+        <EncounterWorkspace
+            encontroId={encontroId}
+            activeTab={abaAtiva}
+            onTabChange={setAbaAtiva}
+            renderPreEncounter={() => (
+                <PreEncounterCheckin encontroId={encontroId} initialCapabilities={preCapabilities} capabilitiesError={preCapabilitiesError} onReloadCapabilities={onReloadPreCapabilities} />
+            )}
+            renderTeam={() => (
+                <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 min-h-[400px]">
                     <div className="animate-in fade-in duration-300 relative">
                         
                         {/* CABEÇALHO DA ABA E BOTÃO DA MATRIZ */}
@@ -545,11 +553,25 @@ function ManagedEncounterDetails({ preCapabilities, preCapabilitiesError, onRelo
                             </div>
                         )}
                     </div>
-                )}
-
-                {abaAtiva === "encontristas" && (
-                    <div className="animate-in fade-in duration-300">
-                        <EncounterRegistrationConfigCard encontroId={encontroId} />
+                </div>
+            )}
+            renderEncontristas={(workspaceCapabilities) => (
+                <div className="space-y-6">
+                    <EncounterRegistrationConfigCard encontroId={encontroId} />
+                    <EncounterCandidatesPanel encontroId={encontroId} capabilities={workspaceCapabilities} />
+                    <section
+                        aria-labelledby="legacy-candidate-operations-title"
+                        className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 min-h-[400px]"
+                    >
+                        <header className="mb-6 border-b pb-4">
+                            <h2 id="legacy-candidate-operations-title" className="text-xl font-bold text-gray-800">
+                                Operações legadas — transição
+                            </h2>
+                            <p className="text-sm text-gray-500 mt-1">
+                                Estes controles pertencem ao fluxo anterior e permanecem disponíveis temporariamente até a migração operacional.
+                            </p>
+                        </header>
+                        <div className="animate-in fade-in duration-300">
                         <div className="flex justify-between items-center mb-6 border-b pb-4">
                             <div>
                                 <h2 className="text-xl font-bold text-gray-800">Inscrições Pendentes</h2>
@@ -661,8 +683,9 @@ function ManagedEncounterDetails({ preCapabilities, preCapabilitiesError, onRelo
                                 )}
                             </div>
                         )}
-                    </div>
-                )}
-            </div>}
-        </EncounterWorkspace>
+                        </div>
+                    </section>
+                </div>
+            )}
+        />
     )}
