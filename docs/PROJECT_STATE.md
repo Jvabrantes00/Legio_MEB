@@ -41,8 +41,9 @@
   disponíveis.
 - R.3I.25 — Bloco 1 está implementado. Sua conclusão foi confirmada pelo
   usuário e passa a integrar o registro documental neste bloco.
-- R.3I.25 — Bloco 2, Encontristas, está planejado. O prompt foi preparado,
-  mas ainda não foi enviado para execução.
+- R.3I.25 — Bloco 2, Encontristas: C3 concluído tecnicamente com ressalvas,
+  no commit local `fe6504a`. Pendem build Next.js, validação em navegador
+  real, integração com backend e banco e o débito opcional de `useMemo`.
 - R.3I.26 e R.3I.27 permanecem planejadas. Suporte parcial eventualmente já
   existente não equivale à conclusão desses blocos.
 
@@ -218,9 +219,8 @@ nenhuma migration foi aplicada em banco persistente.
   export antes de qualquer commit.
 - **Fora do C0:** o frontend do R.3I.25 — Bloco 2, Encontristas
   (`EncounterCandidatesPanel`, `EncounterWorkspace`, `page` e seus testes).
-- **Pendente, decisão separada:** a inconsistência sobre o estado do Bloco 2
-  (esta seção de marcos o descreve como planejado e não enviado, enquanto o
-  código do painel existe no working tree). Não alterada nesta etapa.
+- **Registro posterior:** o frontend do Bloco 2 foi incluído no C3
+  (`fe6504a`), com aceite técnico humano e as ressalvas acima.
 - **Workplan:** não existe workplan específico da Pré-seleção em
   `docs/workplans/`; o workplan do C5 (Entrega/Reconciliação) trata de outra
   frente e não foi alterado para este registro.
@@ -231,13 +231,24 @@ nenhuma migration foi aplicada em banco persistente.
   persistente e B2 continuam não autorizados; a `0050` não é presumida aplicada
   em banco.
 
+### Desenvolvimento autônomo supervisionado
+
+As decisões AUT-01 a AUT-05 e os limites operacionais estão registrados em
+[[AUTONOMOUS_DEV_PROTOCOL]]. O piloto AUT-A1 não está autorizado por este registro.
+
 ### Pendências preservadas
 
 - R.3I.16 aguarda revalidação dos 11 cenários PostgreSQL depois das correções;
   não há resultado final comprovado no registro disponível.
 - R.3I.23 permanece planejada e obrigatória antes do cutover, sem conclusão
   comprovada.
-- R.3I.25 — Bloco 2 ainda não foi iniciado.
+- C3: build Next.js, navegador real, integração com backend e banco e débito
+  opcional de estabilização de referências com `useMemo` permanecem pendentes.
+- Ressalvas técnicas do ARCH: não há teste A/B individual por hunk da mudança
+  de lock-order do C0; a homologação PostgreSQL do C0 foi relatada pelo
+  operador humano e não reproduzida pelo ARCH. No C3, falta teste integrando
+  os componentes reais `EncounterWorkspace` e `EncounterCandidatesPanel`;
+  o TypeScript com `strict: false` limita a abrangência da verificação.
 - A homologação ou o fechamento formal de R.3I.1 a R.3I.9 permanece
   documentalmente indeterminado. A existência de implementação e testes não
   permite promovê-las automaticamente a concluídas.
