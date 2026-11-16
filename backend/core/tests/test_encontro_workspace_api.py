@@ -140,6 +140,7 @@ class EncontroWorkspaceApiTests(TestCase):
         resposta = self.client.get(self._url())
         self.assertEqual(resposta.status_code, status.HTTP_200_OK)
         self.assertEqual(resposta.data['lifecycle'], Encontro.Status.EM_PREPARACAO)
+        self.assertEqual(resposta.data['equipes']['modelo_equipes'], 'LEGADO')
         self.assertEqual(resposta.data['encontristas']['inscricoes_recebidas'], 1)
         self.assertEqual(resposta.data['encontristas']['pendentes'], 1)
         self.assertEqual(resposta.data['encontristas']['confirmados'], 0)
@@ -148,6 +149,18 @@ class EncontroWorkspaceApiTests(TestCase):
         self.assertNotIn('telefone', str(resposta.data).lower())
         self.assertNotIn('cuidados', str(resposta.data).lower())
         self.assertNotIn('foto', str(resposta.data).lower())
+
+    def test_modelo_equipes_visivel_no_resumo_autorizado(self):
+        canonico = make_encontro(modelo_equipes=Encontro.ModeloEquipes.CANONICO)
+        for usuario in (self.fichas, self.comunicacao, self.diretoria, self.suporte, self.superuser):
+            with self.subTest(usuario=usuario.username):
+                self._auth(usuario)
+                self.assertEqual(self.client.get(self._url()).data['equipes']['modelo_equipes'], 'LEGADO')
+                resposta = self.client.get(f'/api/encontros/{canonico.pk}/workspace/')
+                self.assertEqual(resposta.status_code, status.HTTP_200_OK)
+                self.assertEqual(resposta.data['equipes']['modelo_equipes'], 'CANONICO')
+        self._auth(self.sem_papel)
+        self.assertEqual(self.client.get(f'/api/encontros/{canonico.pk}/workspace/').status_code, status.HTTP_403_FORBIDDEN)
 
     def test_default_deny_e_superuser_bypass(self):
         self._auth(self.sem_papel)

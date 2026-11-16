@@ -95,11 +95,15 @@ describe("contrato do Workspace do Encontro", () => {
         quantidade_aptos: 7,
         quantidade_aguardando_decisao: 1,
       },
-      equipes: { quantidade_equipes: 4, quantidade_funcoes: 8, vagas_estruturais: 20, vagas_preenchidas: 12 },
+      equipes: { modelo_equipes: "LEGADO", quantidade_equipes: 4, quantidade_funcoes: 8, vagas_estruturais: 20, vagas_preenchidas: 12 },
       formacao: { total_sessoes: 3, planejadas: 2, realizadas: 1, canceladas: 0 },
       alertas: [{ codigo: "TESTE", mensagem: "Alerta canônico." }],
     });
     expect(parsed.encontristas.pendentes).toBe(5);
+    expect(parsed.equipes.modelo_equipes).toBe("LEGADO");
+    expect(parseEncounterWorkspaceSummary({ ...parsed, equipes: { ...parsed.equipes, modelo_equipes: "CANONICO" } }).equipes.modelo_equipes).toBe("CANONICO");
+    expect(() => parseEncounterWorkspaceSummary({ ...parsed, equipes: { ...parsed.equipes, modelo_equipes: "OUTRO" } })).toThrow();
+    expect(() => parseEncounterWorkspaceSummary({ ...parsed, equipes: { ...parsed.equipes, modelo_equipes: undefined } })).toThrow();
     expect(parsed.encontristas.confirmados).toBe(7);
     expect(parsed.alertas[0].mensagem).toBe("Alerta canônico.");
   });

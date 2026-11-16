@@ -64,6 +64,7 @@ const summary = {
     quantidade_aguardando_decisao: 2,
   },
   equipes: {
+    modelo_equipes: "LEGADO",
     quantidade_equipes: 4,
     quantidade_funcoes: 10,
     vagas_estruturais: 24,

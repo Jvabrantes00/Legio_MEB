@@ -39,5 +39,5 @@ export function parseEncounterTeams(value: unknown): EncounterTeam[] {
 }
 export function buildEncounterTeamPath(encontroId: number): string {
   if (!Number.isSafeInteger(encontroId) || encontroId <= 0) throw new Error("Encontro inválido.");
-  return `/equipes-encontros/?encontro=${encontroId}`;
+  return `/encontros/${encontroId}/workspace/equipes/`;
 }

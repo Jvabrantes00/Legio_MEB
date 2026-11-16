@@ -172,6 +172,7 @@ class WorkspacePreEncontroResumoSerializer(serializers.Serializer):
 
 
 class WorkspaceEquipesResumoSerializer(serializers.Serializer):
+    modelo_equipes = serializers.ChoiceField(choices=Encontro.ModeloEquipes.choices, read_only=True)
     quantidade_equipes = serializers.IntegerField(read_only=True)
     quantidade_funcoes = serializers.IntegerField(read_only=True)
     vagas_estruturais = serializers.IntegerField(read_only=True, allow_null=True)

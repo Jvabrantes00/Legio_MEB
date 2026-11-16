@@ -8,6 +8,7 @@ import { siaFetch } from "../../../../lib/sia-api";
 import { useSiaSession } from "../../../../components/SiaSessionProvider";
 import { ConfirmedAlpinistasTable } from "../../../../components/ConfirmedAlpinistasTable";
 import { EncounterCandidatesPanel } from "../../../../components/EncounterCandidatesPanel";
+import { EncounterTeamPanel } from "../../../../components/encounter-team/EncounterTeamPanel";
 import { PreEncounterCheckin } from "../../../../components/PreEncounterCheckin";
 import { EncounterRegistrationConfigCard } from "../../../../components/EncounterRegistrationConfigCard";
 import {
@@ -93,6 +94,9 @@ function EncounterSummaryDetails({ preCapabilities, preCapabilitiesError, onRelo
             renderPreEncounter={() => (
                 <PreEncounterCheckin encontroId={encontroId} initialCapabilities={preCapabilities} capabilitiesError={preCapabilitiesError} onReloadCapabilities={onReloadPreCapabilities} />
             )}
+            renderTeam={(capabilities, equipes) => equipes ? (
+                <EncounterTeamPanel encontroId={Number(encontroId)} capabilities={capabilities} equipes={equipes} />
+            ) : <p>Resumo de equipes indisponível.</p>}
         />
     );
 }

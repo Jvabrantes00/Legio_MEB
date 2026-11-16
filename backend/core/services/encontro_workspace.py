@@ -387,6 +387,7 @@ def _resumo_equipes(encontro):
         role_equipe__isnull=False,
     ).exclude(status=TrabalhoEncontro.Status.RETIRADO).count()
     return {
+        'modelo_equipes': encontro.modelo_equipes,
         'quantidade_equipes': equipes,
         'quantidade_funcoes': agregados['funcoes'] or 0,
         'vagas_estruturais': agregados['vagas'],

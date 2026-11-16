@@ -107,6 +107,7 @@ export type EncounterWorkspaceSummary = {
     quantidade_aguardando_decisao: number;
   };
   equipes: {
+    modelo_equipes: "LEGADO" | "CANONICO";
     quantidade_equipes: number;
     quantidade_funcoes: number;
     vagas_estruturais: number | null;
@@ -241,6 +242,7 @@ export function parseEncounterWorkspaceSummary(value: unknown): EncounterWorkspa
       ) as number,
     },
     equipes: {
+      modelo_equipes: enumValue(equipes.modelo_equipes, ["LEGADO", "CANONICO"] as const, "modelo_equipes"),
       quantidade_equipes: integer(equipes, "quantidade_equipes") as number,
       quantidade_funcoes: integer(equipes, "quantidade_funcoes") as number,
       vagas_estruturais: integer(equipes, "vagas_estruturais", true),

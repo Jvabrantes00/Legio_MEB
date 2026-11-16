@@ -8,7 +8,7 @@ describe("contrato de equipes", () => {
     expect(parsed[0].capacidade_minima_recomendada).toBeNull();
     expect(parsed[0].roles[0].quantidade_estrutural).toBeNull();
     expect(JSON.stringify(parsed)).not.toContain("privado");
-    expect(buildEncounterTeamPath(2)).toBe("/equipes-encontros/?encontro=2");
+    expect(buildEncounterTeamPath(2)).toBe("/encontros/2/workspace/equipes/");
   });
   it("rejeita enums, tipos, nulos e estruturas inválidas", () => {
     for (const value of [null, {}, [null], [{ ...team(), nome: null }], [{ ...team(), ordem: "1" }], [{ ...team(), roles: {} }], [{ ...team(), capacidade: { resultado: "OUTRO", motivos: [] } }], [{ ...team(), composicao: { resultado: "AVISO", motivos: [{ codigo: "INVALIDO", categoria: "AVISO", mensagem: "x" }] } }], [{ ...team(), capacidade: { resultado: "AVISO", motivos: [{ codigo: "CAPACIDADE_MAXIMA_EXCEDIDA", categoria: "AVISO", mensagem: "x", contexto: null }] } }]]) expect(() => parseEncounterTeams(value)).toThrow();
