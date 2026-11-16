@@ -6,6 +6,43 @@ import { validateProxyPath } from "./sia-proxy";
 const base = ["encontros", "12", "workspace"] as const;
 
 describe("allowlist BFF do Workspace do Encontro", () => {
+  it("permite GET no recurso exato de equipes", () => {
+    const path = [...base, "equipes"];
+    expect(isAllowedEncounterWorkspaceRequest("GET", path)).toBe(true);
+    expect(() => validateProxyPath(path, new URLSearchParams(), "GET")).not.toThrow();
+  });
+
+  it.each(["POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"])(
+    "nega %s em equipes",
+    (method) => {
+      const path = [...base, "equipes"];
+      expect(isAllowedEncounterWorkspaceRequest(method, path)).toBe(false);
+      expect(() => validateProxyPath(path, new URLSearchParams(), method)).toThrow();
+    },
+  );
+
+  it.each(["encontro=1", "page=1", "url=https://example.test"])(
+    "nega query em equipes: %s",
+    (query) => {
+      const path = [...base, "equipes"];
+      const params = new URLSearchParams(query);
+      expect(isAllowedEncounterWorkspaceRequest("GET", path, params)).toBe(false);
+      expect(() => validateProxyPath(path, params, "GET")).toThrow();
+    },
+  );
+
+  it.each([
+    [...base, "equipes", "1"],
+    [...base, "equipes", "roles"],
+    [...base, "Equipes"],
+    [...base, "EQUIPES"],
+    [...base, "equipes-encontros"],
+    ...["0", "01", "-1", "abc", "1.5"].map((id) => ["encontros", id, "workspace", "equipes"]),
+  ])("nega caminho de equipes inválido: %j", (...path) => {
+    expect(isAllowedEncounterWorkspaceRequest("GET", path)).toBe(false);
+    expect(() => validateProxyPath(path, new URLSearchParams(), "GET")).toThrow();
+  });
+
   it.each([
     [[...base]],
     [[...base, "capabilities"]],

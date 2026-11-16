@@ -21,10 +21,11 @@ export function isAllowedEncounterWorkspaceRequest(
   const isSummary = tail.length === 0;
   const isCapabilities = tail.length === 1 && tail[0] === "capabilities";
   const isCandidates = tail.length === 1 && tail[0] === "encontristas";
+  const isTeams = tail.length === 1 && tail[0] === "equipes";
   const isRegistrationConfig = tail.length === 2
     && tail[0] === "inscricoes"
     && tail[1] === "configuracao";
-  if (!isSummary && !isCapabilities && !isCandidates && !isRegistrationConfig) return false;
+  if (!isSummary && !isCapabilities && !isCandidates && !isTeams && !isRegistrationConfig) return false;
   if (isRegistrationConfig && !["GET", "POST", "PATCH"].includes(method)) return false;
   if (!isRegistrationConfig && method !== "GET") return false;
   if (!isCandidates && searchParams.size > 0) return false;
