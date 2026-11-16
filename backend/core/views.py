@@ -143,6 +143,7 @@ from .permissions import (
     pode_regularizar_pre_encontro,
     pode_resolver_vaga_pre_encontro,
     pode_consultar_encontristas_workspace,
+    pode_acessar_equipes_workspace,
     pode_consultar_resumo_workspace_encontro,
     pode_consultar_configuracao_encontristas,
     pode_gerir_configuracao_encontristas,
@@ -214,6 +215,37 @@ class EncontroWorkspaceSummaryAPIView(APIView):
             encontro=encontro,
         )
         return Response(EncontroWorkspaceSummarySerializer(resultado).data)
+
+
+class EncontroWorkspaceEquipesAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, encontro_id):
+        encontro = get_object_or_404(Encontro, pk=encontro_id)
+        _exigir_policy(pode_acessar_equipes_workspace(request.user, encontro))
+        equipes = (
+            EquipeEncontro.objects.filter(encontro=encontro)
+            .select_related('encontro', 'template_origem')
+            .prefetch_related('roles__trabalhos__pessoa')
+            .order_by('ordem', 'id')
+        )
+        dados = EquipeEncontroSerializer(equipes, many=True).data
+        if not (
+            request.user.is_superuser
+            or user_has_any_role(request.user, *FICHAS_MANAGEMENT_ROLES)
+        ):
+            visiveis = {
+                TrabalhoEncontro.Status.ALOCADO,
+                TrabalhoEncontro.Status.TRABALHOU,
+                TrabalhoEncontro.Status.FALTOU,
+            }
+            for equipe in dados:
+                for role in equipe['roles']:
+                    role['trabalhos'] = [
+                        trabalho for trabalho in role['trabalhos']
+                        if trabalho['status'] in visiveis
+                    ]
+        return Response(dados)
 
 
 class EncontroWorkspaceCapabilitiesAPIView(APIView):

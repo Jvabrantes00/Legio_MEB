@@ -44,6 +44,7 @@ from .views import (
     EncontroWorkspaceSummaryAPIView,
     EncontroWorkspaceCapabilitiesAPIView,
     EncontroWorkspaceEncontristasAPIView,
+    EncontroWorkspaceEquipesAPIView,
     ConfiguracaoInscricoesWorkspaceAPIView,
 )
 from .views import dashboard_stats
@@ -155,6 +156,11 @@ urlpatterns = [
         'encontros/<int:encontro_id>/workspace/encontristas/',
         EncontroWorkspaceEncontristasAPIView.as_view(),
         name='encontro-workspace-encontristas',
+    ),
+    path(
+        'encontros/<int:encontro_id>/workspace/equipes/',
+        EncontroWorkspaceEquipesAPIView.as_view(),
+        name='encontro-workspace-equipes',
     ),
     path(
         'encontros/<int:encontro_id>/workspace/inscricoes/configuracao/',
