@@ -30,7 +30,7 @@ from core.services.trabalhos import (
     preparar_equipes_encontro,
     substituir_trabalho,
 )
-from core.tests.factories import make_encontro
+from core.tests.factories import make_encontro_canonico as make_encontro
 
 
 @skipUnless(connection.vendor == 'postgresql', 'exige PostgreSQL real')

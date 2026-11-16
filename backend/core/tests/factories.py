@@ -33,6 +33,11 @@ def make_encontro(**overrides):
     return Encontro.objects.create(**values)
 
 
+def make_encontro_canonico(**overrides):
+    overrides.setdefault('modelo_equipes', Encontro.ModeloEquipes.CANONICO)
+    return make_encontro(**overrides)
+
+
 def make_evento(**overrides):
     number = next(_sequence)
     values = {

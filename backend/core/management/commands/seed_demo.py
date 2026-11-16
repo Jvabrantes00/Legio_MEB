@@ -749,6 +749,11 @@ def _create_work(person, encounter, role=None, final_status=None):
 
 
 def _create_teams_work_and_mme(people, encounters, proposal_profiles):
+    Encontro.objects.filter(pk__in=[e.pk for e in encounters.values()]).update(
+        modelo_equipes=Encontro.ModeloEquipes.CANONICO,
+    )
+    for encounter in encounters.values():
+        encounter.modelo_equipes = Encontro.ModeloEquipes.CANONICO
     for encounter in (
         encounters['vale'],
         encounters['horizonte'],

@@ -30,7 +30,7 @@ from core.services.trabalhos import (
     alocar_trabalho,
     criar_convite_trabalho,
 )
-from core.tests.factories import make_alpinista, make_encontro
+from core.tests.factories import make_alpinista, make_encontro_canonico as make_encontro
 
 
 class EncounterWorkEligibilityTests(TestCase):

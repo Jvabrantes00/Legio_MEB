@@ -23,6 +23,10 @@ class _MigrationScenario:
         executor.migrate([('core', name)])
         return executor.loader.project_state([('core', name)]).apps
 
+    def restore_leaf(self):
+        executor = MigrationExecutor(connection)
+        executor.migrate(executor.loader.graph.leaf_nodes())
+
     def trigger_names(self):
         if connection.vendor != 'postgresql':
             return set()
@@ -49,7 +53,7 @@ class _MigrationScenario:
         oportunidade = OportunidadeConviteEncontro.objects.create(rodada=rodada, convite=convite, token_digest=sha256(b'migracao').hexdigest(), expira_em=now + timedelta(days=2))
         entrega = EntregaConviteEncontro.objects.create(oportunidade=oportunidade, canal='email')
         outbox = OutboxEntregaConvite.objects.create(oportunidade=oportunidade, segredo_criptografado='registro-de-teste')
-        self.addCleanup(self.migrate, '0052_entrega_integridade')
+        self.addCleanup(self.restore_leaf)
 
         apps_50 = self.migrate('0050_preselecaoencontrista')
         OldEntrega = apps_50.get_model('core', 'EntregaConviteEncontro')
@@ -78,7 +82,7 @@ class _MigrationScenario:
         self.assertFalse(self.function_names())
         self.migrate('0050_preselecaoencontrista')
         self.assertNotIn('core_tentativaentregaconvite', connection.introspection.table_names())
-        self.migrate('0052_entrega_integridade')
+        self.restore_leaf()
 
 
 @skipUnless(connection.vendor == 'sqlite', 'Requer SQLite isolado')

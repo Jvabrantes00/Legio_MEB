@@ -1,6 +1,7 @@
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from django.utils import timezone
+from core.services.modelo_equipes import exigir_canonico
 
 from core.models import (
     ConfiguracaoEncontristasEncontro,
@@ -254,6 +255,9 @@ def criar_convite(
             'Já existe convite com outra inscrição para esta finalidade.'
         )
 
+    if finalidade == ConviteEncontro.Finalidade.TRABALHAR:
+        exigir_canonico(encontro_bloqueado)
+
     try:
         with transaction.atomic():
             return ConviteEncontro.objects.create(
@@ -289,6 +293,9 @@ def responder_convite(convite, *, status):
 
     if convite_bloqueado.status == status:
         return convite_bloqueado
+    if (convite_bloqueado.finalidade == ConviteEncontro.Finalidade.TRABALHAR
+            and status == ConviteEncontro.Status.CONFIRMADO):
+        exigir_canonico(encontro_bloqueado)
     if convite_bloqueado.status != ConviteEncontro.Status.CONVIDADO:
         raise ValidationError('O convite já possui uma resposta definitiva.')
 

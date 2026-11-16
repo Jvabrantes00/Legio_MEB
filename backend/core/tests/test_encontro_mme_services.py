@@ -41,6 +41,7 @@ from core.services.trabalhos import alocar_trabalho, iniciar_trabalho_confirmado
 class PropostaVioleirosServiceTests(TestCase):
     def setUp(self):
         self.encontro = Encontro.objects.create(
+            modelo_equipes=Encontro.ModeloEquipes.CANONICO,
             encontro='Escalada Services MME',
             tipo=Encontro.Tipo.ESCALADA,
             data_referencia=date(2027, 2, 10),
@@ -408,6 +409,7 @@ class PropostaVioleirosConcurrencyTests(TransactionTestCase):
 
     def setUp(self):
         self.encontro = Encontro.objects.create(
+            modelo_equipes=Encontro.ModeloEquipes.CANONICO,
             encontro='Escalada Concorrência MME',
             tipo=Encontro.Tipo.ESCALADA,
             data_referencia=date(2027, 3, 10),

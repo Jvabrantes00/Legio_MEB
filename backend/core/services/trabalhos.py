@@ -13,6 +13,7 @@ from core.models import (
     TrabalhoEncontro,
 )
 from core.services.participacoes import criar_convite
+from core.services.modelo_equipes import exigir_canonico
 from core.services.elegibilidade_trabalho import (
     AvisosElegibilidadePendentes,
     BloqueioElegibilidadeTrabalho,
@@ -178,6 +179,7 @@ def _snapshots_do_encontro(encontro):
 @transaction.atomic
 def preparar_equipes_encontro(encontro):
     encontro_bloqueado = _bloquear_encontro(encontro)
+    exigir_canonico(encontro_bloqueado)
     snapshots_existentes = list(
         EquipeEncontro.objects
         .select_for_update()
@@ -245,6 +247,16 @@ def criar_convite_trabalho(
 ):
     encontro_bloqueado = _bloquear_encontro(encontro)
     pessoa_bloqueada = _bloquear_pessoa(pessoa)
+    if encontro_bloqueado.modelo_equipes != Encontro.ModeloEquipes.CANONICO:
+        convite_existente = ConviteEncontro.objects.select_for_update().filter(
+            encontro=encontro_bloqueado, pessoa=pessoa_bloqueada,
+            finalidade=ConviteEncontro.Finalidade.TRABALHAR,
+        ).first()
+        if convite_existente is None or (
+            role_proposta is not None
+            and convite_existente.role_trabalho_proposta_id != role_proposta.pk
+        ):
+            exigir_canonico(encontro_bloqueado)
     avaliacao = avaliar_elegibilidade_trabalho(
         pessoa_bloqueada,
         encontro_bloqueado,
@@ -281,6 +293,7 @@ def criar_convite_trabalho(
 @transaction.atomic
 def iniciar_trabalho_confirmado(convite, *, confirmar_avisos=False):
     encontro_bloqueado = _bloquear_encontro(convite.encontro)
+    exigir_canonico(encontro_bloqueado)
     pessoa_bloqueada = _bloquear_pessoa(convite.pessoa)
     convite_bloqueado = _bloquear_convite(convite)
     _validar_convite_do_trabalho(
@@ -365,6 +378,7 @@ def alocar_trabalho(
     trabalho_bloqueado, _, encontro_bloqueado, _ = (
         _bloquear_contexto_trabalho(trabalho)
     )
+    exigir_canonico(encontro_bloqueado)
     role_bloqueada = _bloquear_role(role_equipe)
     _validar_role_do_encontro(role_bloqueada, encontro_bloqueado)
 
@@ -406,7 +420,8 @@ def alocar_trabalho(
 
 @transaction.atomic
 def desalocar_trabalho(trabalho):
-    trabalho_bloqueado, _, _, _ = _bloquear_contexto_trabalho(trabalho)
+    trabalho_bloqueado, _, encontro, _ = _bloquear_contexto_trabalho(trabalho)
+    exigir_canonico(encontro)
     if trabalho_bloqueado.status == TrabalhoEncontro.Status.AGUARDANDO_ALOCACAO:
         return trabalho_bloqueado
     if trabalho_bloqueado.status != TrabalhoEncontro.Status.ALOCADO:
@@ -433,7 +448,8 @@ def desalocar_trabalho(trabalho):
 
 @transaction.atomic
 def retirar_trabalho(trabalho):
-    trabalho_bloqueado, _, _, _ = _bloquear_contexto_trabalho(trabalho)
+    trabalho_bloqueado, _, encontro, _ = _bloquear_contexto_trabalho(trabalho)
+    exigir_canonico(encontro)
     if trabalho_bloqueado.status == TrabalhoEncontro.Status.RETIRADO:
         return trabalho_bloqueado
     if trabalho_bloqueado.status in {
@@ -463,7 +479,8 @@ def registrar_resultado_trabalho(trabalho, *, status, momento=None):
     }:
         raise ValidationError('Resultado de trabalho inválido.')
 
-    trabalho_bloqueado, _, _, _ = _bloquear_contexto_trabalho(trabalho)
+    trabalho_bloqueado, _, encontro, _ = _bloquear_contexto_trabalho(trabalho)
+    exigir_canonico(encontro)
     if trabalho_bloqueado.status == status:
         return trabalho_bloqueado
     if trabalho_bloqueado.status in STATUS_FINAIS:
@@ -512,6 +529,7 @@ def substituir_trabalho(
     except Encontro.DoesNotExist as error:
         raise ValidationError('Encontro não encontrado.') from error
 
+    exigir_canonico(encontro)
     pessoa_ids = sorted({
         trabalho_anterior.pessoa_id,
         trabalho_novo.pessoa_id,

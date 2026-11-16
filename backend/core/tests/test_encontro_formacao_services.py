@@ -46,7 +46,7 @@ from core.services.trabalhos import (
     registrar_resultado_trabalho,
     retirar_trabalho,
 )
-from core.tests.factories import make_encontro
+from core.tests.factories import make_encontro_canonico as make_encontro
 
 
 class EncounterFormationServiceTests(TestCase):

@@ -38,6 +38,7 @@ class PropostaVioleirosApiTests(AuthenticatedAPITestCase):
     def setUp(self):
         super().setUp()
         self.encontro = Encontro.objects.create(
+            modelo_equipes=Encontro.ModeloEquipes.CANONICO,
             encontro='Escalada API MME',
             tipo=Encontro.Tipo.ESCALADA,
             data_referencia=date(2027, 4, 10),

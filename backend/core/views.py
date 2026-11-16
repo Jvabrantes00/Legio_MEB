@@ -123,6 +123,7 @@ from .serializers import (
     WorkspaceCandidatoSummarySerializer,
     ConfiguracaoInscricoesWorkspaceCommandSerializer,
     ConfiguracaoInscricoesWorkspaceSerializer,
+    AtivacaoModeloEquipesSerializer,
     )
 from .permissions import (
     AlpinistaQueryPolicy,
@@ -152,6 +153,7 @@ from .services.reunioes_preparatorias import corrigir_presenca_preparatoria
 from .services import avaliacoes_encontro as avaliacao_services
 from .services import reunioes_preparatorias as reuniao_services
 from .services import trabalhos as trabalho_services
+from .services import modelo_equipes as modelo_equipes_services
 from .services import formacoes as formacao_services
 from .services import propostas_violeiros as proposta_violeiros_services
 from .services import inscricoes_encontro as inscricao_encontro_services
@@ -1305,6 +1307,7 @@ class EncontroViewSet(viewsets.ModelViewSet):
         'efetivar_encontrista': FICHAS_MANAGEMENT_ROLES,
         'remover_encontristas': FICHAS_MANAGEMENT_ROLES,
         'preparar_equipes': FICHAS_MANAGEMENT_ROLES,
+        'modelo_equipes': FULL_ADMIN_ROLES,
     }
 
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
@@ -1331,6 +1334,19 @@ class EncontroViewSet(viewsets.ModelViewSet):
         if self.has_full_encontro_access():
             return queryset
         return queryset.only('id', 'encontro', 'tipo', 'data_referencia')
+
+    @action(detail=True, methods=['get', 'post'], url_path='modelo-equipes')
+    def modelo_equipes(self, request, pk=None):
+        encontro = self.get_object()
+        if request.method == 'GET':
+            return Response(modelo_equipes_services.prontidao(encontro))
+        serializer = AtivacaoModeloEquipesSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        modelo_equipes_services.ativar(
+            encontro, ator=request.user,
+            justificativa=serializer.validated_data['justificativa'],
+        )
+        return Response({'modelo_equipes': Encontro.ModeloEquipes.CANONICO})
 
     @action(detail=True, methods=['post'], url_path='preparar-equipes')
     def preparar_equipes(self, request, pk=None):
@@ -1627,6 +1643,19 @@ class FuncaoEncontroViewSet(AuditedCrudViewSetMixin, viewsets.ModelViewSet):
     pagination_class = None
     audit_module = 'FuncaoEncontro'
 
+    def perform_update(self, serializer):
+        with transaction.atomic():
+            funcao = FuncaoEncontro.objects.select_for_update().get(pk=serializer.instance.pk)
+            novo_tipo = serializer.validated_data.get('tipo', funcao.tipo)
+            if novo_tipo != funcao.tipo:
+                encontros = Encontro.objects.select_for_update().filter(
+                    participacoes__funcao=funcao,
+                ).order_by('pk')
+                if any(e.modelo_equipes == Encontro.ModeloEquipes.CANONICO for e in encontros):
+                    raise modelo_equipes_services.ConflitoModeloEquipes()
+            serializer.instance = funcao
+            super().perform_update(serializer)
+
 class ParticipacaoEncontroViewSet(AuditedCrudViewSetMixin, viewsets.ModelViewSet):
     queryset = ParticipacaoEncontro.objects.select_related('alpinista', 'encontro', 'funcao').all()
     serializer_class = ParticipacaoEncontroSerializer
@@ -1637,6 +1666,45 @@ class ParticipacaoEncontroViewSet(AuditedCrudViewSetMixin, viewsets.ModelViewSet
 
     filter_backends = [DjangoFilterBackend]
     filterset_fields = ['encontro', 'alpinista', 'funcao']  # Permite filtrar por encontro, alpinista e função
+
+    def _salvar_protegido(self, serializer, *, excluir=False):
+        with transaction.atomic():
+            anterior = serializer.instance if serializer is not None else self.get_object()
+            dados = serializer.validated_data if serializer is not None else {}
+            funcao_ids = {dados['funcao'].pk} if 'funcao' in dados else set()
+            encontro_ids = {dados['encontro'].pk} if 'encontro' in dados else set()
+            if anterior is not None:
+                funcao_ids.add(anterior.funcao_id)
+                encontro_ids.add(anterior.encontro_id)
+            funcoes = {f.pk: f for f in FuncaoEncontro.objects.select_for_update().filter(pk__in=funcao_ids).order_by('pk')}
+            encontros = {e.pk: e for e in Encontro.objects.select_for_update().filter(pk__in=encontro_ids).order_by('pk')}
+            if anterior is not None:
+                anterior = ParticipacaoEncontro.objects.select_for_update().get(pk=anterior.pk)
+                if anterior.funcao_id not in funcoes or anterior.encontro_id not in encontros:
+                    raise modelo_equipes_services.ConflitoModeloEquipes()
+                if encontros[anterior.encontro_id].modelo_equipes == Encontro.ModeloEquipes.CANONICO and funcoes[anterior.funcao_id].tipo != 'encontrista':
+                    raise modelo_equipes_services.ConflitoModeloEquipes()
+            encontro = dados.get('encontro', encontros.get(anterior.encontro_id) if anterior else None)
+            funcao = dados.get('funcao', funcoes.get(anterior.funcao_id) if anterior else None)
+            if encontro and funcao and encontros[encontro.pk].modelo_equipes == Encontro.ModeloEquipes.CANONICO and funcoes[funcao.pk].tipo != 'encontrista':
+                raise modelo_equipes_services.ConflitoModeloEquipes()
+            if excluir:
+                super().perform_destroy(anterior)
+            else:
+                serializer.instance = anterior
+                if anterior is None:
+                    super().perform_create(serializer)
+                else:
+                    super().perform_update(serializer)
+
+    def perform_create(self, serializer):
+        self._salvar_protegido(serializer)
+
+    def perform_update(self, serializer):
+        self._salvar_protegido(serializer)
+
+    def perform_destroy(self, instance):
+        self._salvar_protegido(None, excluir=True)
 
 
 class InscricaoEncontroCommandViewSet(

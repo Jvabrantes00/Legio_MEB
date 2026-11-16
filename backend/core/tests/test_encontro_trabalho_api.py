@@ -18,7 +18,7 @@ from core.models import (
 from core.services import participacoes as participacao_services
 from core.services import trabalhos as trabalho_services
 from core.tests.base import AuthenticatedAPITestCase
-from core.tests.factories import make_alpinista, make_encontro
+from core.tests.factories import make_alpinista, make_encontro_canonico as make_encontro
 
 
 class EncounterWorkCommandApiTests(AuthenticatedAPITestCase):

@@ -29,7 +29,7 @@ from core.services.trabalhos import (
     retirar_trabalho,
     substituir_trabalho,
 )
-from core.tests.factories import make_encontro
+from core.tests.factories import make_encontro_canonico as make_encontro
 
 
 def criar_template(

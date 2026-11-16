@@ -55,6 +55,16 @@ class StrictCommandSerializer(serializers.Serializer):
         return super().to_internal_value(data)
 
 
+class AtivacaoModeloEquipesSerializer(StrictCommandSerializer):
+    confirmacao = serializers.BooleanField()
+    justificativa = serializers.CharField(allow_blank=False, trim_whitespace=True)
+
+    def validate_confirmacao(self, value):
+        if not value:
+            raise serializers.ValidationError('Confirmação obrigatória.')
+        return value
+
+
 class WorkspaceCodigoLabelSerializer(serializers.Serializer):
     codigo = serializers.CharField(read_only=True)
     label = serializers.CharField(read_only=True)

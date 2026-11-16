@@ -459,6 +459,10 @@ class FuncaoEncontro(models.Model):
 
     
 class Encontro(models.Model):
+    class ModeloEquipes(models.TextChoices):
+        LEGADO = 'LEGADO', 'Legado'
+        CANONICO = 'CANONICO', 'Canônico'
+
     class Status(models.TextChoices):
         EM_AGENDAMENTO = 'em_agendamento', 'Em Agendamento'
         AGENDADO = 'agendado', 'Agendado'
@@ -476,6 +480,11 @@ class Encontro(models.Model):
 
     STATUS_CHOICES = Status.choices
     TIPO_ENCONTRO_CHOICES = Tipo.choices
+
+    modelo_equipes = models.CharField(
+        max_length=8, choices=ModeloEquipes.choices,
+        default=ModeloEquipes.LEGADO, db_default=ModeloEquipes.LEGADO,
+    )
 
     encontro = models.CharField(
         max_length=255,
@@ -504,6 +513,14 @@ class Encontro(models.Model):
         blank=True,
         related_name='encontro_participacao',
     )
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(modelo_equipes__in=('LEGADO', 'CANONICO')),
+                name='encontro_modelo_equipes_valido',
+            ),
+        ]
 
     def __str__(self):
         return self.encontro
