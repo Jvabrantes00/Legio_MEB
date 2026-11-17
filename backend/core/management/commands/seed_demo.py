@@ -173,9 +173,12 @@ DEMO_REGISTRATION_OPEN_DAYS_BEFORE = 210
 DEMO_REGISTRATION_CLOSE_DAYS_BEFORE = 14
 
 DEMO_TEMPLATE_SPECS = (
-    ('demo-coordenacao-geral', '[DEMO] Coordenação Geral'),
+    ('coordenacao-geral', '[DEMO] Coordenação Geral'),
     ('demo-acolhida', '[DEMO] Acolhida'),
     ('violeiros', '[DEMO] Violeiros'),
+)
+LEGACY_DEMO_TEMPLATE_SPECS = (
+    ('demo-coordenacao-geral', '[DEMO] Coordenação Geral'),
 )
 DEMO_TEMPLATE_CODES = tuple(code for code, _ in DEMO_TEMPLATE_SPECS)
 DEMO_ROLE_CODES = (
@@ -209,7 +212,7 @@ def _demo_encounter_filter():
 def _demo_template_filter():
     query = Q(pk__in=[])
     for encounter_type in (Encontro.Tipo.ESCALADA, Encontro.Tipo.ESPPA):
-        for code, name in DEMO_TEMPLATE_SPECS:
+        for code, name in DEMO_TEMPLATE_SPECS + LEGACY_DEMO_TEMPLATE_SPECS:
             query |= Q(
                 tipo_encontro=encounter_type,
                 codigo=code,
@@ -238,7 +241,9 @@ def _delete_demo_dataset():
     template_scope = TemplateEquipeEncontro.objects.filter(
         tipo_encontro__in=(Encontro.Tipo.ESCALADA, Encontro.Tipo.ESPPA),
         codigo__in=DEMO_TEMPLATE_CODES,
-    )
+    ).exclude(
+        Q(codigo='coordenacao-geral') & ~Q(nome='[DEMO] Coordenação Geral')
+    ) | TemplateEquipeEncontro.objects.filter(_demo_template_filter())
 
     PalestranteSessao.objects.filter(
         sessao_formativa__encontro__in=encounters
@@ -661,7 +666,7 @@ def _prepare_mme_profiles(people):
 def _create_team_templates():
     specifications = (
         (
-            'demo-coordenacao-geral',
+            'coordenacao-geral',
             '[DEMO] Coordenação Geral',
             1,
             (
@@ -755,6 +760,7 @@ def _create_teams_work_and_mme(people, encounters, proposal_profiles):
     for encounter in encounters.values():
         encounter.modelo_equipes = Encontro.ModeloEquipes.CANONICO
     for encounter in (
+        encounters['serra'],
         encounters['vale'],
         encounters['horizonte'],
         encounters['caminho'],
@@ -782,13 +788,13 @@ def _create_teams_work_and_mme(people, encounters, proposal_profiles):
     finalized_work_specs = (
         (
             people[0],
-            'demo-coordenacao-geral',
+            'coordenacao-geral',
             'demo-coordenador-geral',
             TrabalhoEncontro.Status.TRABALHOU,
         ),
         (
             people[1],
-            'demo-coordenacao-geral',
+            'coordenacao-geral',
             'demo-apoio-coordenacao',
             TrabalhoEncontro.Status.TRABALHOU,
         ),
@@ -818,7 +824,7 @@ def _create_teams_work_and_mme(people, encounters, proposal_profiles):
         ),
         (
             people[4],
-            'demo-coordenacao-geral',
+            'coordenacao-geral',
             'demo-apoio-coordenacao',
             TrabalhoEncontro.Status.FALTOU,
         ),
@@ -851,12 +857,17 @@ def _create_teams_work_and_mme(people, encounters, proposal_profiles):
             encounters['vale'],
             _role(
                 encounters['vale'],
-                'demo-coordenacao-geral',
+                'coordenacao-geral',
                 'demo-coordenador-geral',
             ),
         ),
         _create_work(people[6], encounters['vale']),
     ]
+    _create_work(
+        people[9],
+        encounters['vale'],
+        _role(encounters['vale'], 'coordenacao-geral', 'demo-apoio-coordenacao'),
+    )
     criar_convite_trabalho(
         pessoa=people[7],
         encontro=encounters['vale'],
@@ -868,7 +879,7 @@ def _create_teams_work_and_mme(people, encounters, proposal_profiles):
         encounters['horizonte'],
         _role(
             encounters['horizonte'],
-            'demo-coordenacao-geral',
+            'coordenacao-geral',
             'demo-coordenador-geral',
         ),
     )
@@ -1010,6 +1021,14 @@ class Command(BaseCommand):
             if reset_only:
                 self.stdout.write(self.style.SUCCESS('Dataset demo removido.'))
                 return
+            for encounter_type in (Encontro.Tipo.ESCALADA, Encontro.Tipo.ESPPA):
+                if TemplateEquipeEncontro.objects.filter(
+                    tipo_encontro=encounter_type, codigo='coordenacao-geral',
+                ).exclude(nome='[DEMO] Coordenação Geral').exists():
+                    raise CommandError(
+                        f'Há template real conflitante de Coordenação Geral para '
+                        f'{encounter_type}; nada foi alterado.'
+                    )
             result = _seed_dataset(password)
 
         encounter_ids = [item.pk for item in result['encounters'].values()]

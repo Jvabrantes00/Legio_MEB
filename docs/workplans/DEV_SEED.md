@@ -39,7 +39,11 @@ O reset usa allowlists exatas de usernames, pares nome/e-mail das Pessoas,
 nomes dos Grupos e pares título/tipo dos Encontros. Templates criados pelo seed
 só são removidos quando código e nome demo coincidem; um template canônico
 preexistente de Violeiros é reutilizado e preservado. Referências externas
-protegidas fazem a transação falhar em vez de ampliar a exclusão.
+protegidas fazem a transação falhar em vez de ampliar a exclusão. A limpeza
+inclui o código legado `demo-coordenacao-geral` somente quando o nome também é
+`[DEMO] Coordenação Geral`. Na criação, um template `coordenacao-geral` com
+nome diferente desse, em qualquer dos dois tipos, causa erro fechado e reverte
+toda a transação, preservando o template real e seus papéis.
 
 ## Contas
 
@@ -51,6 +55,12 @@ São criadas as contas `demo.suporte`, `demo.diretoria`, `demo.fichas`,
 técnico. As contas não técnicas têm `VinculoUsuarioPessoa`. A Pessoa ligada a
 `demo.sem_papel` não recebe trabalho ou função contextual privilegiada, para
 preservar esse usuário como cenário de default deny.
+
+Em Vale Verde, `demo.secretaria` atua como coordenador geral e
+`demo.comunicacao` como apoio alocado na equipe de código exato
+`coordenacao-geral`. Ambas têm acesso contextual a Equipes nesse Encontro;
+`demo.sem_papel` permanece negado. A conta de Comunicação não recebe trabalho
+nos outros três Encontros.
 
 ## Dataset
 
@@ -71,8 +81,8 @@ preservar esse usuário como cenário de default deny.
   estados derivados cobrem disponibilidade, aproveitamento, outra equipe,
   indisponibilidade MME e histórico.
 
-Executar novamente substitui apenas o dataset reconhecido e o recria, evitando
-duplicatas e mantendo o resultado determinístico.
+A reexecução tenta substituir apenas o dataset reconhecido e recriá-lo; consulte
+a limitação conhecida de auditoria abaixo.
 
 ### Configuração demonstrativa de inscrições
 
@@ -97,9 +107,8 @@ automaticamente pelo model e não é definido pelo seed. A reconciliação de um
 configuração existente preserva seu registro e seu `public_id`.
 
 A reexecução do comando completo tem uma semântica mais ampla: primeiro remove
-o dataset reconhecido pelas allowlists e depois o recria. Ela converge para as
-mesmas quantidades e valores demonstrativos sem duplicatas, mas não garante a
-preservação de PKs ou `public_id` entre recriações completas.
+o dataset reconhecido pelas allowlists e depois o recria. Quando a exclusão é permitida, ela recria os valores demonstrativos sem
+preservar necessariamente PKs ou `public_id` entre recriações completas.
 
 > **Limite dos valores demo.** Os valores descritos pertencem exclusivamente
 > ao dataset de demonstração. Não constituem regras institucionais gerais nem
@@ -121,3 +130,12 @@ integralmente.
 - Nenhum AVC ou Acampamento é criado nesta versão.
 - O dataset é apoio futuro à revisão manual de maturidade; este bloco não
   inicia a R.3.
+
+### Limitação conhecida — auditoria PostgreSQL
+
+No PostgreSQL, eventos de auditoria protegidos pelo trigger imutável da
+migration 0052 fazem a recriação e o `--reset` falharem. A idempotência não
+está atendida nesse cenário e permanece pendente para o pacote R26-B. O comando
+é restrito a desenvolvimento (`DEBUG=True` e `SIA_ENVIRONMENT=development`) e
+jamais deve ser usado no `sia_dev`. A adição de papéis `demo-*` a um template
+real preexistente de Violeiros permanece como dívida técnica conhecida.

@@ -26,6 +26,7 @@ from core.models import (
     ConfiguracaoEncontristasEncontro,
     ConviteEncontro,
     Encontro,
+    EquipeEncontro,
     Grupo,
     ItemPropostaVioleiros,
     ParticipacaoEncontro,
@@ -34,11 +35,13 @@ from core.models import (
     PropostaVioleiros,
     ReuniaoPreparatoriaEncontro,
     TemplateEquipeEncontro,
+    TemplateRoleEquipe,
     TrabalhoEncontro,
 )
 from core.permissions import pode_registrar_presenca_preparatoria
 from core.roles import SiaRole
 from core.serializers import AlpinistaCompletoSerializer
+from core.services.encontro_workspace import projetar_capabilities
 
 
 DEMO_ENV = {'SIA_ENVIRONMENT': 'development'}
@@ -248,6 +251,121 @@ class SeedDemoCommandTests(TestCase):
         self.assertIn('Pessoas: 40', output)
         self.assertIn('Contas demo: 12', output)
         self.assertNotIn(DEMO_PASSWORD, output)
+
+    def test_contextual_coordination_and_team_snapshots(self):
+        self.run_seed()
+        encounters = list(Encontro.objects.filter(
+            encontro__in=[title for title, _ in DEMO_ENCOUNTERS],
+        ))
+        communication = User.objects.get(username='demo.comunicacao')
+        no_role = User.objects.get(username='demo.sem_papel')
+        secretary = User.objects.get(username='demo.secretaria')
+        vale = next(e for e in encounters if 'Vale Verde' in e.encontro)
+        for encounter in encounters:
+            with self.subTest(encounter=encounter.encontro):
+                self.assertEqual(
+                    projetar_capabilities(usuario=communication, encontro=encounter)['acessar_equipes'],
+                    encounter.pk == vale.pk,
+                )
+                self.assertFalse(projetar_capabilities(
+                    usuario=no_role, encontro=encounter,
+                )['acessar_equipes'])
+                self.assertEqual(EquipeEncontro.objects.filter(
+                    encontro=encounter, codigo='coordenacao-geral',
+                ).count(), 1)
+        self.assertEqual(len(encounters), 4)
+        self.assertTrue(projetar_capabilities(
+            usuario=secretary, encontro=vale,
+        )['acessar_equipes'])
+        work = TrabalhoEncontro.objects.get(pessoa=communication.vinculo_pessoa.pessoa)
+        self.assertEqual(work.encontro, vale)
+        self.assertEqual(work.status, TrabalhoEncontro.Status.ALOCADO)
+        self.assertEqual(work.role_equipe.codigo, 'demo-apoio-coordenacao')
+        self.assertEqual(work.role_equipe.quantidade_estrutural, 4)
+        self.assertFalse(TrabalhoEncontro.objects.filter(
+            pessoa=no_role.vinculo_pessoa.pessoa,
+        ).exists())
+
+    def _assert_real_conflict(self, encounter_type):
+        template = TemplateEquipeEncontro.objects.create(
+            tipo_encontro=encounter_type, codigo='coordenacao-geral',
+            nome='Coordenação real', ordem=7,
+        )
+        TemplateRoleEquipe.objects.create(
+            template_equipe=template, codigo='papel-real', nome='Papel real',
+            quantidade_estrutural=3,
+        )
+        before = TemplateEquipeEncontro.objects.filter(pk=template.pk).values().get()
+        roles_before = list(template.roles.values())
+        with self.assertRaisesMessage(CommandError, str(encounter_type)):
+            self.run_seed()
+        self.assertEqual(TemplateEquipeEncontro.objects.filter(pk=template.pk).values().get(), before)
+        self.assertEqual(list(template.roles.values()), roles_before)
+        self.assertFalse(Pessoa.objects.filter(nome__in=DEMO_PERSON_NAMES).exists())
+        self.assertFalse(Encontro.objects.filter(
+            encontro__in=[title for title, _ in DEMO_ENCOUNTERS],
+        ).exists())
+        self.assertFalse(User.objects.filter(
+            username__in=[username for username, _ in DEMO_ACCOUNTS],
+        ).exists())
+        self.assertFalse(TemplateEquipeEncontro.objects.filter(nome__startswith='[DEMO]').exists())
+
+    def test_real_escalada_template_conflict_fails_closed(self):
+        self._assert_real_conflict(Encontro.Tipo.ESCALADA)
+
+    def test_real_esppa_template_conflict_fails_closed(self):
+        self._assert_real_conflict(Encontro.Tipo.ESPPA)
+
+    def test_conflict_rolls_back_existing_demo_deletion(self):
+        self.run_seed()
+        template = TemplateEquipeEncontro.objects.get(
+            tipo_encontro=Encontro.Tipo.ESPPA, codigo='coordenacao-geral',
+        )
+        template.nome = 'Coordenação real'
+        template.save(update_fields=['nome'])
+        before_people = list(Pessoa.objects.filter(nome__in=DEMO_PERSON_NAMES).order_by('pk').values())
+        before_encounters = list(Encontro.objects.filter(
+            encontro__in=[title for title, _ in DEMO_ENCOUNTERS],
+        ).order_by('pk').values())
+        before_users = list(User.objects.filter(
+            username__in=[username for username, _ in DEMO_ACCOUNTS],
+        ).order_by('pk').values())
+        before_templates = list(TemplateEquipeEncontro.objects.order_by('pk').values())
+        before_roles = list(TemplateRoleEquipe.objects.order_by('pk').values())
+        with self.assertRaisesMessage(CommandError, 'template real conflitante'):
+            self.run_seed()
+        self.assertEqual(list(Pessoa.objects.filter(nome__in=DEMO_PERSON_NAMES).order_by('pk').values()), before_people)
+        self.assertEqual(list(Encontro.objects.filter(
+            encontro__in=[title for title, _ in DEMO_ENCOUNTERS],
+        ).order_by('pk').values()), before_encounters)
+        self.assertEqual(list(User.objects.filter(
+            username__in=[username for username, _ in DEMO_ACCOUNTS],
+        ).order_by('pk').values()), before_users)
+        self.assertEqual(list(TemplateEquipeEncontro.objects.order_by('pk').values()), before_templates)
+        self.assertEqual(list(TemplateRoleEquipe.objects.order_by('pk').values()), before_roles)
+
+    def test_reset_removes_only_demo_legacy_template(self):
+        legacy = TemplateEquipeEncontro.objects.create(
+            tipo_encontro=Encontro.Tipo.ESCALADA, codigo='demo-coordenacao-geral',
+            nome='[DEMO] Coordenação Geral',
+        )
+        TemplateRoleEquipe.objects.create(
+            template_equipe=legacy, codigo='demo-apoio-coordenacao', nome='Apoio',
+        )
+        real = TemplateEquipeEncontro.objects.create(
+            tipo_encontro=Encontro.Tipo.ESPPA, codigo='demo-coordenacao-geral',
+            nome='Coordenação real legada',
+        )
+        TemplateRoleEquipe.objects.create(
+            template_equipe=real, codigo='papel-real', nome='Papel real',
+        )
+        before = TemplateEquipeEncontro.objects.filter(pk=real.pk).values().get()
+        roles_before = list(real.roles.values())
+        self.run_seed()
+        self.run_reset()
+        self.assertFalse(TemplateEquipeEncontro.objects.filter(pk=legacy.pk).exists())
+        self.assertEqual(TemplateEquipeEncontro.objects.filter(pk=real.pk).values().get(), before)
+        self.assertEqual(list(real.roles.values()), roles_before)
 
     def test_second_execution_replaces_dataset_without_duplication(self):
         self.run_seed()
