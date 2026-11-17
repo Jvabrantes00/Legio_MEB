@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ReactNode } from "react";
@@ -157,9 +157,27 @@ describe("integração de Encontristas no Workspace", () => {
     const user = userEvent.setup();
     const view = render(<DetalhesEncontro />);
     const legacy = await screen.findByText("Montagem das Equipes");
-    expect(screen.getByRole("button", { name: "Matriz legada" }).getAttribute("aria-pressed")).toBe("true");
+    const group = screen.getByRole("group", { name: "Visão de equipes" });
+    const legacyButton = within(group).getByRole("button", { name: "Matriz legada" });
+    const canonicalButton = within(group).getByRole("button", { name: "Visão canônica" });
+    expect(group.classList.contains("flex-wrap")).toBe(true);
+    expect(group.classList.contains("gap-2")).toBe(true);
+    for (const button of [legacyButton, canonicalButton]) {
+      expect(button.classList.contains("focus-visible:ring-2")).toBe(true);
+      expect(button.classList.contains("focus-visible:ring-offset-2")).toBe(true);
+      expect(button.classList.contains("focus-visible:ring-gray-800")).toBe(true);
+    }
+    const expectSelection = (active: HTMLElement, inactive: HTMLElement) => {
+      expect(active.getAttribute("aria-pressed")).toBe("true");
+      expect(inactive.getAttribute("aria-pressed")).toBe("false");
+      for (const name of ["bg-gray-800", "text-white"]) expect(active.classList.contains(name)).toBe(true);
+      for (const name of ["bg-gray-100", "text-gray-600", "hover:bg-gray-200"]) expect(inactive.classList.contains(name)).toBe(true);
+    };
+    expectSelection(legacyButton, canonicalButton);
+    expect(screen.queryByText("Equipes ainda não preparadas")).toBeNull();
     expect(mockedFetch.mock.calls.some(([path]) => String(path).includes("workspace/equipes/"))).toBe(false);
-    await user.click(screen.getByRole("button", { name: "Visão canônica" }));
+    await user.click(canonicalButton);
+    expectSelection(canonicalButton, legacyButton);
     expect(legacy.closest("[hidden]")).toBeTruthy();
     expect(screen.queryByRole("heading", { name: "Montagem das Equipes" })).toBeNull();
     expect(await screen.findByText("Equipes ainda não preparadas")).toBeTruthy();

@@ -395,9 +395,9 @@ function ManagedEncounterDetails({ preCapabilities, preCapabilitiesError, onRelo
             )}
             renderTeam={(capabilities, equipes, resumoErro) => (
                 <>
-                    <div role="group" aria-label="Visão de equipes">
-                        <button type="button" aria-pressed={visaoEfetiva === "legada"} onClick={() => setVisaoEquipe({ encontroId, visao: "legada" })}>Matriz legada</button>
-                        <button type="button" aria-pressed={visaoEfetiva === "canonica"} onClick={() => setVisaoEquipe({ encontroId, visao: "canonica" })}>Visão canônica</button>
+                    <div role="group" aria-label="Visão de equipes" className="flex flex-wrap gap-2 mb-4">
+                        <button type="button" aria-pressed={visaoEfetiva === "legada"} onClick={() => setVisaoEquipe({ encontroId, visao: "legada" })} className={`px-4 py-2 rounded-lg font-bold transition-colors shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-gray-800 ${visaoEfetiva === "legada" ? "bg-gray-800 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}>Matriz legada</button>
+                        <button type="button" aria-pressed={visaoEfetiva === "canonica"} onClick={() => setVisaoEquipe({ encontroId, visao: "canonica" })} className={`px-4 py-2 rounded-lg font-bold transition-colors shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-gray-800 ${visaoEfetiva === "canonica" ? "bg-gray-800 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}>Visão canônica</button>
                     </div>
                     {visaoEfetiva === "canonica" && <EncounterTeamPanel key={encontroId} encontroId={Number(encontroId)} capabilities={capabilities} equipes={equipes} resumoErro={resumoErro} />}
                     <div hidden={visaoEfetiva === "canonica"}>
