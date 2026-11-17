@@ -94,9 +94,9 @@ function EncounterSummaryDetails({ preCapabilities, preCapabilitiesError, onRelo
             renderPreEncounter={() => (
                 <PreEncounterCheckin encontroId={encontroId} initialCapabilities={preCapabilities} capabilitiesError={preCapabilitiesError} onReloadCapabilities={onReloadPreCapabilities} />
             )}
-            renderTeam={(capabilities, equipes) => equipes ? (
-                <EncounterTeamPanel encontroId={Number(encontroId)} capabilities={capabilities} equipes={equipes} />
-            ) : <p>Resumo de equipes indisponível.</p>}
+            renderTeam={(capabilities, equipes, resumoErro) => (
+                <EncounterTeamPanel key={encontroId} encontroId={Number(encontroId)} capabilities={capabilities} equipes={equipes} resumoErro={resumoErro} />
+            )}
         />
     );
 }
@@ -106,6 +106,8 @@ function ManagedEncounterDetails({ preCapabilities, preCapabilitiesError, onRelo
     const encontroId = params.id;
 
     const [abaAtiva, setAbaAtiva] = useState<EncounterWorkspaceTab>("visao-geral");
+    const [visaoEquipe, setVisaoEquipe] = useState<{ encontroId: string; visao: "legada" | "canonica" }>({ encontroId, visao: "legada" });
+    const visaoEfetiva = visaoEquipe.encontroId === encontroId ? visaoEquipe.visao : "legada";
 
     const [modoLista, setModoLista] = useState<"pendentes" | "confirmados">("pendentes");
 
@@ -391,7 +393,14 @@ function ManagedEncounterDetails({ preCapabilities, preCapabilitiesError, onRelo
             renderPreEncounter={() => (
                 <PreEncounterCheckin encontroId={encontroId} initialCapabilities={preCapabilities} capabilitiesError={preCapabilitiesError} onReloadCapabilities={onReloadPreCapabilities} />
             )}
-            renderTeam={() => (
+            renderTeam={(capabilities, equipes, resumoErro) => (
+                <>
+                    <div role="group" aria-label="Visão de equipes">
+                        <button type="button" aria-pressed={visaoEfetiva === "legada"} onClick={() => setVisaoEquipe({ encontroId, visao: "legada" })}>Matriz legada</button>
+                        <button type="button" aria-pressed={visaoEfetiva === "canonica"} onClick={() => setVisaoEquipe({ encontroId, visao: "canonica" })}>Visão canônica</button>
+                    </div>
+                    {visaoEfetiva === "canonica" && <EncounterTeamPanel key={encontroId} encontroId={Number(encontroId)} capabilities={capabilities} equipes={equipes} resumoErro={resumoErro} />}
+                    <div hidden={visaoEfetiva === "canonica"}>
                 <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 min-h-[400px]">
                     <div className="animate-in fade-in duration-300 relative">
                         
@@ -558,6 +567,8 @@ function ManagedEncounterDetails({ preCapabilities, preCapabilitiesError, onRelo
                         )}
                     </div>
                 </div>
+                    </div>
+                </>
             )}
             renderEncontristas={(workspaceCapabilities) => (
                 <div className="space-y-6">

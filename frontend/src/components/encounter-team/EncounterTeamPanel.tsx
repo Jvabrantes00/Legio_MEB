@@ -6,13 +6,13 @@ import type { EncounterWorkspaceCapabilities, EncounterWorkspaceSummary } from "
 import { errorMessage, readApiError } from "../../lib/form-api-error";
 import { siaFetch } from "../../lib/sia-api";
 
-export function EncounterTeamPanel({ encontroId, capabilities, equipes }: { encontroId: number; capabilities: EncounterWorkspaceCapabilities | null | undefined; equipes: Pick<EncounterWorkspaceSummary["equipes"], "modelo_equipes" | "quantidade_equipes"> }) {
+export function EncounterTeamPanel({ encontroId, capabilities, equipes, resumoErro }: { encontroId: number; capabilities: EncounterWorkspaceCapabilities | null | undefined; equipes: Pick<EncounterWorkspaceSummary["equipes"], "modelo_equipes" | "quantidade_equipes"> | null; resumoErro?: string | null }) {
   const allowed = capabilities?.acessar_equipes === true && ["consultar_resumo", "consultar_encontristas", "consultar_contato", "acessar_pre_encontro", "acessar_equipes", "acessar_formacao", "acessar_agenda", "consultar_inscricoes", "configurar_inscricoes"].every((key) => typeof capabilities[key as keyof EncounterWorkspaceCapabilities] === "boolean");
   const [retry, setRetry] = useState(0);
   const [result, setResult] = useState<{ key: object; data: EncounterTeam[] | null; error: string | null } | null>(null);
   const requestId = useRef(0);
-  const shouldLoad = allowed && (equipes.modelo_equipes === "CANONICO" || equipes.quantidade_equipes > 0);
-  const key = useMemo(() => ({ capabilities, encontroId, retry, modelo: equipes.modelo_equipes, quantidade: equipes.quantidade_equipes }), [capabilities, encontroId, retry, equipes.modelo_equipes, equipes.quantidade_equipes]);
+  const shouldLoad = allowed && equipes !== null && (equipes.modelo_equipes === "CANONICO" || equipes.quantidade_equipes > 0);
+  const key = useMemo(() => ({ capabilities, encontroId, retry, modelo: equipes?.modelo_equipes, quantidade: equipes?.quantidade_equipes }), [capabilities, encontroId, retry, equipes?.modelo_equipes, equipes?.quantidade_equipes]);
   useEffect(() => {
     const current = ++requestId.current;
     if (!shouldLoad) return;
@@ -33,6 +33,7 @@ export function EncounterTeamPanel({ encontroId, capabilities, equipes }: { enco
   const current = shouldLoad && result?.key === key ? result : null;
   return <section aria-label="Equipes" className="space-y-4">
     <h2 className="text-2xl font-bold">Equipes</h2>
+    {!equipes ? resumoErro ? <p role="alert">Resumo de equipes indisponível.</p> : <p role="status">Carregando resumo de equipes...</p> : <>
     {equipes.modelo_equipes === "LEGADO" ? <p>O modelo canônico de Equipes não está ativo neste Encontro (modelo legado).</p> : <p>Visão canônica somente leitura. Não substitui a montagem de equipes.</p>}
     {allowed && equipes.modelo_equipes === "LEGADO" && equipes.quantidade_equipes > 0 ? <p>Canônicos preexistentes — não ativos no modelo LEGADO</p> : null}
     {!allowed ? <p>A consulta de equipes não está disponível neste contexto.</p> : !shouldLoad ? null : !current ? <p role="status">Carregando equipes...</p> : current.error ? <div role="alert"><p>{current.error}</p><button type="button" onClick={() => setRetry((value) => value + 1)}>Tentar novamente</button></div> : current.data?.length === 0 ? equipes.modelo_equipes === "CANONICO" ? <p>Equipes ainda não preparadas</p> : null : current.data?.slice().sort((a, b) => a.ordem - b.ordem).map((team) => <article key={team.id} className="rounded-xl border p-4">
@@ -41,5 +42,6 @@ export function EncounterTeamPanel({ encontroId, capabilities, equipes }: { enco
       {([["Capacidade", team.capacidade], ["Composição", team.composicao]] as const).map(([label, assessment]) => <div key={label}><p>{label}: {assessment.resultado}</p><ul>{assessment.motivos.map((reason, index) => <li key={index}>{reason.mensagem}</li>)}</ul></div>)}
       {team.roles.slice().sort((a, b) => a.ordem - b.ordem).map((role) => <div key={role.id}><h4 className="font-semibold">{role.nome}</h4><p>Vagas estruturais: {role.quantidade_estrutural ?? "não definida"}</p><ul>{role.trabalhos.map((person) => <li key={person.id}>{person.pessoa_nome} — {person.status}</li>)}</ul></div>)}
     </article>)}
+    </>}
   </section>;
 }

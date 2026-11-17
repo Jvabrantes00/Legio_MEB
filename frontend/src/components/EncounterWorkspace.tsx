@@ -33,7 +33,7 @@ type EncounterWorkspaceProps = {
   onTabChange: (tab: EncounterWorkspaceTab) => void;
   renderEncontristas?: (capabilities: EncounterWorkspaceCapabilities) => ReactNode;
   renderPreEncounter?: () => ReactNode;
-  renderTeam?: (capabilities: EncounterWorkspaceCapabilities, equipes: EncounterWorkspaceSummary["equipes"] | null) => ReactNode;
+  renderTeam?: (capabilities: EncounterWorkspaceCapabilities, equipes: EncounterWorkspaceSummary["equipes"] | null, resumoErro: string | null) => ReactNode;
 };
 
 type WorkspaceTabDefinition = {
@@ -316,7 +316,7 @@ export function EncounterWorkspace({
               : <p className="rounded-xl border bg-white p-6 text-slate-500">Visão geral indisponível.</p>
         ) : activeTab === "encontristas" ? renderEncontristas?.(capabilities)
           : activeTab === "pre-encontro" ? renderPreEncounter?.()
-            : activeTab === "equipe" && capabilities.acessar_equipes ? renderTeam?.(capabilities, summary?.equipes ?? null)
+            : activeTab === "equipe" && capabilities.acessar_equipes ? renderTeam?.(capabilities, summary?.equipes ?? null, summaryError)
               : null}
       </main>
     </div>

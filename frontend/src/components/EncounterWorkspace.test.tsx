@@ -264,6 +264,8 @@ describe("Workspace canônico do Encontro", () => {
     expect(renderEncontristas).toHaveBeenCalledWith(capabilities);
     expect(renderPreEncounter).not.toHaveBeenCalled();
     expect(renderTeam).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("tab", { name: "Equipe" }));
+    expect(renderTeam).toHaveBeenLastCalledWith(capabilities, summary.equipes, null);
   });
 
   it("preserva a navegação quando somente o summary falha", async () => {

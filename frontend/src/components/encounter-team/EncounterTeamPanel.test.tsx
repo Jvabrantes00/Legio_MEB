@@ -12,6 +12,15 @@ const team = { id: 1, encontro_id: 2, codigo: "A", nome: "Equipe Exemplo", ordem
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 describe("painel de equipes", () => {
   beforeEach(() => fetchMock.mockReset()); afterEach(cleanup);
+  it("distingue resumo carregando de resumo indisponível sem consultar equipes", () => {
+    const view = render(<EncounterTeamPanel encontroId={2} capabilities={caps} equipes={null} />);
+    expect(screen.getByRole("status").textContent).toContain("Carregando resumo de equipes...");
+    expect(screen.queryByText("Resumo de equipes indisponível.")).toBeNull();
+    view.rerender(<EncounterTeamPanel encontroId={2} capabilities={caps} equipes={null} resumoErro="Falha" />);
+    expect(screen.getByRole("alert").textContent).toContain("Resumo de equipes indisponível.");
+    expect(screen.queryByRole("status")).toBeNull();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
   it("nega por padrão e revoga acesso", async () => {
     fetchMock.mockResolvedValue(json([team]));
     const view = render(<EncounterTeamPanel encontroId={2} capabilities={null} equipes={equipes} />);

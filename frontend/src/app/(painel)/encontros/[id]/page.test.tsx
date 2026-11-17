@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import { cleanup, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ReactNode } from "react";
 
@@ -8,6 +9,9 @@ import DetalhesEncontro from "./page";
 import { siaFetch } from "../../../../lib/sia-api";
 
 const state = vi.hoisted(() => ({
+  id: "37",
+  equipes: { modelo_equipes: "CANONICO", quantidade_equipes: 0 } as { modelo_equipes: "CANONICO" | "LEGADO"; quantidade_equipes: number } | null,
+  resumoErro: null as string | null,
   session: null as null | {
     id: number;
     username: string;
@@ -28,7 +32,7 @@ const state = vi.hoisted(() => ({
 }));
 
 vi.mock("next/navigation", () => ({
-  useParams: () => ({ id: "37" }),
+  useParams: () => ({ id: state.id }),
 }));
 vi.mock("../../../../components/SiaSessionProvider", () => ({
   useSiaSession: () => ({ session: state.session, loading: false, error: null }),
@@ -39,11 +43,13 @@ vi.mock("../../../../lib/pre-encounter-contract", () => ({
 }));
 vi.mock("../../../../components/EncounterWorkspace", () => ({
   EncounterWorkspace: ({
-    renderEncontristas,
+    renderEncontristas, renderTeam,
   }: {
     renderEncontristas?: (capabilities: typeof state.capabilities) => ReactNode;
+    renderTeam?: (capabilities: typeof state.capabilities, equipes: typeof state.equipes, erro: string | null) => ReactNode;
   }) => (
     <div data-testid="workspace">
+      {state.capabilities.acessar_equipes ? renderTeam?.(state.capabilities, state.equipes, state.resumoErro) : null}
       {state.capabilities.consultar_encontristas
         ? renderEncontristas?.(state.capabilities)
         : null}
@@ -84,6 +90,10 @@ function json(body: unknown): Response {
 
 describe("integração de Encontristas no Workspace", () => {
   beforeEach(() => {
+    state.id = "37";
+    state.equipes = { modelo_equipes: "CANONICO", quantidade_equipes: 0 };
+    state.resumoErro = null;
+    state.capabilities.acessar_equipes = false;
     mockedFetch.mockReset();
     mockedFetch.mockResolvedValue(json({}));
     state.session = {
@@ -132,6 +142,44 @@ describe("integração de Encontristas no Workspace", () => {
     expect(screen.getByText("Operações legadas — transição")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Fila de Espera" })).toBeTruthy();
     expect(screen.getByRole("button", { name: /Confirmar Selecionados/ })).toBeTruthy();
+  });
+
+
+  it("alterna a visão administrativa mantendo a matriz montada e reinicia em outro Encontro", async () => {
+    state.session = { id: 2, username: "fichas", roles: ["Fichas"], superuser: false };
+    state.capabilities.acessar_equipes = true;
+    mockedFetch.mockImplementation(async (path) => {
+      if (String(path) === "/funcoes/") return json([{ id: 1, nome: "Apoio" }]);
+      if (String(path).includes("workspace/equipes/")) return json([]);
+      if (String(path).includes("participacoes-encontros")) return json([]);
+      return json({});
+    });
+    const user = userEvent.setup();
+    const view = render(<DetalhesEncontro />);
+    const legacy = await screen.findByText("Montagem das Equipes");
+    expect(screen.getByRole("button", { name: "Matriz legada" }).getAttribute("aria-pressed")).toBe("true");
+    expect(mockedFetch.mock.calls.some(([path]) => String(path).includes("workspace/equipes/"))).toBe(false);
+    await user.click(screen.getByRole("button", { name: "Visão canônica" }));
+    expect(legacy.closest("[hidden]")).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: "Montagem das Equipes" })).toBeNull();
+    expect(await screen.findByText("Equipes ainda não preparadas")).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "Matriz legada" }));
+    expect(screen.getByText("Montagem das Equipes")).toBe(legacy);
+    await user.click(screen.getByRole("button", { name: "Visão canônica" }));
+    state.id = "38"; view.rerender(<DetalhesEncontro />);
+    expect(screen.getByRole("button", { name: "Matriz legada" }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByText("Montagem das Equipes")).toBe(legacy);
+  });
+
+  it("mantém a visão resumida e distingue carregamento e falha do resumo", async () => {
+    state.capabilities.acessar_equipes = true;
+    state.equipes = null;
+    const view = render(<DetalhesEncontro />);
+    expect(await screen.findByText("Carregando resumo de equipes...")).toBeTruthy();
+    expect(mockedFetch.mock.calls.some(([path]) => String(path).includes("workspace/equipes/"))).toBe(false);
+    state.resumoErro = "Falha"; view.rerender(<DetalhesEncontro />);
+    expect(screen.getByRole("alert").textContent).toContain("Resumo de equipes indisponível.");
+    expect(screen.queryByText("Carregando resumo de equipes...")).toBeNull();
   });
 
   it("segue capabilities contextuais sem liberar superfícies legadas", async () => {
