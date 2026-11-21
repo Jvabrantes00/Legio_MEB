@@ -445,10 +445,10 @@ class CampanhaConvitesServiceTests(TestCase):
                 momento=self.momento,
             )
 
-    def test_diretoria_e_suporte_consultam_mas_nao_gerem(self):
+    def test_diretoria_consulta_mas_nao_gere(self):
         campanha = self.iniciar()
 
-        for role in (SiaRole.DIRETORIA, SiaRole.SUPORTE):
+        for role in (SiaRole.DIRETORIA,):
             usuario = get_user_model().objects.create_user(
                 username=f'consulta-{role.value}',
             )

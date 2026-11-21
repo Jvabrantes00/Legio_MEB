@@ -227,11 +227,11 @@ class PreEncontroAuthorizationTests(TestCase):
         self.assertEqual(primeira.pk, segunda.pk)
         self.assertEqual(segunda.conferido_por, self.diretoria)
 
-    def test_somente_diretoria_resolve_disputa_de_negocio(self):
+    def test_diretoria_e_suporte_resolvem_disputa_de_negocio(self):
         coordenacao = self.criar_contextual('coordenacao-sem-decisao')
         primeiro, segundo = self.criar_disputa()
 
-        for usuario in (self.fichas, coordenacao, self.suporte):
+        for usuario in (self.fichas, coordenacao):
             with self.subTest(usuario=usuario.username):
                 with self.assertRaises(PermissionDenied):
                     resolver_vaga_pre_encontro(
@@ -241,7 +241,7 @@ class PreEncontroAuthorizationTests(TestCase):
                     )
 
         decisao = resolver_vaga_pre_encontro(
-            usuario=self.diretoria,
+            usuario=self.suporte,
             atendimento=primeiro,
             status=DecisaoVagaPreEncontro.Status.APROVADO,
         )
@@ -293,9 +293,9 @@ class PreEncontroAuthorizationTests(TestCase):
 
         self.assertEqual(atendimento.registrado_por, self.superuser)
 
-    def test_configuracao_inicial_e_exclusiva_de_fichas_diretoria_e_superuser(self):
+    def test_configuracao_inicial_papeis_autorizados(self):
         coordenacao = self.criar_contextual('coord-sem-configuracao')
-        for usuario in (self.suporte, self.comunicacao, coordenacao):
+        for usuario in (self.comunicacao, coordenacao):
             self.assertFalse(pode_configurar_pre_encontro(usuario, self.encontro))
             encontro = make_encontro(status=Encontro.Status.EM_PREPARACAO)
             with self.assertRaises(PermissionDenied):
@@ -307,7 +307,7 @@ class PreEncontroAuthorizationTests(TestCase):
                 )
             self.assertFalse(PreEncontro.objects.filter(encontro=encontro).exists())
 
-        for usuario in (self.fichas, self.diretoria, self.superuser):
+        for usuario in (self.fichas, self.diretoria, self.suporte, self.superuser):
             encontro = make_encontro(status=Encontro.Status.EM_PREPARACAO)
             CalendarioEncontro.objects.create(
                 encontro=encontro,

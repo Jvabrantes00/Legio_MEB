@@ -169,7 +169,7 @@ class PreSelecaoEncontristaAuthorizationTests(TestCase):
             pode_preselecionar_encontrista(negado, self.encontro)
         )
 
-    def test_aprovacao_de_encaminhamento_e_exclusiva_de_fichas(self):
+    def test_aprovacao_de_encaminhamento_para_fichas_e_suporte(self):
         fichas = self._usuario('fichas-aprova', SiaRole.FICHAS)
         misto = self._usuario(
             'fichas-comunicacao-aprova',
@@ -177,7 +177,6 @@ class PreSelecaoEncontristaAuthorizationTests(TestCase):
             SiaRole.COMUNICACAO,
         )
         negados = (
-            self._usuario('suporte-nao-aprova', SiaRole.SUPORTE),
             self._usuario('diretoria-nao-aprova', SiaRole.DIRETORIA),
             self._usuario('comunicacao-nao-aprova', SiaRole.COMUNICACAO),
             self._usuario('sem-papel-nao-aprova'),
@@ -188,6 +187,9 @@ class PreSelecaoEncontristaAuthorizationTests(TestCase):
         self.assertTrue(
             pode_aprovar_encaminhamento_encontrista(fichas, self.encontro)
         )
+        self.assertTrue(pode_aprovar_encaminhamento_encontrista(
+            self._usuario('suporte-aprova', SiaRole.SUPORTE), self.encontro,
+        ))
         self.assertTrue(
             pode_aprovar_encaminhamento_encontrista(misto, self.encontro)
         )

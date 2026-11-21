@@ -362,7 +362,7 @@ class PreEncontroPdfTests(TestCase):
             'gerar_pdf_cuidados_pre_encontro',
             return_value=b'%PDF',
         ):
-            for usuario in (self.fichas, coordenacao, self.superuser):
+            for usuario in (self.fichas, self.suporte, coordenacao, self.superuser):
                 self.client.force_authenticate(usuario)
                 self.assertEqual(
                     self.client.get(self._url('cuidados')).status_code,
@@ -376,7 +376,6 @@ class PreEncontroPdfTests(TestCase):
         ) as gerar:
             for usuario in (
                 self.comunicacao,
-                self.suporte,
                 self.diretoria,
                 self.sem_papel,
             ):

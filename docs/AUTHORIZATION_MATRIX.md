@@ -8,6 +8,9 @@
 - **RW**: leitura e escrita permitidas pelos métodos/actions do recurso.
 - **—**: acesso negado.
 - Superuser é bypass técnico; **Suporte** é um papel de negócio distinto.
+- Suporte ativo e autenticado administra operações funcionais de negócio,
+  preservando validações, transições e aprovações explícitas. Não administra
+  grupos ou papéis nem recebe acesso à administração técnica.
 
 Esta matriz descreve somente o que está implementado. Capabilities do
 frontend orientam a interface, mas o backend é a autoridade final.
@@ -65,10 +68,9 @@ comandos explícitos sobre o domínio canônico de Encontros.
 ### Campanha de convites de Encontro
 
 - Suporte, Diretoria e Fichas podem consultar a campanha e suas projeções.
-- Somente Fichas executa os comandos de negócio de início, processamento de
+- Fichas e Suporte executam os comandos de negócio de início, processamento de
   prazo, prorrogação, encerramento, recusa, reabertura manual e reposição.
-- Suporte mantém apenas a consulta e seus acessos técnicos/auditoria já
-  previstos; Diretoria permanece somente leitura neste domínio. O superuser
+- Diretoria permanece somente leitura neste domínio. O superuser
   permanece como bypass técnico separado.
 - Os demais papéis permanecem negados por default. A gestão da campanha não
   concede acesso a endpoint público nem amplia permissões sobre cadastros.
@@ -103,9 +105,9 @@ comandos explícitos sobre o domínio canônico de Encontros.
 
 ### Pré-Encontro operacional
 
-- A configuração inicial do `PreEncontro` é um command explícito de Fichas ou
-  Diretoria; o superuser permanece bypass técnico. Suporte empresarial,
-  Comunicação e Coordenação Geral contextual não recebem essa ação.
+- A configuração inicial do `PreEncontro` é um command explícito de Fichas,
+  Diretoria ou Suporte; o superuser permanece bypass técnico. Comunicação e
+  Coordenação Geral contextual não recebem essa ação.
 - Suporte, Diretoria e Fichas consultam a lista, a busca e o detalhe
   operacional. A Coordenação Geral alocada consulta somente no próprio
   Encontro; Comunicação recebe a mesma projeção mínima para localizar o
@@ -115,11 +117,15 @@ comandos explícitos sobre o domínio canônico de Encontros.
 - Check-in e regularização pertencem a Suporte, Diretoria e Fichas, conforme
   as policies administrativas já aplicadas pelo domínio.
 - Pagamento e conferência operacional seguem as policies de gestão existentes.
-  A consulta ao conteúdo de cuidado é mais restrita: Fichas, Coordenação Geral
+  A consulta ao conteúdo de cuidado é mais restrita: Suporte, Fichas, Coordenação Geral
   do mesmo Encontro e superuser técnico. O conteúdo fica em endpoint e PDF
-  separados e nunca integra lista, busca ou detalhe comum; Comunicação,
-  Suporte e Diretoria não recebem essa consulta apenas por seus papéis.
-- A decisão excepcional de vaga pertence à Diretoria. Aumento de capacidade
+  separados e nunca integra lista, busca ou detalhe comum; Comunicação e
+  Diretoria não recebem essa consulta apenas por seus papéis.
+- Suporte também pode visualizar, alterar e associar a foto do Pré-Encontro;
+  as permissões de foto da Diretoria permanecem inalteradas.
+  O adiamento por si só não impede operações de foto; check-in e decisão de
+  vaga dependem da data e permanecem bloqueados em `ADIADO`.
+- A decisão excepcional de vaga pertence à Diretoria e ao Suporte. Aumento de capacidade
   pertence a Suporte, Diretoria e Fichas pelo command canônico da configuração
   de inscrições. O superuser permanece bypass técnico separado.
 - Todos os subrecursos são escopados pelo Encontro; vínculo com outro Encontro
@@ -199,6 +205,17 @@ comandos explícitos sobre o domínio canônico de Encontros.
   objeto de origem.
 - Encontros, Eventos, equipes e demais recursos continuarão sujeitos às
   permissões de seus próprios módulos.
+
+## Pendências
+
+- Antes da implementação das ações C5, revisar expressamente a participação
+  de Suporte na reconciliação incerta: a regra de que apenas Fichas concede
+  autorização conflita com a autoridade geral de Suporte. Preservar as
+  aprovações humanas e não revogar direitos silenciosamente.
+- Antes da operação real, resolver a pendência de segurança e privacidade da
+  auditoria de leitura dos dados de cuidado.
+- Atualizar no momento apropriado as descrições operacionais obsoletas de
+  `PROJECT_STATE.md` sobre as permissões anteriores de Suporte.
 
 ## Semântica de negação
 

@@ -15,6 +15,7 @@ from .roles import (
     FULL_ADMIN_ROLES,
     INSTITUTIONAL_CALENDAR_READ_ROLES,
     SiaRole,
+    eh_administrador_geral,
     user_has_any_role,
 )
 
@@ -74,7 +75,7 @@ def pode_gerir_campanha_convites(user):
     ):
         return False
     return bool(
-        user.is_superuser
+        eh_administrador_geral(user)
         or user_has_any_role(user, SiaRole.FICHAS)
     )
 
@@ -128,7 +129,7 @@ def pode_aprovar_encaminhamento_encontrista(user, encontro):
             Encontro.Status.FINALIZADO,
         )
         and (
-            user.is_superuser
+            eh_administrador_geral(user)
             or user_has_any_role(user, SiaRole.FICHAS)
         )
     )
@@ -170,7 +171,7 @@ def pode_configurar_pre_encontro(user, encontro):
     return bool(
         _usuario_ativo(user)
         and (
-            user.is_superuser
+            eh_administrador_geral(user)
             or user_has_any_role(user, SiaRole.FICHAS, SiaRole.DIRETORIA)
         )
     )
@@ -208,7 +209,7 @@ def pode_resolver_vaga_pre_encontro(user, encontro):
     return bool(
         _usuario_ativo(user)
         and (
-            user.is_superuser
+            eh_administrador_geral(user)
             or user_has_any_role(user, SiaRole.DIRETORIA)
         )
     )
@@ -252,7 +253,7 @@ def pode_associar_foto_pessoa_pre_encontro(user, encontro):
     return bool(
         _usuario_ativo(user)
         and (
-            user.is_superuser
+            eh_administrador_geral(user)
             or user_has_any_role(
                 user,
                 SiaRole.FICHAS,
@@ -267,7 +268,7 @@ def pode_consultar_cuidados_pre_encontro(user, encontro):
     return bool(
         _usuario_ativo(user)
         and (
-            user.is_superuser
+            eh_administrador_geral(user)
             or user_has_any_role(user, SiaRole.FICHAS)
             or pertence_coordenacao_geral_encontro(user, encontro)
         )
@@ -483,9 +484,9 @@ class HasAnySiaRole(BasePermission):
 
     def has_permission(self, request, view):
         user = request.user
-        if not getattr(user, 'is_authenticated', False):
+        if not _usuario_ativo(user):
             return False
-        if user.is_superuser:
+        if eh_administrador_geral(user):
             return True
 
         action_roles = getattr(view, 'action_roles', {})

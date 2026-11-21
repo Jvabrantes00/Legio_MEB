@@ -191,6 +191,7 @@ from .roles import (
     MATERIAL_MANAGEMENT_ROLES,
     PROFILE_PHOTO_MANAGEMENT_ROLES,
     SiaRole,
+    eh_administrador_geral,
     user_has_any_role,
 )
 
@@ -233,7 +234,7 @@ class EncontroWorkspaceEquipesAPIView(APIView):
         )
         dados = EquipeEncontroSerializer(equipes, many=True).data
         if not (
-            request.user.is_superuser
+            eh_administrador_geral(request.user)
             or user_has_any_role(request.user, *FICHAS_MANAGEMENT_ROLES)
         ):
             visiveis = {
@@ -459,7 +460,7 @@ def calendario_institucional(request):
         query.validated_data['inicio'],
         query.validated_data['fim'],
     )
-    pode_gerir = request.user.is_superuser or user_has_any_role(
+    pode_gerir = eh_administrador_geral(request.user) or user_has_any_role(
         request.user,
         *INSTITUTIONAL_CALENDAR_MANAGEMENT_ROLES,
     )
@@ -510,7 +511,7 @@ def preview_calendario_institucional(request):
 
 
 def _pode_gerir_exportacao_calendario(user):
-    return user.is_superuser or user_has_any_role(
+    return eh_administrador_geral(user) or user_has_any_role(
         user,
         *INSTITUTIONAL_CALENDAR_MANAGEMENT_ROLES,
     )
@@ -1091,7 +1092,7 @@ class AlpinistaViewSet(viewsets.ModelViewSet):
 
     def has_full_profile_access(self):
         user = self.request.user
-        return user.is_superuser or user_has_any_role(
+        return eh_administrador_geral(user) or user_has_any_role(
             user,
             *FICHAS_MANAGEMENT_ROLES,
         )
@@ -1317,7 +1318,7 @@ class EncontroViewSet(viewsets.ModelViewSet):
 
     def has_full_encontro_access(self):
         user = self.request.user
-        return user.is_superuser or user_has_any_role(
+        return eh_administrador_geral(user) or user_has_any_role(
             user,
             *FICHAS_MANAGEMENT_ROLES,
         )

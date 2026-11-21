@@ -96,6 +96,15 @@ class CampanhaConvitesApiTests(AuthenticatedAPITestCase):
             momento=self.agora,
         ).campanha
 
+    def test_suporte_inicia_campanha(self):
+        self.autenticar(SiaRole.SUPORTE, 'gestao')
+        resposta = self.client.post(
+            self.iniciar_url,
+            {'prazo_confirmacao': (self.agora + timedelta(days=10)).isoformat()},
+            format='json',
+        )
+        self.assertEqual(resposta.status_code, status.HTTP_201_CREATED)
+
     def test_autenticacao_e_default_deny(self):
         self.client.force_authenticate(user=None)
         self.assertEqual(
@@ -154,7 +163,7 @@ class CampanhaConvitesApiTests(AuthenticatedAPITestCase):
             status.HTTP_200_OK,
         )
 
-    def test_diretoria_e_suporte_nao_executam_mutacoes(self):
+    def test_diretoria_nao_executa_mutacoes(self):
         mutacoes = (
             self.iniciar_url,
             reverse(
@@ -182,7 +191,7 @@ class CampanhaConvitesApiTests(AuthenticatedAPITestCase):
                 kwargs={'pk': self.encontro.pk},
             ),
         )
-        for role in (SiaRole.DIRETORIA, SiaRole.SUPORTE):
+        for role in (SiaRole.DIRETORIA,):
             self.autenticar(role, f'somente-leitura-{role.value}')
             for url in mutacoes:
                 with self.subTest(role=role, url=url):

@@ -77,6 +77,14 @@ def user_has_any_role(user, *roles):
     return user.groups.filter(name__in=names).exists()
 
 
+def eh_administrador_geral(user):
+    return bool(
+        getattr(user, 'is_authenticated', False)
+        and getattr(user, 'is_active', False)
+        and (user.is_superuser or user_has_role(user, SiaRole.SUPORTE))
+    )
+
+
 def recognized_user_roles(user):
     """Return the user's recognized SIA roles in the canonical business order."""
     if not getattr(user, 'is_authenticated', False):

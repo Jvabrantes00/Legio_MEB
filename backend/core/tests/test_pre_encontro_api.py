@@ -1,5 +1,6 @@
 from datetime import date, time, timedelta
 from io import BytesIO
+from tempfile import TemporaryDirectory
 
 from django.contrib.auth.models import Group, User
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -276,7 +277,7 @@ class PreEncontroApiTests(TestCase):
         casos = (
             (self.fichas, True, True, True, True, True, True),
             (self.comunicacao, True, False, False, False, False, False),
-            (self.suporte, True, True, True, False, True, True),
+            (self.suporte, True, True, True, True, True, True),
             (self.sem_papel, False, False, False, False, False, False),
         )
         for (
@@ -405,8 +406,43 @@ class PreEncontroApiTests(TestCase):
         self.assertFalse(contexto['registrar_checkin'])
         self.assertTrue(contexto['aumentar_capacidade'])
         self.assertTrue(detalhe['capabilities']['registrar_pagamento'])
-        self.assertFalse(detalhe['capabilities']['alterar_foto'])
+        self.assertTrue(detalhe['capabilities']['alterar_foto'])
         self.assertFalse(detalhe['capabilities']['decidir_vaga'])
+
+    def test_foto_em_adiado_mantem_capability_e_operacao_real(self):
+        self.encontro.status = Encontro.Status.ADIADO
+        self.encontro.save(update_fields=['status'])
+        superuser = User.objects.create_superuser('super-foto-adiado')
+        with TemporaryDirectory() as media, override_settings(MEDIA_ROOT=media):
+            for usuario in (self.suporte, superuser, self.fichas, self.comunicacao):
+                with self.subTest(usuario=usuario.username):
+                    self._autenticar(usuario)
+                    resposta = self.client.put(
+                        self._atendimento_url('foto/'),
+                        {'foto': self._foto()}, format='multipart',
+                    )
+                    self.assertEqual(resposta.status_code, status.HTTP_200_OK)
+                    self.assertEqual(self.client.get(
+                        self._atendimento_url('foto/'),
+                    ).status_code, status.HTTP_200_OK)
+            self._autenticar(self.suporte)
+            detalhe = self.client.get(self._atendimento_url()).data
+            self.assertTrue(detalhe['capabilities']['alterar_foto'])
+            self.assertFalse(detalhe['capabilities']['decidir_vaga'])
+            self.assertEqual(self.client.post(
+                f'{self._base()}/check-in/', {'pessoa_id': self.pessoa.pk}, format='json',
+            ).status_code, status.HTTP_400_BAD_REQUEST)
+            self.assertEqual(self.client.post(
+                self._atendimento_url('decisao-vaga/'),
+                {'status': 'aprovado'}, format='json',
+            ).status_code, status.HTTP_400_BAD_REQUEST)
+            self.encontro.status = Encontro.Status.FINALIZADO
+            self.encontro.save(update_fields=['status'])
+            self.assertFalse(self.client.get(self._atendimento_url()).data[
+                'capabilities']['alterar_foto'])
+            self.assertEqual(self.client.put(
+                self._atendimento_url('foto/'), {'foto': self._foto()}, format='multipart',
+            ).status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_decidir_vaga_so_quando_policy_e_estado_permitem(self):
         self.configuracao.capacidade = 1
@@ -423,7 +459,7 @@ class PreEncontroApiTests(TestCase):
             (self.diretoria, True),
             (self.fichas, False),
             (self._coordenacao('coord-cap-sem-decisao'), False),
-            (self.suporte, False),
+            (self.suporte, True),
         ):
             self._autenticar(usuario)
             resposta = self.client.get(
@@ -453,7 +489,7 @@ class PreEncontroApiTests(TestCase):
             (self.diretoria, True, True, True, False, True),
             (self.comunicacao, True, False, False, False, False),
             (coordenacao, True, True, True, True, False),
-            (self.suporte, True, True, True, False, False),
+            (self.suporte, True, True, True, True, True),
             (self.sem_papel, False, False, False, False, False),
             (superuser, True, True, True, True, True),
         )
@@ -535,7 +571,6 @@ class PreEncontroApiTests(TestCase):
         }
         coordenacao = self._coordenacao('coord-sem-command', encontro=encontro)
         for usuario in (
-            self.suporte,
             self.comunicacao,
             self.sem_papel,
             coordenacao,
@@ -1125,7 +1160,7 @@ class PreEncontroApiTests(TestCase):
                     status.HTTP_200_OK,
                 )
 
-        for usuario in (self.diretoria, self.suporte):
+        for usuario in (self.diretoria,):
             self._autenticar(usuario)
             capabilities = self.client.get(
                 self._foto_lista_url(),
