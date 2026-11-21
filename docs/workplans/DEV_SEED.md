@@ -81,8 +81,18 @@ nos outros três Encontros.
   estados derivados cobrem disponibilidade, aproveitamento, outra equipe,
   indisponibilidade MME e histórico.
 
-A reexecução tenta substituir apenas o dataset reconhecido e recriá-lo; consulte
-a limitação conhecida de auditoria abaixo.
+Os quatro Encontros, incluindo Serra Azul, recebem snapshots de equipes.
+
+Sem `--reset`, o comando classifica o dataset antes de escrever:
+
+- **AUSENTE:** cria o dataset pelos services existentes, sem limpeza prévia.
+- **COMPLETO:** informa que já existe e não altera qualquer registro; IDs,
+  senhas, estados, relacionamentos e auditoria permanecem intactos.
+- **PARCIAL:** recusa a execução sem alterações.
+- **DIVERGENTE:** recusa inconsistências relevantes sem alterações ou correção.
+
+Idempotência não significa convergência automática: alterações no dataset não
+são sincronizadas nem reconstruídas pela segunda execução.
 
 ### Configuração demonstrativa de inscrições
 
@@ -106,9 +116,8 @@ e constraints do domínio não são contornadas. O `public_id` é um UUID gerado
 automaticamente pelo model e não é definido pelo seed. A reconciliação de uma
 configuração existente preserva seu registro e seu `public_id`.
 
-A reexecução do comando completo tem uma semântica mais ampla: primeiro remove
-o dataset reconhecido pelas allowlists e depois o recria. Quando a exclusão é permitida, ela recria os valores demonstrativos sem
-preservar necessariamente PKs ou `public_id` entre recriações completas.
+A segunda execução do comando completo é somente leitura quando as invariantes
+estão satisfeitas; ela preserva também o `public_id`.
 
 > **Limite dos valores demo.** Os valores descritos pertencem exclusivamente
 > ao dataset de demonstração. Não constituem regras institucionais gerais nem
@@ -131,11 +140,17 @@ integralmente.
 - O dataset é apoio futuro à revisão manual de maturidade; este bloco não
   inicia a R.3.
 
-### Limitação conhecida — auditoria PostgreSQL
+### Reset e ambiente descartável
 
-No PostgreSQL, eventos de auditoria protegidos pelo trigger imutável da
-migration 0052 fazem a recriação e o `--reset` falharem. A idempotência não
-está atendida nesse cenário e permanece pendente para o pacote R26-B. O comando
-é restrito a desenvolvimento (`DEBUG=True` e `SIA_ENVIRONMENT=development`) e
-jamais deve ser usado no `sia_dev`. A adição de papéis `demo-*` a um template
-real preexistente de Violeiros permanece como dívida técnica conhecida.
+No PostgreSQL, o reset é sempre recusado antes de qualquer exclusão, sem DELETE
+ou UPDATE. Se houver eventos de auditoria imutáveis associados ao dataset, a
+mensagem informa "auditoria imutável associada ao dataset"; caso contrário,
+informa "segurança da exclusão no PostgreSQL não comprovada".
+Em SQLite isolado, o reset explícito preserva o comportamento existente.
+Para reconstruir uma demonstração, provisione um banco de desenvolvimento
+descartável novo, aplique nele as migrations e execute o comando de criação
+acima; descarte o ambiente inteiro quando terminar. Nunca execute o seed ou
+reset no `sia_dev` nem em outro banco operacional.
+
+A adição de papéis `demo-*` a um template real preexistente de Violeiros
+permanece como dívida técnica para outro pacote.

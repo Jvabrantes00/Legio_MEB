@@ -7,7 +7,9 @@ from unittest.mock import patch
 from django.contrib.auth.models import User
 from django.core.management import call_command
 from django.core.management.base import CommandError
+from django.db import connection
 from django.test import TestCase, override_settings
+from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 
 from core.management.commands.seed_demo import (
@@ -27,6 +29,7 @@ from core.models import (
     ConviteEncontro,
     Encontro,
     EquipeEncontro,
+    EventoAuditoriaEncontro,
     Grupo,
     ItemPropostaVioleiros,
     ParticipacaoEncontro,
@@ -345,6 +348,7 @@ class SeedDemoCommandTests(TestCase):
         self.assertEqual(list(TemplateRoleEquipe.objects.order_by('pk').values()), before_roles)
 
     def test_reset_removes_only_demo_legacy_template(self):
+        self.run_seed()
         legacy = TemplateEquipeEncontro.objects.create(
             tipo_encontro=Encontro.Tipo.ESCALADA, codigo='demo-coordenacao-geral',
             nome='[DEMO] Coordenação Geral',
@@ -361,14 +365,17 @@ class SeedDemoCommandTests(TestCase):
         )
         before = TemplateEquipeEncontro.objects.filter(pk=real.pk).values().get()
         roles_before = list(real.roles.values())
-        self.run_seed()
         self.run_reset()
         self.assertFalse(TemplateEquipeEncontro.objects.filter(pk=legacy.pk).exists())
         self.assertEqual(TemplateEquipeEncontro.objects.filter(pk=real.pk).values().get(), before)
         self.assertEqual(list(real.roles.values()), roles_before)
 
-    def test_second_execution_replaces_dataset_without_duplication(self):
+    def test_second_execution_is_read_only_and_preserves_dataset(self):
         self.run_seed()
+        users_before = list(User.objects.filter(username__startswith='demo.').order_by('pk').values())
+        people_before = list(Pessoa.objects.filter(nome__in=DEMO_PERSON_NAMES).order_by('pk').values())
+        encounters_before = list(Encontro.objects.filter(encontro__in=[x[0] for x in DEMO_ENCOUNTERS]).order_by('pk').values())
+        audit_before = list(EventoAuditoriaEncontro.objects.order_by('pk').values())
         first_counts = (
             Pessoa.objects.filter(nome__in=DEMO_PERSON_NAMES).count(),
             Encontro.objects.filter(
@@ -384,7 +391,15 @@ class SeedDemoCommandTests(TestCase):
             ).count(),
         )
 
-        self.run_seed()
+        with CaptureQueriesContext(connection) as queries:
+            output = self.run_seed()
+        self.assertIn('já existe; nada foi alterado', output)
+        self.assertFalse([q['sql'] for q in queries if q['sql'].lstrip().upper().startswith(('INSERT', 'UPDATE', 'DELETE'))])
+        self.assertEqual(users_before, list(User.objects.filter(username__startswith='demo.').order_by('pk').values()))
+        self.assertEqual(people_before, list(Pessoa.objects.filter(nome__in=DEMO_PERSON_NAMES).order_by('pk').values()))
+        self.assertEqual(encounters_before, list(Encontro.objects.filter(encontro__in=[x[0] for x in DEMO_ENCOUNTERS]).order_by('pk').values()))
+        self.assertEqual(audit_before, list(EventoAuditoriaEncontro.objects.order_by('pk').values()))
+        self.assertTrue(User.objects.get(username='demo.suporte').check_password(DEMO_PASSWORD))
 
         self.assertEqual(
             (
@@ -403,6 +418,42 @@ class SeedDemoCommandTests(TestCase):
             ),
             first_counts,
         )
+
+    def assert_seed_refuses_without_writes(self):
+        with CaptureQueriesContext(connection) as queries:
+            with self.assertRaises(CommandError):
+                self.run_seed()
+        self.assertFalse([q['sql'] for q in queries if q['sql'].lstrip().upper().startswith(('INSERT', 'UPDATE', 'DELETE'))])
+
+    def test_partial_dataset_is_refused_without_writes(self):
+        User.objects.create(username='demo.suporte')
+        self.assert_seed_refuses_without_writes()
+
+    def test_divergent_person_marker_is_refused_without_writes(self):
+        self.run_seed()
+        Pessoa.objects.filter(nome=DEMO_PERSON_NAMES[0]).update(apelido='alterado')
+        self.assert_seed_refuses_without_writes()
+
+    def test_legacy_coordination_code_is_refused_without_writes(self):
+        self.run_seed()
+        TemplateEquipeEncontro.objects.filter(codigo='coordenacao-geral', tipo_encontro=Encontro.Tipo.ESCALADA).update(codigo='demo-coordenacao-geral')
+        self.assert_seed_refuses_without_writes()
+
+    def test_missing_contextual_coordination_is_refused_without_writes(self):
+        self.run_seed()
+        TrabalhoEncontro.objects.filter(pessoa__vinculo_usuario__usuario__username='demo.comunicacao').update(status=TrabalhoEncontro.Status.RETIRADO)
+        self.assert_seed_refuses_without_writes()
+
+    def test_postgresql_reset_refuses_immutable_audit_before_deletion(self):
+        self.run_seed()
+        before = EventoAuditoriaEncontro.objects.count()
+        self.assertGreater(before, 0)
+        with patch.object(connection, 'vendor', 'postgresql'):
+            with CaptureQueriesContext(connection) as queries:
+                with self.assertRaisesMessage(CommandError, 'auditoria imutável'):
+                    self.run_reset()
+        self.assertEqual(EventoAuditoriaEncontro.objects.count(), before)
+        self.assertFalse([q['sql'] for q in queries if q['sql'].lstrip().upper().startswith(('INSERT', 'UPDATE', 'DELETE'))])
 
     def test_registration_configuration_reconciliation_is_idempotent(self):
         self.run_seed()

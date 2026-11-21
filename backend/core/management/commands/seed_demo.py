@@ -5,7 +5,7 @@ from django.conf import settings
 from django.contrib.auth.models import Group as AuthGroup
 from django.contrib.auth.models import User
 from django.core.management.base import BaseCommand, CommandError
-from django.db import transaction
+from django.db import connection, transaction
 from django.db.models import Q
 from django.utils import timezone
 
@@ -228,6 +228,91 @@ def _ensure_development_environment():
             'seed_demo é bloqueado fora do desenvolvimento. '
             'Exige DEBUG=True e SIA_ENVIRONMENT=development.'
         )
+
+
+def _dataset_exists_and_is_complete():
+    usernames = [username for username, _ in DEMO_ACCOUNTS]
+    titles = [title for title, _ in DEMO_ENCOUNTERS]
+    people = Pessoa.objects.filter(
+        Q(nome__in=DEMO_PERSON_NAMES) | Q(email__in=[
+            _demo_person_email(i) for i in range(1, len(DEMO_PERSON_NAMES) + 1)
+        ])
+    )
+    users = User.objects.filter(username__in=usernames)
+    encounters = Encontro.objects.filter(encontro__in=titles)
+    groups = Grupo.objects.filter(nome__in=DEMO_GROUP_NAMES)
+    demo_templates = TemplateEquipeEncontro.objects.filter(_demo_template_filter())
+    if not (people.exists() or users.exists() or encounters.exists() or
+            groups.exists() or demo_templates.exists()):
+        return False
+
+    def invalid():
+        raise CommandError('Dataset demo parcial ou divergente; nada foi alterado.')
+
+    if (people.count() != len(DEMO_PERSON_NAMES) or users.count() != len(usernames)
+            or encounters.count() != len(titles) or groups.count() != len(DEMO_GROUP_NAMES)):
+        invalid()
+    for index, name in enumerate(DEMO_PERSON_NAMES, start=1):
+        if not people.filter(nome=name, email=_demo_person_email(index),
+                             apelido=f'Demo {index:02d}', cpf__isnull=True).exists():
+            invalid()
+    for index, (username, role) in enumerate(DEMO_ACCOUNTS):
+        user = users.get(username=username)
+        technical = username == 'demo.superuser'
+        if (user.email != f'{username}@{DEMO_EMAIL_DOMAIN}' or not user.is_active
+                or user.is_superuser != technical or user.is_staff != technical
+                or set(user.groups.values_list('name', flat=True)) != ({role.value} if role else set())):
+            invalid()
+        if not technical and not VinculoUsuarioPessoa.objects.filter(
+            usuario=user, pessoa__nome=DEMO_PERSON_NAMES[index],
+            pessoa__email=_demo_person_email(index + 1),
+        ).exists():
+            invalid()
+    if TemplateEquipeEncontro.objects.filter(
+        tipo_encontro__in=(Encontro.Tipo.ESCALADA, Encontro.Tipo.ESPPA),
+        codigo='demo-coordenacao-geral',
+    ).exists():
+        invalid()
+    roles = {
+        'coordenacao-geral': ('demo-coordenador-geral', 'demo-apoio-coordenacao'),
+        'demo-acolhida': ('demo-coordenador-acolhida', 'demo-integrante-acolhida'),
+        'violeiros': ('demo-coordenador-violeiros', 'demo-violeiro'),
+    }
+    for title, kind in DEMO_ENCOUNTERS:
+        encounter = encounters.filter(encontro=title, tipo=kind,
+                                      modelo_equipes=Encontro.ModeloEquipes.CANONICO).first()
+        if not encounter or not ConfiguracaoEncontristasEncontro.objects.filter(encontro=encounter).exists():
+            invalid()
+        for code, name in DEMO_TEMPLATE_SPECS:
+            template = TemplateEquipeEncontro.objects.filter(tipo_encontro=kind, codigo=code, ativo=True).first()
+            if not template or (code != 'violeiros' and template.nome != name):
+                invalid()
+            team = EquipeEncontro.objects.filter(encontro=encounter, codigo=code, template_origem=template).first()
+            if not team:
+                invalid()
+            for role_code in roles[code]:
+                if not RoleEquipeEncontro.objects.filter(
+                    equipe_encontro=team, codigo=role_code,
+                    template_origem__template_equipe=template,
+                    template_origem__codigo=role_code, template_origem__ativo=True,
+                ).exists():
+                    invalid()
+    vale = encounters.get(encontro=DEMO_ENCOUNTERS[1][0])
+    for username, role_code in (('demo.secretaria', 'demo-coordenador-geral'),
+                                ('demo.comunicacao', 'demo-apoio-coordenacao')):
+        if not TrabalhoEncontro.objects.filter(
+            pessoa__vinculo_usuario__usuario__username=username, encontro=vale,
+            status=TrabalhoEncontro.Status.ALOCADO, role_equipe__codigo=role_code,
+            role_equipe__equipe_encontro__encontro=vale,
+            role_equipe__equipe_encontro__codigo='coordenacao-geral',
+        ).exists():
+            invalid()
+    if TrabalhoEncontro.objects.filter(
+        pessoa__vinculo_usuario__usuario__username='demo.sem_papel',
+        role_equipe__equipe_encontro__codigo='coordenacao-geral',
+    ).exists():
+        invalid()
+    return True
 
 
 def _delete_demo_dataset():
@@ -1017,8 +1102,15 @@ class Command(BaseCommand):
             )
 
         with transaction.atomic():
-            _delete_demo_dataset()
             if reset_only:
+                if connection.vendor == 'postgresql':
+                    if EventoAuditoriaEncontro.objects.filter(
+                        Q(encontro__in=Encontro.objects.filter(_demo_encounter_filter()))
+                        | Q(ator__username__in=[username for username, _ in DEMO_ACCOUNTS])
+                    ).exists():
+                        raise CommandError('Reset recusado: auditoria imutável associada ao dataset.')
+                    raise CommandError('Reset recusado: segurança da exclusão no PostgreSQL não comprovada.')
+                _delete_demo_dataset()
                 self.stdout.write(self.style.SUCCESS('Dataset demo removido.'))
                 return
             for encounter_type in (Encontro.Tipo.ESCALADA, Encontro.Tipo.ESPPA):
@@ -1029,6 +1121,9 @@ class Command(BaseCommand):
                         f'Há template real conflitante de Coordenação Geral para '
                         f'{encounter_type}; nada foi alterado.'
                     )
+            if _dataset_exists_and_is_complete():
+                self.stdout.write(self.style.SUCCESS('Dataset demo já existe; nada foi alterado.'))
+                return
             result = _seed_dataset(password)
 
         encounter_ids = [item.pk for item in result['encounters'].values()]
