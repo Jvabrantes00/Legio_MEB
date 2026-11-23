@@ -228,3 +228,11 @@ comandos explícitos sobre o domínio canônico de Encontros.
 Mudanças nesta matriz exigem evidência de regra de negócio, alteração
 correspondente no backend e testes de autorização. Não derive novas
 permissões apenas a partir da navegação do frontend.
+# GE-2A — consulta e preparação de equipes
+
+Suporte ativo e Diretoria ativam o modelo canônico mediante justificativa.
+Suporte ativo, Diretoria e Fichas preparam equipes e registram convites de
+trabalho. O seletor de trabalho é restrito aos mesmos perfis e retorna somente
+`id`, `pessoa_id`, `nome` e `grupo`. A listagem de convites de trabalho exige
+`encontro` (ausente ou vazio: 405; não numérico: 400), limita a finalidade a `trabalhar` e é restrita aos mesmos perfis;
+Encontro inexistente resulta em lista vazia. Superusuário é bypass técnico.

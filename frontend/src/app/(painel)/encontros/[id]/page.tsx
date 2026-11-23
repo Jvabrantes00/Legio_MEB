@@ -9,13 +9,14 @@ import { useSiaSession } from "../../../../components/SiaSessionProvider";
 import { ConfirmedAlpinistasTable } from "../../../../components/ConfirmedAlpinistasTable";
 import { EncounterCandidatesPanel } from "../../../../components/EncounterCandidatesPanel";
 import { EncounterTeamPanel } from "../../../../components/encounter-team/EncounterTeamPanel";
+import { EncounterTeamSetup } from "../../../../components/encounter-team/EncounterTeamSetup";
 import { PreEncounterCheckin } from "../../../../components/PreEncounterCheckin";
 import { EncounterRegistrationConfigCard } from "../../../../components/EncounterRegistrationConfigCard";
 import {
     EncounterWorkspace,
     type EncounterWorkspaceTab,
 } from "../../../../components/EncounterWorkspace";
-import { canManageEncontros } from "../../../../lib/sia-capabilities";
+import { canManageEncontros, canManageInstitutionalCalendar } from "../../../../lib/sia-capabilities";
 import {
     parsePreEncounterContextCapabilities,
     type PreEncounterContextCapabilities,
@@ -102,12 +103,12 @@ function EncounterSummaryDetails({ preCapabilities, preCapabilitiesError, onRelo
 }
 
 function ManagedEncounterDetails({ preCapabilities, preCapabilitiesError, onReloadPreCapabilities }: PreEncounterAccessProps) {
+    const { session } = useSiaSession();
     const params = useParams<{ id: string }>();
     const encontroId = params.id;
 
     const [abaAtiva, setAbaAtiva] = useState<EncounterWorkspaceTab>("visao-geral");
-    const [visaoEquipe, setVisaoEquipe] = useState<{ encontroId: string; visao: "legada" | "canonica" }>({ encontroId, visao: "legada" });
-    const visaoEfetiva = visaoEquipe.encontroId === encontroId ? visaoEquipe.visao : "legada";
+    const [visaoEquipe, setVisaoEquipe] = useState<{ encontroId: string; visao: "legada" | "canonica" } | null>(null);
 
     const [modoLista, setModoLista] = useState<"pendentes" | "confirmados">("pendentes");
 
@@ -395,11 +396,13 @@ function ManagedEncounterDetails({ preCapabilities, preCapabilitiesError, onRelo
             )}
             renderTeam={(capabilities, equipes, resumoErro) => (
                 <>
+                    {(() => { const visaoEfetiva = visaoEquipe?.encontroId === encontroId ? visaoEquipe.visao : equipes?.modelo_equipes === "CANONICO" ? "canonica" : "legada"; return <>
                     <div role="group" aria-label="Visão de equipes" className="flex flex-wrap gap-2 mb-4">
                         <button type="button" aria-pressed={visaoEfetiva === "legada"} onClick={() => setVisaoEquipe({ encontroId, visao: "legada" })} className={`px-4 py-2 rounded-lg font-bold transition-colors shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-gray-800 ${visaoEfetiva === "legada" ? "bg-gray-800 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}>Matriz legada</button>
                         <button type="button" aria-pressed={visaoEfetiva === "canonica"} onClick={() => setVisaoEquipe({ encontroId, visao: "canonica" })} className={`px-4 py-2 rounded-lg font-bold transition-colors shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-gray-800 ${visaoEfetiva === "canonica" ? "bg-gray-800 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}>Visão canônica</button>
                     </div>
                     {visaoEfetiva === "canonica" && <EncounterTeamPanel key={encontroId} encontroId={Number(encontroId)} capabilities={capabilities} equipes={equipes} resumoErro={resumoErro} />}
+                    {visaoEfetiva === "legada" && equipes?.modelo_equipes === "LEGADO" && canManageInstitutionalCalendar(session) && <EncounterTeamSetup encontroId={Number(encontroId)} modelo="LEGADO" canActivate canPrepare={false} onChange={() => window.location.reload()} />}
                     <div hidden={visaoEfetiva === "canonica"}>
                 <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 min-h-[400px]">
                     <div className="animate-in fade-in duration-300 relative">
@@ -568,6 +571,7 @@ function ManagedEncounterDetails({ preCapabilities, preCapabilitiesError, onRelo
                     </div>
                 </div>
                     </div>
+                    </>; })()}
                 </>
             )}
             renderEncontristas={(workspaceCapabilities) => (

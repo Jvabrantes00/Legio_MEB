@@ -15,6 +15,8 @@ from core.models import (
     VinculoEncontroLegado as ParticipacaoEncontro,
 )
 from core.serializers import (
+    AlpinistaSeletorTrabalhoSerializer,
+    ConviteTrabalhoLeituraSerializer,
     EquipeEncontroSerializer,
     AlpinistaCompletoSerializer,
     HistoricoFormativoSerializer,
@@ -33,6 +35,8 @@ from core.tests.factories import make_alpinista, make_encontro, make_funcao
 class RemainingSerializerAllowlistTests(AuthenticatedAPITestCase):
     def test_serializers_restantes_possuem_allowlists_explicitas(self):
         contracts = (
+            (AlpinistaSeletorTrabalhoSerializer, ('id', 'pessoa_id', 'nome', 'grupo')),
+            (ConviteTrabalhoLeituraSerializer, ('id', 'pessoa_id', 'pessoa_nome', 'encontro_id', 'finalidade', 'status', 'role_trabalho_proposta_id', 'criado_em')),
             (
                 EncontroSerializer,
                 (

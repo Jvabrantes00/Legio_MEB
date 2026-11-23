@@ -40,7 +40,8 @@ from .models import (
 )
 from .serializers import (
     AlpinistaCompletoSerializer, AlpinistaFotoSerializer, CurrentUserSerializer,
-    AlpinistaResumoSerializer,
+    AlpinistaResumoSerializer, AlpinistaSeletorTrabalhoSerializer,
+    ConviteTrabalhoLeituraSerializer,
     AlpinistaMusicaCommandSerializer, HistoricoPalestraSerializer,
     HistoricoVioleiroSerializer,
     EncontroComunicacaoSerializer, EncontroSerializer, EventoSerializer,
@@ -1077,6 +1078,7 @@ class AlpinistaViewSet(viewsets.ModelViewSet):
     read_roles = RECOGNIZED_ROLES
     write_roles = FICHAS_MANAGEMENT_ROLES
     action_roles = {
+        'seletor_trabalho': FICHAS_MANAGEMENT_ROLES,
         'foto': PROFILE_PHOTO_MANAGEMENT_ROLES,
         'foto_arquivo': RECOGNIZED_ROLES,
         'musica': MUSIC_MANAGEMENT_ROLES,
@@ -1098,6 +1100,8 @@ class AlpinistaViewSet(viewsets.ModelViewSet):
         )
 
     def get_serializer_class(self):
+        if self.action == 'seletor_trabalho':
+            return AlpinistaSeletorTrabalhoSerializer
         if self.action == 'foto':
             return AlpinistaFotoSerializer
         if self.action == 'musica':
@@ -1111,6 +1115,16 @@ class AlpinistaViewSet(viewsets.ModelViewSet):
         if self.has_full_profile_access():
             return AlpinistaCompletoSerializer
         return AlpinistaResumoSerializer
+
+    @action(detail=False, methods=['get'], url_path='seletor-trabalho')
+    def seletor_trabalho(self, request):
+        queryset = self.filter_queryset(self.get_queryset()).filter(
+            pessoa__isnull=False,
+        ).only('id', 'pessoa_id', 'nome', 'grupo')
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            return self.get_paginated_response(self.get_serializer(page, many=True).data)
+        return Response(self.get_serializer(queryset, many=True).data)
 
     @action(detail=True, methods=['patch', 'delete'], url_path='foto')
     def foto(self, request, pk=None):
@@ -2983,6 +2997,7 @@ class CampanhaConvitesEncontroViewSet(viewsets.GenericViewSet):
 
 
 class ConviteEncontroCommandViewSet(
+    mixins.ListModelMixin,
     mixins.CreateModelMixin,
     viewsets.GenericViewSet,
 ):
@@ -2993,6 +3008,22 @@ class ConviteEncontroCommandViewSet(
     )
     serializer_class = ConviteEncontroCommandSerializer
     permission_classes = [require_sia_roles(*FICHAS_MANAGEMENT_ROLES)]
+
+    def list(self, request, *args, **kwargs):
+        encontro = request.query_params.get('encontro', '')
+        if not encontro:
+            raise MethodNotAllowed(request.method)
+        if not encontro.isascii() or not encontro.isdigit() or int(encontro) <= 0:
+            raise ValidationError({'encontro': 'Informe um Encontro válido.'})
+        if request.query_params.get('finalidade', 'trabalhar') != 'trabalhar':
+            raise ValidationError({'finalidade': 'Somente convites de trabalho são permitidos.'})
+        queryset = self.get_queryset().filter(
+            encontro_id=int(encontro), finalidade=ConviteEncontro.Finalidade.TRABALHAR,
+        ).order_by('-criado_em', '-id')
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            return self.get_paginated_response(ConviteTrabalhoLeituraSerializer(page, many=True).data)
+        return Response(ConviteTrabalhoLeituraSerializer(queryset, many=True).data)
 
     def perform_create(self, serializer):
         with transaction.atomic():

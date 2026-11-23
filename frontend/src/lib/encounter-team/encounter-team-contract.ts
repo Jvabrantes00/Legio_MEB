@@ -41,3 +41,28 @@ export function buildEncounterTeamPath(encontroId: number): string {
   if (!Number.isSafeInteger(encontroId) || encontroId <= 0) throw new Error("Encontro inválido.");
   return `/encontros/${encontroId}/workspace/equipes/`;
 }
+
+export function parseReadiness(value: unknown) {
+  const r = record(value), c = record(r.contagens);
+  return { elegivel: bool(r.elegivel), motivos: list(r.motivos, text), contagens: {
+    vinculos_legados_equipe: integer(c.vinculos_legados_equipe), vinculos_tipo_indefinido: integer(c.vinculos_tipo_indefinido),
+    equipes_canonicas: integer(c.equipes_canonicas), trabalhos_canonicos: integer(c.trabalhos_canonicos),
+  } };
+}
+export function parseActivation(value: unknown) { const r = record(value); return { modelo_equipes: enumeration(r.modelo_equipes, ["CANONICO"] as const) }; }
+export function parsePreparation(value: unknown) { return list(value, (item) => { const r = record(item); return { id: integer(r.id), nome: text(r.nome) }; }); }
+function page<T>(value: unknown, parse: (item: unknown) => T) {
+  const r = record(value);
+  const link = (v: unknown) => v === null ? null : text(v);
+  return { count: integer(r.count), next: link(r.next), previous: link(r.previous), results: list(r.results, parse) };
+}
+export function parseSelectorPage(value: unknown) {
+  return page(value, (item) => { const r = record(item); return { id: integer(r.id), pessoa_id: integer(r.pessoa_id), nome: text(r.nome), grupo: r.grupo === null ? null : text(r.grupo) }; });
+}
+export function parseInvitePage(value: unknown) {
+  return page(value, (item) => { const r = record(item); return { id: integer(r.id), pessoa_id: integer(r.pessoa_id), pessoa_nome: text(r.pessoa_nome), encontro_id: integer(r.encontro_id), finalidade: enumeration(r.finalidade, ["trabalhar"] as const), status: enumeration(r.status, ["convidado", "confirmado", "recusado", "sem_resposta"] as const), role_trabalho_proposta_id: nullableInteger(r.role_trabalho_proposta_id), criado_em: text(r.criado_em) }; });
+}
+export function parseEligibilityError(value: unknown) {
+  const r = record(record(value).avaliacao);
+  return { resultado: enumeration(r.resultado, RESULTS), motivos: list(r.motivos, (item) => { const m = record(item); return { codigo: enumeration(m.codigo, CODES), categoria: enumeration(m.categoria, RESULTS), mensagem: text(m.mensagem) }; }) };
+}

@@ -84,6 +84,19 @@ describe("cookies de autenticação", () => {
   });
 });
 
+describe("limites GE-2A no proxy", () => {
+  it("permite apenas os caminhos e consultas autorizados", () => {
+    expect(() => validateProxyPath(["convites-encontros"], new URLSearchParams("encontro=1&finalidade=trabalhar"))).not.toThrow();
+    expect(() => validateProxyPath(["convites-encontros"], new URLSearchParams(), "POST")).not.toThrow();
+    expect(() => validateProxyPath(["convites-encontros"], new URLSearchParams())).toThrow();
+    expect(() => validateProxyPath(["convites-encontros"], new URLSearchParams("encontro=1&finalidade=participar"))).toThrow();
+    expect(() => validateProxyPath(["convites-encontros", "1", "responder"], new URLSearchParams(), "POST")).toThrow();
+    expect(() => validateProxyPath(["equipes-encontros"], new URLSearchParams("encontro=1"))).toThrow();
+    expect(() => validateProxyPath(["alpinistas", "seletor-trabalho"], new URLSearchParams(), "PATCH")).toThrow();
+    expect(() => validateProxyPath(["encontros", "..", "modelo-equipes"], new URLSearchParams())).toThrow();
+  });
+});
+
 describe("CSRF double-submit e Origin", () => {
   it("aceita token igual e Origin exata", () => {
     const valid = mutationRequest("/api/sia/alpinistas/", { method: "POST" });

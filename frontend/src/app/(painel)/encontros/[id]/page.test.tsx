@@ -147,6 +147,7 @@ describe("integração de Encontristas no Workspace", () => {
 
   it("alterna a visão administrativa mantendo a matriz montada e reinicia em outro Encontro", async () => {
     state.session = { id: 2, username: "fichas", roles: ["Fichas"], superuser: false };
+    state.equipes = { modelo_equipes: "LEGADO", quantidade_equipes: 0 };
     state.capabilities.acessar_equipes = true;
     mockedFetch.mockImplementation(async (path) => {
       if (String(path) === "/funcoes/") return json([{ id: 1, nome: "Apoio" }]);
@@ -180,13 +181,24 @@ describe("integração de Encontristas no Workspace", () => {
     expectSelection(canonicalButton, legacyButton);
     expect(legacy.closest("[hidden]")).toBeTruthy();
     expect(screen.queryByRole("heading", { name: "Montagem das Equipes" })).toBeNull();
-    expect(await screen.findByText("Equipes ainda não preparadas")).toBeTruthy();
+    expect(screen.getByText(/modelo canônico de Equipes não está ativo/)).toBeTruthy();
+    expect(mockedFetch.mock.calls.some(([path]) => String(path).includes("workspace/equipes/"))).toBe(false);
     await user.click(screen.getByRole("button", { name: "Matriz legada" }));
     expect(screen.getByText("Montagem das Equipes")).toBe(legacy);
     await user.click(screen.getByRole("button", { name: "Visão canônica" }));
     state.id = "38"; view.rerender(<DetalhesEncontro />);
     expect(screen.getByRole("button", { name: "Matriz legada" }).getAttribute("aria-pressed")).toBe("true");
     expect(screen.getByText("Montagem das Equipes")).toBe(legacy);
+  });
+
+  it("abre o modelo canônico por padrão sem alterá-lo", async () => {
+    state.session = { id: 2, username: "fichas", roles: ["Fichas"], superuser: false };
+    state.capabilities.acessar_equipes = true;
+    mockedFetch.mockImplementation(async (path) => String(path).includes("workspace/equipes/") ? json([]) : json({}));
+    render(<DetalhesEncontro />);
+    expect((await screen.findByRole("button", { name: "Visão canônica" })).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("button", { name: "Matriz legada" }).getAttribute("aria-pressed")).toBe("false");
+    expect(mockedFetch.mock.calls.every(([, init]) => !init?.method || init.method === "GET")).toBe(true);
   });
 
   it("mantém a visão resumida e distingue carregamento e falha do resumo", async () => {

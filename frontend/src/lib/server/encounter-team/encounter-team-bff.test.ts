@@ -2,10 +2,15 @@ import { describe, expect, it } from "vitest";
 import { isAllowedEncounterTeamRequest as allowed } from "./encounter-team-bff";
 
 describe("BFF de equipes", () => {
-  it("permite apenas consulta exata", () => {
-    expect(allowed("GET", ["equipes-encontros"], new URLSearchParams("encontro=1"))).toBe(true);
-    for (const method of ["POST", "PUT", "PATCH", "DELETE"]) expect(allowed(method, ["equipes-encontros"], new URLSearchParams("encontro=1"))).toBe(false);
-    for (const path of [["equipes-encontros", "1"], ["equipes-encontros", "roles"], []]) expect(allowed("GET", path, new URLSearchParams("encontro=1"))).toBe(false);
-    for (const query of ["", "encontro=0", "encontro=-1", "encontro=abc", "encontro=01", "encontro=1&encontro=2", "encontro=1&outro=2"]) expect(allowed("GET", ["equipes-encontros"], new URLSearchParams(query))).toBe(false);
+  it("permite somente o contrato GE-2A", () => {
+    expect(allowed("GET", ["convites-encontros"], new URLSearchParams("encontro=1&finalidade=trabalhar&page=2"))).toBe(true);
+    expect(allowed("POST", ["convites-encontros"])).toBe(true);
+    expect(allowed("GET", ["encontros", "1", "modelo-equipes"])).toBe(true);
+    expect(allowed("POST", ["encontros", "1", "modelo-equipes"])).toBe(true);
+    expect(allowed("POST", ["encontros", "1", "preparar-equipes"])).toBe(true);
+    expect(allowed("GET", ["alpinistas", "seletor-trabalho"], new URLSearchParams("search=Ana&page=1&ordering=-nome"))).toBe(true);
+    for (const method of ["PUT", "PATCH", "DELETE"]) expect(allowed(method, ["convites-encontros"])).toBe(false);
+    for (const path of [["equipes-encontros"], ["trabalhos-encontros"], ["convites-encontros", "1", "responder"], ["encontros", "..", "modelo-equipes"]]) expect(allowed("GET", path)).toBe(false);
+    for (const query of ["", "encontro=0&finalidade=trabalhar", "encontro=1&finalidade=participar", "encontro=1&finalidade=trabalhar&encontro=2", "encontro=1&finalidade=trabalhar&outro=2"]) expect(allowed("GET", ["convites-encontros"], new URLSearchParams(query))).toBe(false);
   });
 });

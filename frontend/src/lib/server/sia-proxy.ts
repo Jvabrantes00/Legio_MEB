@@ -5,6 +5,7 @@ import { validateCsrf } from "./csrf";
 import { backendApiUrl, getSiaServerConfig } from "./sia-config";
 import { isAllowedPreEncounterRequest } from "./pre-encounter-bff";
 import { isAllowedEncounterWorkspaceRequest } from "./encounter-workspace-bff";
+import { isAllowedEncounterTeamRequest } from "./encounter-team/encounter-team-bff";
 import {
   createPreEncounterMediaResponse,
   preEncounterMediaOperation,
@@ -43,7 +44,13 @@ export function validateProxyPath(
   searchParams: URLSearchParams,
   method = "GET",
 ) {
-  if (!path.length || path.some(invalidPathPart) || !ALLOWED_RESOURCES.has(path[0])) {
+  if (!path.length || path.some(invalidPathPart)) {
+    throw new Error("Caminho de API não permitido.");
+  }
+  const teamPath = path[0] === "convites-encontros"
+    || (path[0] === "alpinistas" && path[1] === "seletor-trabalho")
+    || (path[0] === "encontros" && ["modelo-equipes", "preparar-equipes"].includes(path[2] ?? ""));
+  if (teamPath ? !isAllowedEncounterTeamRequest(method, path, searchParams) : !ALLOWED_RESOURCES.has(path[0])) {
     throw new Error("Caminho de API não permitido.");
   }
   if (

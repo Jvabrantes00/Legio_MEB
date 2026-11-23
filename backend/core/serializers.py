@@ -2050,6 +2050,23 @@ def _avaliacao_da_instancia(instance):
     return avaliacao.as_dict() if avaliacao is not None else None
 
 
+class AlpinistaSeletorTrabalhoSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Alpinista
+        fields = ('id', 'pessoa_id', 'nome', 'grupo')
+        read_only_fields = fields
+
+
+class ConviteTrabalhoLeituraSerializer(serializers.ModelSerializer):
+    pessoa_nome = serializers.CharField(source='pessoa.nome', read_only=True)
+
+    class Meta:
+        model = ConviteEncontro
+        fields = ('id', 'pessoa_id', 'pessoa_nome', 'encontro_id', 'finalidade',
+                  'status', 'role_trabalho_proposta_id', 'criado_em')
+        read_only_fields = fields
+
+
 class InscricaoEncontroCommandSerializer(serializers.ModelSerializer):
     pessoa_id = serializers.PrimaryKeyRelatedField(
         source='pessoa',

@@ -37,8 +37,16 @@ describe("painel de equipes", () => {
     expect(await screen.findByText("Pessoa Exemplo — alocado")).toBeTruthy();
     expect(screen.getByText("Vagas estruturais: não definida")).toBeTruthy();
     expect(screen.getByText("Abaixo")).toBeTruthy();
-    expect(screen.getByText("Visão canônica somente leitura. Não substitui a montagem de equipes.")).toBeTruthy();
+    expect(screen.queryByText("Visão canônica somente leitura. Não substitui a montagem de equipes.")).toBeNull();
     expect(screen.queryByText("segredo")).toBeNull(); expect(screen.queryAllByRole("button")).toHaveLength(0);
+  });
+  it("agrupa avisos iguais de composição preservando as funções envolvidas", async () => {
+    const motivo = { codigo: "COMPOSICAO_ESTRUTURAL_INCOMPLETA", categoria: "AVISO", mensagem: "Composição incompleta" };
+    fetchMock.mockResolvedValue(json([{ ...team, composicao: { resultado: "AVISO", motivos: [{ ...motivo, contexto: { role_id: 3, ocupacao: 1, quantidade_estrutural: 2 } }, { ...motivo, contexto: { role_id: 6, ocupacao: 0, quantidade_estrutural: 3 } }] }, roles: [...team.roles, { ...team.roles[0], id: 6, nome: "Cozinha", trabalhos: [] }] }]));
+    render(<EncounterTeamPanel encontroId={2} capabilities={caps} equipes={equipes} />);
+    expect(await screen.findAllByText("Composição incompleta")).toHaveLength(1);
+    expect(screen.getByText(/Função: Apoio.*ocupacao: 1/)).toBeTruthy();
+    expect(screen.getByText(/Função: Cozinha.*ocupacao: 0/)).toBeTruthy();
   });
   it("apresenta vazio, erro, retry e 403", async () => {
     fetchMock.mockResolvedValueOnce(json([])).mockResolvedValueOnce(json({ detail: "Falha" }, 500)).mockResolvedValueOnce(json({ detail: "negado" }, 403)).mockResolvedValueOnce(json([team]));
