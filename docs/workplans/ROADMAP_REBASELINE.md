@@ -1,5 +1,8 @@
 # Roadmap Re-baseline
 
+> Registro histórico. Não descreve o estado atual; consulte
+> [docs/PROJECT_STATE.md](../PROJECT_STATE.md) (bloco 'Estado verificado em 2026-11-24').
+
 ## Status
 
 ### Atualização documental

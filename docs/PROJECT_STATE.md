@@ -1,6 +1,42 @@
 # SIA/MEB — Estado do Projeto
 
+## Estado verificado em 2026-11-24
+
+- **VERIFICADO:** branch `sia/roadmap-rebaseline`, HEAD
+  `7547ad0807a6cb4518805eb9d26302c5ed685ddf`; publicação na branch de
+  desenvolvimento verificada pelo ARCH. GE-2A (`e4ac93c`), GE-2B-1
+  (`db3bc5e`) e GE-2B-2 (`7547ad0`) estão implementados e publicados nessa
+  branch, sem merge na main nem implantação em produção, conforme evidência
+  fornecida. Antes deles: seed de Coordenação Geral `3e17195`, seed_demo
+  idempotente `202f9a1` e autoridade funcional de Suporte `ec9a86f`.
+- **VERIFICADO pelo ARCH:** homologação HTTP GE-2B-2 com SQLite descartável,
+  cliente → BFF → backend: 153/154 verificações OK. A divergência aceita é
+  auditoria redundante na desalocação idempotente, sem mudança de dados.
+  Coordenação Geral leu apenas o próprio Encontro (200), recebeu 403 nas
+  escritas e em outros Encontros; payloads iguais aos de Fichas. Houve
+  conferência de integridade SHA-256 e auditorias Git.
+- **REGISTRADO pelo ARCH:** homologação HTTP GE-2B-1, 61/61, em pacote anterior.
+- **RELATADO por DEV/QA, não reexecutado pelo ARCH:** frontend 35 arquivos,
+  471 testes aprovados, lint sem erros e dois avisos antigos, TypeScript sem
+  erros; backend check e migration check limpos, 1116 testes OK e 75 pulados
+  em SQLite em memória.
+- **RELATADO por pessoas:** validação visual GE-2B-2 em nove cenários; C5 B1
+  em PostgreSQL, 67 aprovados e um pulado.
+- **NÃO VERIFICADO/PENDENTE:** suíte PostgreSQL completa e build no HEAD,
+  produção, backup e homologação com usuários reais; idempotência de
+  `iniciar_trabalho_confirmado`, campos de encontristas para Coordenação
+  Geral com registros preenchidos, seletor de status e rótulos terminais.
+  A auditoria redundante foi aceita como pendência. Faltam catálogo real
+  aprovado, telas operacionais e exposição no BFF de retirar, substituir e
+  registrar resultado; C5 tem somente schema B1 e não está ativado.
+- **Legado:** a meta aprovada é substituir o legado preservando os dados
+  históricos; a estratégia de migração ainda não foi homologada. Detalhes no
+  [handoff](SENIOR_HANDOFF.md).
+
 ## Estado atual
+
+> Snapshot de 11/nov/2026, HEAD 1c42f63 — histórico; leia primeiro o bloco
+> 'Estado verificado em 2026-11-24'.
 
 - Snapshot documental atualizado em 11 de novembro de 2026, sem nova
   verificação geral de todo o projeto.
@@ -64,7 +100,7 @@
   commit local F-01 `a44518c8b76143319974032150950d14d8b9fab8`, com a
   mensagem `fix: restrict communication pre-encounter access` e os 16 arquivos
   de código e testes da correção.
-- O commit F-01 ainda não foi publicado. Os oito commits funcionais anteriores,
+- (obsoleto: publicado; ver bloco de 2026-11-24) O commit F-01 ainda não foi publicado. Os oito commits funcionais anteriores,
   o F-01 e os commits locais C0 e C1 (ver as seções da Pré-seleção e do C5)
   aguardam publicação controlada; nenhum push, merge ou deploy foi realizado ou
   autorizado.
@@ -83,7 +119,7 @@ nenhuma migration foi aplicada em banco persistente.
   (`feat(entrega): adiciona reconciliacao e integridade de convites`), com 7
   arquivos: `models.py` (hunks do B1), migrations `0051` e `0052` e quatro
   arquivos de teste do B1. Foi autorizado após o aceite A1 (que não autorizava
-  commit); não foi publicado.
+  commit); não foi publicado. (obsoleto: publicado; ver bloco de 2026-11-24)
 - **Homologações do snapshot C1:**
   - SQLite G-B1: 29 testes, 13 aprovados, 16 pulados por exigirem PostgreSQL.
   - SQLite G-REG: 39 aprovados.

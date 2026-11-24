@@ -3,7 +3,18 @@
 Este arquivo é o ponto de entrada da documentação. Ele roteia o contexto; não
 substitui os documentos de referência nem os `AGENTS.md` aplicáveis.
 
+## Estado verificado em 2026-11-24
+
+HEAD `7547ad0807a6cb4518805eb9d26302c5ed685ddf` na branch
+`sia/roadmap-rebaseline`, publicada segundo verificação Git relatada pelo ARCH.
+GE-2A, GE-2B-1 e GE-2B-2 estão implementados. Permanecem pendentes a suíte
+PostgreSQL completa no HEAD, o build, a homologação com usuários reais e a
+estratégia de migração do legado. Consulte o [README](../README.md), o
+[handoff](SENIOR_HANDOFF.md) e o [estado detalhado](PROJECT_STATE.md).
+
 ## Estado atual
+
+> Snapshot histórico de 11/nov/2026 — não descreve o estado atual.
 
 - A Fase 0 está formalmente concluída.
 - O Roadmap Re-baseline e sua implementação R.3I estão em andamento.
@@ -100,6 +111,8 @@ necessário. Carregue outros documentos apenas diante de dependência real da
 tarefa.
 
 ### Equipes e Trabalho em Encontro
+
+Estado da implementação: [GE-2 — equipe canônica](workplans/GE_2_EQUIPE_CANONICA.md).
 
 Se a tarefa envolver templates ou equipes de Encontro, roles/funções, convite
 para trabalhar, alocação, `TrabalhoEncontro`, coordenação, reuniões ou presença

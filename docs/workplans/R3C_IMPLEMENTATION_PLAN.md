@@ -15,6 +15,9 @@ disponível ou decisões externas explicitamente identificadas.
 
 ### Panorama da implementação
 
+> Panorama histórico de 11/nov/2026; o estado corrente está em
+> [docs/PROJECT_STATE.md](../PROJECT_STATE.md), no bloco 'Estado verificado em 2026-11-24'.
+
 - R.3I.1–I.9 estão implementadas e possuem testes automatizados, mas a
   validação executada e o fechamento formal não estão comprovados no registro
   versionado.
