@@ -1,4 +1,4 @@
-# Handoff para desenvolvimento sênior
+# Handoff 
 
 Conferência: 2026-11-24. HEAD `7547ad0807a6cb4518805eb9d26302c5ed685ddf`.
 
