@@ -82,3 +82,16 @@ it("mostra falha de rede sem classificá-la como duplicidade e permite tentar no
   expect(screen.queryByText(/Já existe um convite/)).toBeNull();
   expect((screen.getByRole("button", { name: "Registrar convite" }) as HTMLButtonElement).disabled).toBe(false);
 });
+
+it("preserva a página de convites durante sincronização", async () => {
+  const invite = { id: 9, pessoa_id: 7, pessoa_nome: "Pessoa", encontro_id: 1, finalidade: "trabalhar", status: "confirmado", role_trabalho_proposta_id: null, trabalho_id: null, trabalho_status: null, criado_em: "2026" };
+  vi.mocked(siaFetch).mockImplementation(async (path) => {
+    const url = String(path); if (url.startsWith("/alpinistas")) return Response.json({ count: 0, next: null, previous: null, results: [] });
+    const second = url.includes("page=2"); return Response.json({ count: 2, next: second ? null : "next", previous: second ? "previous" : null, results: second ? [invite] : [] });
+  });
+  const view = render(<EncounterTeamInvites encontroId={1} teams={[]} enabled refreshToken={0} />);
+  await screen.findByText("Nenhum convite de trabalho registrado."); fireEvent.click(within(screen.getByLabelText("Paginação de convites")).getByRole("button", { name: "Próxima" }));
+  await screen.findByText("Pessoa — Confirmado"); view.rerender(<EncounterTeamInvites encontroId={1} teams={[]} enabled refreshToken={1} />);
+  await waitFor(() => expect(vi.mocked(siaFetch).mock.calls.filter(([path]) => String(path).includes("page=2")).length).toBe(2));
+  expect(screen.getByText("Pessoa — Confirmado")).toBeTruthy();
+});

@@ -5,7 +5,7 @@ import { validateCsrf } from "./csrf";
 import { backendApiUrl, getSiaServerConfig } from "./sia-config";
 import { isAllowedPreEncounterRequest } from "./pre-encounter-bff";
 import { isAllowedEncounterWorkspaceRequest } from "./encounter-workspace-bff";
-import { isAllowedEncounterTeamRequest, parseStartWorkBody } from "./encounter-team/encounter-team-bff";
+import { isAllowedEncounterTeamRequest, parseStartWorkBody, parseWorkActionBody } from "./encounter-team/encounter-team-bff";
 import {
   createPreEncounterMediaResponse,
   preEncounterMediaOperation,
@@ -183,7 +183,9 @@ export async function proxySiaRequest(
   let requestBody = canHaveBody ? await request.arrayBuffer() : undefined;
   if (path[0] === "trabalhos-encontros") {
     try {
-      const parsed = parseStartWorkBody(JSON.parse(new TextDecoder().decode(requestBody)));
+      const bodyText = new TextDecoder().decode(requestBody);
+      const value = path.length === 3 && path[2] === "desalocar" && !bodyText.trim() ? {} : JSON.parse(bodyText);
+      const parsed = path.length === 1 ? parseStartWorkBody(value) : parseWorkActionBody(value, path[2]);
       requestBody = new TextEncoder().encode(JSON.stringify(parsed)).buffer;
     } catch {
       return NextResponse.json({ detail: "Corpo inválido." }, { status: 400, headers: { "Cache-Control": "private, no-store" } });
@@ -192,9 +194,11 @@ export async function proxySiaRequest(
 
   try {
     const result = await authenticatedDjangoRequest(request, (access) => {
+      const headers = forwardedHeaders(request, access);
+      if (path[0] === "trabalhos-encontros") headers.set("Content-Type", "application/json");
       const init: RequestInit = {
         method: request.method,
-        headers: forwardedHeaders(request, access),
+        headers,
         body: requestBody?.slice(0),
         cache: "no-store",
         redirect: "manual",

@@ -140,6 +140,12 @@ comandos explícitos sobre o domínio canônico de Encontros.
   executar os comandos canônicos de convite, início, alocação, realocação,
   retirada, substituição e resultado de trabalho. O superuser permanece como
   bypass técnico separado.
+- No BFF, além do início aprovado, apenas `alocar`, `realocar` e
+  `desalocar` são expostos: os corpos são estritos, com função e confirmação
+  booleana opcional nas duas primeiras ações e objeto vazio na última.
+  Retirar, substituir e resultado permanecem fora do BFF. A interface exibe
+  controles somente para Suporte, Diretoria e Fichas; a Coordenação Geral
+  contextual apenas consulta a composição.
 - As consultas exigem escopo explícito de Encontro e os comandos não expõem
   update ou delete genéricos de `TrabalhoEncontro`.
 - A action `responder-trabalho` aplica as mesmas permissões e aceita apenas

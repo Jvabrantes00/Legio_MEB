@@ -25,3 +25,12 @@ describe("contrato de equipes", () => {
     for (const value of [null, {}, [null], [{ ...team(), nome: null }], [{ ...team(), ordem: "1" }], [{ ...team(), roles: {} }], [{ ...team(), capacidade: { resultado: "OUTRO", motivos: [] } }], [{ ...team(), composicao: { resultado: "AVISO", motivos: [{ codigo: "INVALIDO", categoria: "AVISO", mensagem: "x" }] } }], [{ ...team(), capacidade: { resultado: "AVISO", motivos: [{ codigo: "CAPACIDADE_MAXIMA_EXCEDIDA", categoria: "AVISO", mensagem: "x", contexto: null }] } }]]) expect(() => parseEncounterTeams(value)).toThrow();
   });
 });
+
+it("constrói caminhos e corpos restritos das ações de trabalho", async () => {
+  const { buildWorkActionPath, buildWorkActionBody } = await import("./encounter-team-contract");
+  for (const action of ["alocar", "realocar", "desalocar"] as const) expect(buildWorkActionPath(4, action)).toBe(`/trabalhos-encontros/4/${action}/`);
+  expect(buildWorkActionBody("alocar", 3)).toEqual({ role_equipe_id: 3 });
+  expect(buildWorkActionBody("realocar", 3, true)).toEqual({ role_equipe_id: 3, confirmar_avisos: true });
+  expect(buildWorkActionBody("desalocar")).toEqual({});
+  expect(() => buildWorkActionPath(0, "alocar")).toThrow(); expect(() => buildWorkActionBody("alocar", 0)).toThrow();
+});

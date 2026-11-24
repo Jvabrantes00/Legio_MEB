@@ -580,3 +580,41 @@ describe("referências retornadas pelo Django", () => {
     expect(await response.text()).toBe("bytes");
   });
 });
+
+describe("ações GE-2B-2 no proxy", () => {
+  it.each(["alocar", "realocar", "desalocar"])("valida e normaliza %s antes do backend", async (action) => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async () => Response.json({}));
+    const path = ["trabalhos-encontros", "4", action]; const url = `/api/sia/trabalhos-encontros/4/${action}/`;
+    const valid = action === "desalocar" ? [undefined, "{}"] : ['{"role_equipe_id":2}', '{"role_equipe_id":2,"confirmar_avisos":true}', '{"role_equipe_id":2,"confirmar_avisos":false}'];
+    for (const body of valid) {
+      const response = await proxySiaRequest(mutationRequest(url, { method: "POST", body }), path);
+      expect(response.status).toBe(200);
+      const init = fetchMock.mock.calls.at(-1)?.[1];
+      expect(await new Response(init?.body).json()).toEqual(body === undefined ? {} : JSON.parse(body));
+      expect(new Headers(init?.headers).get("content-type")).toBe("application/json");
+    }
+    const invalid = action === "desalocar" ? ['{"x":1}', '[]', '{'] : [undefined, '{}', '[]', '{', '{"role_equipe_id":0}', '{"role_equipe_id":-1}', '{"role_equipe_id":1.5}', '{"role_equipe_id":"1"}', '{"role_equipe_id":9007199254740992}', '{"role_equipe_id":1,"confirmar_avisos":"true"}', '{"role_equipe_id":1,"confirmar_avisos":1}', '{"role_equipe_id":1,"extra":2}'];
+    for (const body of invalid) {
+      const count = fetchMock.mock.calls.length;
+      const response = await proxySiaRequest(mutationRequest(url, { method: "POST", body }), path);
+      expect(response.status).toBe(400); expect(await response.json()).toEqual({ detail: "Corpo inválido." }); expect(fetchMock).toHaveBeenCalledTimes(count);
+    }
+  });
+  it("rejeita caminhos e consultas antes de contatar o backend", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+    for (const path of [["trabalhos-encontros", "0", "alocar"], ["trabalhos-encontros", "-1", "alocar"], ["trabalhos-encontros", "abc", "alocar"], ["trabalhos-encontros", "1.5", "alocar"], ["trabalhos-encontros", "", "alocar"], ["trabalhos-encontros", "1", "retirar"], ["trabalhos-encontros", "1", "substituir"], ["trabalhos-encontros", "1", "resultado"], ["trabalhos-encontros", "1", "alocar", "extra"]]) {
+      const response = await proxySiaRequest(mutationRequest("/api/sia/trabalhos-encontros/1/alocar/", { method: "POST", body: "{}" }), path);
+      expect(response.status).toBe(400);
+    }
+    for (const query of ["?x=1", "?x=1&x=2"]) expect((await proxySiaRequest(mutationRequest(`/api/sia/trabalhos-encontros/1/alocar/${query}`, { method: "POST", body: "{}" }), ["trabalhos-encontros", "1", "alocar"])).status).toBe(400);
+    for (const method of ["GET", "PUT", "PATCH", "DELETE"]) expect((await proxySiaRequest(mutationRequest("/api/sia/trabalhos-encontros/1/alocar/", { method }), ["trabalhos-encontros", "1", "alocar"])).status).toBe(400);
+    for (const path of [["trabalhos-encontros"], ["trabalhos-encontros", "1"]]) expect((await proxySiaRequest(request("/api/sia/trabalhos-encontros/", { method: "GET" }), path)).status).toBe(400);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+  it("exige CSRF e autenticação", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch"); const path = ["trabalhos-encontros", "1", "desalocar"];
+    expect((await proxySiaRequest(request("/api/sia/trabalhos-encontros/1/desalocar/", { method: "POST" }), path)).status).toBe(403);
+    const noSession = request("/api/sia/trabalhos-encontros/1/desalocar/", { method: "POST", headers: { origin: APP_ORIGIN, "x-csrf-token": "csrf-token", cookie: "sia_csrf=csrf-token" } }, "");
+    expect((await proxySiaRequest(noSession, path)).status).toBe(401); expect(fetchMock).not.toHaveBeenCalled();
+  });
+});

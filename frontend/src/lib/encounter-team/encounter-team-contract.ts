@@ -42,6 +42,17 @@ export function buildEncounterTeamPath(encontroId: number): string {
   return `/encontros/${encontroId}/workspace/equipes/`;
 }
 
+export type WorkAction = "alocar" | "realocar" | "desalocar";
+export function buildWorkActionPath(id: number, action: WorkAction): string {
+  if (!Number.isSafeInteger(id) || id <= 0 || !["alocar", "realocar", "desalocar"].includes(action)) throw new Error("Trabalho inválido.");
+  return `/trabalhos-encontros/${id}/${action}/`;
+}
+export function buildWorkActionBody(action: WorkAction, roleId?: number, confirmWarnings = false): Record<string, number | boolean> {
+  if (action === "desalocar") return {};
+  if (!Number.isSafeInteger(roleId) || (roleId as number) <= 0) throw new Error("Função inválida.");
+  return { role_equipe_id: roleId as number, ...(confirmWarnings ? { confirmar_avisos: true } : {}) };
+}
+
 export function parseReadiness(value: unknown) {
   const r = record(value), c = record(r.contagens);
   return { elegivel: bool(r.elegivel), motivos: list(r.motivos, text), contagens: {
