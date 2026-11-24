@@ -85,6 +85,20 @@ describe("cookies de autenticação", () => {
 });
 
 describe("limites GE-2A no proxy", () => {
+  it("encaminha apenas o corpo autorizado para iniciar trabalho", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async () => Response.json({ id: 1 }, { status: 201 }));
+    for (const body of [{ convite_id: 4 }, { convite_id: 4, confirmar_avisos: true }]) {
+      const response = await proxySiaRequest(mutationRequest("/api/sia/trabalhos-encontros/", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }), ["trabalhos-encontros"]);
+      expect(response.status).toBe(201);
+      expect(JSON.parse(await new Response(fetchMock.mock.calls.at(-1)?.[1]?.body).text())).toEqual(body);
+    }
+    for (const body of [{}, { convite_id: 0 }, { convite_id: "4" }, { convite_id: 4, confirmar_avisos: "true" }, { convite_id: 4, pessoa_id: 2 }]) {
+      const count = fetchMock.mock.calls.length;
+      const response = await proxySiaRequest(mutationRequest("/api/sia/trabalhos-encontros/", { method: "POST", body: JSON.stringify(body) }), ["trabalhos-encontros"]);
+      expect(response.status).toBe(400);
+      expect(fetchMock).toHaveBeenCalledTimes(count);
+    }
+  });
   it("permite apenas os caminhos e consultas autorizados", () => {
     expect(() => validateProxyPath(["convites-encontros"], new URLSearchParams("encontro=1&finalidade=trabalhar"))).not.toThrow();
     expect(() => validateProxyPath(["convites-encontros"], new URLSearchParams(), "POST")).not.toThrow();

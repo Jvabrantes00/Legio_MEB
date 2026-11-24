@@ -60,7 +60,7 @@ export function parseSelectorPage(value: unknown) {
   return page(value, (item) => { const r = record(item); return { id: integer(r.id), pessoa_id: integer(r.pessoa_id), nome: text(r.nome), grupo: r.grupo === null ? null : text(r.grupo) }; });
 }
 export function parseInvitePage(value: unknown) {
-  return page(value, (item) => { const r = record(item); return { id: integer(r.id), pessoa_id: integer(r.pessoa_id), pessoa_nome: text(r.pessoa_nome), encontro_id: integer(r.encontro_id), finalidade: enumeration(r.finalidade, ["trabalhar"] as const), status: enumeration(r.status, ["convidado", "confirmado", "recusado", "sem_resposta"] as const), role_trabalho_proposta_id: nullableInteger(r.role_trabalho_proposta_id), criado_em: text(r.criado_em) }; });
+  return page(value, (item) => { const r = record(item); return { id: integer(r.id), pessoa_id: integer(r.pessoa_id), pessoa_nome: text(r.pessoa_nome), encontro_id: integer(r.encontro_id), finalidade: enumeration(r.finalidade, ["trabalhar"] as const), status: enumeration(r.status, ["convidado", "confirmado", "recusado", "sem_resposta"] as const), role_trabalho_proposta_id: nullableInteger(r.role_trabalho_proposta_id), trabalho_id: nullableInteger(r.trabalho_id), trabalho_status: r.trabalho_status === null ? null : enumeration(r.trabalho_status, STATUSES), criado_em: text(r.criado_em) }; });
 }
 export function parseEligibilityError(value: unknown) {
   const r = record(record(value).avaliacao);

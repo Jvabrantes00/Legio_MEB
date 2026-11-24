@@ -7,7 +7,7 @@ import type { EncounterTeam } from "../../lib/encounter-team/encounter-team-cont
 vi.mock("../../lib/sia-api", () => ({ siaFetch: vi.fn() }));
 afterEach(() => { cleanup(); vi.resetAllMocks(); });
 it("mostra estado sem resposta e não sugere envio externo", async () => {
-  vi.mocked(siaFetch).mockImplementation(async (path) => Response.json(String(path).startsWith("/alpinistas") ? { count: 0, next: null, previous: null, results: [] } : { count: 1, next: null, previous: null, results: [{ id: 1, pessoa_id: 2, pessoa_nome: "Pessoa", encontro_id: 1, finalidade: "trabalhar", status: "sem_resposta", role_trabalho_proposta_id: null, criado_em: "2026-01-01" }] }));
+  vi.mocked(siaFetch).mockImplementation(async (path) => Response.json(String(path).startsWith("/alpinistas") ? { count: 0, next: null, previous: null, results: [] } : { count: 1, next: null, previous: null, results: [{ id: 1, pessoa_id: 2, pessoa_nome: "Pessoa", encontro_id: 1, finalidade: "trabalhar", status: "sem_resposta", role_trabalho_proposta_id: null, trabalho_id: null, trabalho_status: null, criado_em: "2026-01-01" }] }));
   render(<EncounterTeamInvites encontroId={1} teams={[]} enabled />);
   expect(await screen.findByText(/Pessoa — Sem resposta/)).toBeTruthy();
   const list = screen.getByRole("list", { name: "Convites registrados" });
@@ -17,14 +17,37 @@ it("mostra estado sem resposta e não sugere envio externo", async () => {
   expect(screen.getByLabelText("Função").tagName).toBe("SELECT");
   expect(screen.getByLabelText("Paginação de alpinistas").className).toContain("gap-2");
   expect(screen.queryByText(/convite enviado/i)).toBeNull();
-  expect(screen.getByText(/etapa posterior/)).toBeTruthy();
+  expect(screen.queryByText(/etapa posterior/)).toBeNull();
+});
+
+it("atualiza a resposta na lista antes e depois da recarga", async () => {
+  let resolveReload!: (response: Response) => void;
+  let listCount = 0;
+  const invite = { id: 1, pessoa_id: 2, pessoa_nome: "Pessoa", encontro_id: 1, finalidade: "trabalhar", status: "convidado", role_trabalho_proposta_id: null, trabalho_id: null, trabalho_status: null, criado_em: "2026-01-01" };
+  const page = (status: string) => ({ count: 1, next: null, previous: null, results: [{ ...invite, status }] });
+  vi.mocked(siaFetch).mockImplementation(async (path, init) => {
+    if (init?.method === "POST") return Response.json({});
+    if (String(path).startsWith("/alpinistas")) return Response.json({ count: 0, next: null, previous: null, results: [] });
+    listCount += 1;
+    if (listCount === 1) return Response.json(page("convidado"));
+    return new Promise<Response>((resolve) => { resolveReload = resolve; });
+  });
+  render(<EncounterTeamInvites encontroId={1} teams={[]} enabled />);
+  fireEvent.click(await screen.findByRole("button", { name: "Registrar recusa" }));
+  fireEvent.click(screen.getByRole("button", { name: "Confirmar registro definitivo" }));
+  expect(await screen.findByText("Pessoa — Recusado")).toBeTruthy();
+  expect(screen.queryByText(/Pessoa — Pendente/)).toBeNull();
+  await waitFor(() => expect(resolveReload).toBeDefined());
+  resolveReload(Response.json(page("recusado")));
+  await waitFor(() => expect(screen.getByText("Pessoa — Recusado")).toBeTruthy());
+  expect(screen.queryByRole("button", { name: "Registrar recusa" })).toBeNull();
 });
 
 it("confirma duplicidade na lista e impede POSTs simultâneos", async () => {
   let resolvePost!: (response: Response) => void;
   const page = { count: 1, next: null, previous: null };
   const person = { id: 5, pessoa_id: 7, nome: "Pessoa", grupo: "A" };
-  const invite = { id: 9, pessoa_id: 7, pessoa_nome: "Pessoa", encontro_id: 1, finalidade: "trabalhar", status: "convidado", role_trabalho_proposta_id: 3, criado_em: "2026-01-01" };
+  const invite = { id: 9, pessoa_id: 7, pessoa_nome: "Pessoa", encontro_id: 1, finalidade: "trabalhar", status: "convidado", role_trabalho_proposta_id: 3, trabalho_id: null, trabalho_status: null, criado_em: "2026-01-01" };
   const team = { id: 1, nome: "Apoio", roles: [{ id: 3, nome: "Membro", quantidade_estrutural: 1 }] } as EncounterTeam;
   vi.mocked(siaFetch).mockImplementation(async (path, init) => {
     if (init?.method === "POST") return new Promise<Response>((resolve) => { resolvePost = resolve; });

@@ -142,6 +142,8 @@ comandos explícitos sobre o domínio canônico de Encontros.
   bypass técnico separado.
 - As consultas exigem escopo explícito de Encontro e os comandos não expõem
   update ou delete genéricos de `TrabalhoEncontro`.
+- A action `responder-trabalho` aplica as mesmas permissões e aceita apenas
+  convite cuja finalidade persistida seja trabalhar; participação retorna 404.
 - Avisos de elegibilidade exigem confirmação explícita; bloqueios estruturais
   permanecem impeditivos. Essa gestão não concede acesso a dados de saúde.
 - Usuários sem uma das roles administrativas não recebem gestão de equipes. A

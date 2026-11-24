@@ -7,7 +7,7 @@ describe("contrato de equipes", () => {
     const paging = { count: 1, next: null, previous: null };
     const result = parseSelectorPage({ ...paging, results: [{ id: 1, pessoa_id: 2, nome: "Ana", grupo: "A", cpf: "privado" }] });
     expect(JSON.stringify(result)).not.toContain("privado");
-    expect(parseInvitePage({ ...paging, results: [{ id: 1, pessoa_id: 2, pessoa_nome: "Ana", encontro_id: 3, finalidade: "trabalhar", status: "sem_resposta", role_trabalho_proposta_id: null, criado_em: "2026-01-01" }] }).results[0].status).toBe("sem_resposta");
+    expect(parseInvitePage({ ...paging, results: [{ id: 1, pessoa_id: 2, pessoa_nome: "Ana", encontro_id: 3, finalidade: "trabalhar", status: "sem_resposta", role_trabalho_proposta_id: null, trabalho_id: null, trabalho_status: null, criado_em: "2026-01-01" }] }).results[0].status).toBe("sem_resposta");
     expect(() => parseInvitePage({ ...paging, results: [{ finalidade: "participar" }] })).toThrow();
     expect(parseEligibilityError({ avaliacao: { resultado: "AVISO", motivos: [{ codigo: "ALPINISTA_INATIVO", categoria: "AVISO", mensagem: "Aviso" }] } }).motivos[0].categoria).toBe("AVISO");
     expect(parseReadiness({ elegivel: true, motivos: [], contagens: { vinculos_legados_equipe: 0, vinculos_tipo_indefinido: 0, equipes_canonicas: 0, trabalhos_canonicos: 0 } }).elegivel).toBe(true);

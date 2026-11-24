@@ -67,7 +67,7 @@ class GE2AApiTests(AuthenticatedAPITestCase):
         self.assertEqual(self.client.get(url, {'encontro': self.encontro.pk, 'finalidade': 'participar'}).status_code, 400)
         dados = self.client.get(url, {'encontro': self.encontro.pk, 'finalidade': 'trabalhar'}).json()
         self.assertEqual([r['id'] for r in dados['results']], [convite.pk])
-        self.assertEqual(set(dados['results'][0]), {'id', 'pessoa_id', 'pessoa_nome', 'encontro_id', 'finalidade', 'status', 'role_trabalho_proposta_id', 'criado_em'})
+        self.assertEqual(set(dados['results'][0]), {'id', 'pessoa_id', 'pessoa_nome', 'encontro_id', 'finalidade', 'status', 'role_trabalho_proposta_id', 'trabalho_id', 'trabalho_status', 'criado_em'})
         seletor = self.client.get('/api/alpinistas/seletor-trabalho/', {'search': 'Nome Selecionado', 'page': 1, 'ordering': 'nome'}).json()
         self.assertEqual(seletor['count'], 1)
         self.assertEqual(set(seletor['results'][0]), {'id', 'pessoa_id', 'nome', 'grupo'})

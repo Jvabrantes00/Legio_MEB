@@ -3017,9 +3017,14 @@ class ConviteEncontroCommandViewSet(
             raise ValidationError({'encontro': 'Informe um Encontro válido.'})
         if request.query_params.get('finalidade', 'trabalhar') != 'trabalhar':
             raise ValidationError({'finalidade': 'Somente convites de trabalho são permitidos.'})
-        queryset = self.get_queryset().filter(
+        filtro_status = request.query_params.get('status')
+        if filtro_status is not None and filtro_status not in ConviteEncontro.Status.values:
+            raise ValidationError({'status': 'Informe um status válido.'})
+        queryset = self.get_queryset().select_related('trabalho').filter(
             encontro_id=int(encontro), finalidade=ConviteEncontro.Finalidade.TRABALHAR,
         ).order_by('-criado_em', '-id')
+        if filtro_status is not None:
+            queryset = queryset.filter(status=filtro_status)
         page = self.paginate_queryset(queryset)
         if page is not None:
             return self.get_paginated_response(ConviteTrabalhoLeituraSerializer(page, many=True).data)
@@ -3067,6 +3072,16 @@ class ConviteEncontroCommandViewSet(
             self.get_serializer(convite).data,
             status=status.HTTP_200_OK,
         )
+
+    @action(detail=True, methods=['post'], url_path='responder-trabalho')
+    def responder_trabalho(self, request, pk=None):
+        convite = get_object_or_404(self.filter_queryset(self.get_queryset()), pk=pk, finalidade=ConviteEncontro.Finalidade.TRABALHAR)
+        serializer = RespostaConviteEncontroCommandSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        with transaction.atomic():
+            convite = serializer.save(convite=convite)
+            LogSistema.objects.create(usuario=request.user, acao='UPDATE', modulo='ConviteEncontro', descricao=f'ConviteEncontro ID {convite.pk} respondido.')
+        return Response(self.get_serializer(convite).data, status=status.HTTP_200_OK)
 
 
 class ResultadoParticipacaoCommandViewSet(

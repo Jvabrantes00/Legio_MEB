@@ -5,7 +5,7 @@ import { validateCsrf } from "./csrf";
 import { backendApiUrl, getSiaServerConfig } from "./sia-config";
 import { isAllowedPreEncounterRequest } from "./pre-encounter-bff";
 import { isAllowedEncounterWorkspaceRequest } from "./encounter-workspace-bff";
-import { isAllowedEncounterTeamRequest } from "./encounter-team/encounter-team-bff";
+import { isAllowedEncounterTeamRequest, parseStartWorkBody } from "./encounter-team/encounter-team-bff";
 import {
   createPreEncounterMediaResponse,
   preEncounterMediaOperation,
@@ -47,7 +47,7 @@ export function validateProxyPath(
   if (!path.length || path.some(invalidPathPart)) {
     throw new Error("Caminho de API não permitido.");
   }
-  const teamPath = path[0] === "convites-encontros"
+  const teamPath = path[0] === "convites-encontros" || path[0] === "trabalhos-encontros"
     || (path[0] === "alpinistas" && path[1] === "seletor-trabalho")
     || (path[0] === "encontros" && ["modelo-equipes", "preparar-equipes"].includes(path[2] ?? ""));
   if (teamPath ? !isAllowedEncounterTeamRequest(method, path, searchParams) : !ALLOWED_RESOURCES.has(path[0])) {
@@ -180,7 +180,15 @@ export async function proxySiaRequest(
 
   const target = backendApiUrl(path, request.nextUrl.search);
   const canHaveBody = BODY_METHODS.has(request.method);
-  const requestBody = canHaveBody ? await request.arrayBuffer() : undefined;
+  let requestBody = canHaveBody ? await request.arrayBuffer() : undefined;
+  if (path[0] === "trabalhos-encontros") {
+    try {
+      const parsed = parseStartWorkBody(JSON.parse(new TextDecoder().decode(requestBody)));
+      requestBody = new TextEncoder().encode(JSON.stringify(parsed)).buffer;
+    } catch {
+      return NextResponse.json({ detail: "Corpo inválido." }, { status: 400, headers: { "Cache-Control": "private, no-store" } });
+    }
+  }
 
   try {
     const result = await authenticatedDjangoRequest(request, (access) => {

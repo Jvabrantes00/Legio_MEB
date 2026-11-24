@@ -36,7 +36,7 @@ it("integra ativação, preparação, avisos, bloqueio e duplicidade", async () 
   const team = { id: 1, encontro_id: 37, codigo: "A", nome: "Apoio", ordem: 0, capacidade_minima_recomendada: null, capacidade_maxima_recomendada: null, capacidade: { resultado: "ELEGIVEL", motivos: [] }, composicao: { resultado: "ELEGIVEL", motivos: [] }, roles: [{ id: 3, codigo: "M", nome: "Membro", ordem: 0, quantidade_estrutural: 3, concede_registro_presenca: false, trabalhos: [] }] };
   const people = [{ id: 1, pessoa_id: 11, nome: "Pessoa Aviso", grupo: "A", cpf: "dado-sensivel" }, { id: 2, pessoa_id: 12, nome: "Pessoa Bloqueio", grupo: "B" }];
   let prepared = false; let created = false;
-  const list = () => ({ count: created ? 4 : 0, next: null, previous: null, results: created ? ["convidado", "confirmado", "recusado", "sem_resposta"].map((status, i) => ({ id: i + 1, pessoa_id: i ? 20 + i : 11, pessoa_nome: i ? `Pessoa ${i}` : "Pessoa Aviso", encontro_id: 37, finalidade: "trabalhar", status, role_trabalho_proposta_id: 3, criado_em: "2026-01-01" })) : [] });
+  const list = () => ({ count: created ? 4 : 0, next: null, previous: null, results: created ? ["convidado", "confirmado", "recusado", "sem_resposta"].map((status, i) => ({ id: i + 1, pessoa_id: i ? 20 + i : 11, pessoa_nome: i ? `Pessoa ${i}` : "Pessoa Aviso", encontro_id: 37, finalidade: "trabalhar", status, role_trabalho_proposta_id: 3, trabalho_id: null, trabalho_status: null, criado_em: "2026-01-01" })) : [] });
   const assessment = (category: string) => ({ avaliacao: { resultado: category, motivos: [{ codigo: category === "AVISO" ? "ALPINISTA_INATIVO" : "AVC_NAO_CONCLUIDO_CAMINHO_ESCALADA", categoria: category, mensagem: category === "AVISO" ? "Verifique atividade" : "Caminho incompleto" }] } });
   vi.mocked(siaFetch).mockImplementation(async (path, init) => {
     const url = String(path), post = init?.method === "POST";
@@ -75,7 +75,7 @@ it("integra ativação, preparação, avisos, bloqueio e duplicidade", async () 
   await user.click(screen.getByRole("button", { name: "Registrar convite com confirmação" }));
   await screen.findByText(/Convite registrado no SIA/);
   await screen.findByText(/Pendente \(aguardando resposta\)/);
-  expect(screen.getByText(/Confirmado/)).toBeTruthy(); expect(screen.getByText(/Recusado/)).toBeTruthy(); expect(screen.getByText(/Sem resposta/)).toBeTruthy();
+  expect(screen.getByText(/Pessoa 1 — Confirmado/)).toBeTruthy(); expect(screen.getByText(/Recusado/)).toBeTruthy(); expect(screen.getByText(/Sem resposta/)).toBeTruthy();
   await user.selectOptions(screen.getByLabelText("Alpinista"), "12");
   await user.click(screen.getByRole("button", { name: "Registrar convite" }));
   await screen.findByText(/Caminho incompleto/);

@@ -2059,11 +2059,13 @@ class AlpinistaSeletorTrabalhoSerializer(serializers.ModelSerializer):
 
 class ConviteTrabalhoLeituraSerializer(serializers.ModelSerializer):
     pessoa_nome = serializers.CharField(source='pessoa.nome', read_only=True)
+    trabalho_id = serializers.IntegerField(source='trabalho.id', read_only=True, default=None)
+    trabalho_status = serializers.CharField(source='trabalho.status', read_only=True, default=None)
 
     class Meta:
         model = ConviteEncontro
         fields = ('id', 'pessoa_id', 'pessoa_nome', 'encontro_id', 'finalidade',
-                  'status', 'role_trabalho_proposta_id', 'criado_em')
+                  'status', 'role_trabalho_proposta_id', 'trabalho_id', 'trabalho_status', 'criado_em')
         read_only_fields = fields
 
 

@@ -3,6 +3,10 @@ import { isAllowedEncounterTeamRequest as allowed } from "./encounter-team-bff";
 
 describe("BFF de equipes", () => {
   it("permite somente o contrato GE-2A", () => {
+    expect(allowed("POST", ["trabalhos-encontros"])).toBe(true);
+    expect(allowed("POST", ["convites-encontros", "1", "responder-trabalho"])).toBe(true);
+    for (const method of ["GET", "PUT", "PATCH", "DELETE"]) expect(allowed(method, ["trabalhos-encontros"])).toBe(false);
+    for (const action of ["alocar", "realocar", "desalocar"]) expect(allowed("POST", ["trabalhos-encontros", "1", action])).toBe(false);
     expect(allowed("GET", ["convites-encontros"], new URLSearchParams("encontro=1&finalidade=trabalhar&page=2"))).toBe(true);
     expect(allowed("POST", ["convites-encontros"])).toBe(true);
     expect(allowed("GET", ["encontros", "1", "modelo-equipes"])).toBe(true);
