@@ -10,7 +10,7 @@ HEAD `7547ad0807a6cb4518805eb9d26302c5ed685ddf` na branch
 GE-2A, GE-2B-1 e GE-2B-2 estão implementados. Permanecem pendentes a suíte
 PostgreSQL completa no HEAD, o build, a homologação com usuários reais e a
 estratégia de migração do legado. Consulte o [README](../README.md), o
-[handoff](SENIOR_HANDOFF.md) e o [estado detalhado](PROJECT_STATE.md).
+[handoff](HANDOFF.md) e o [estado detalhado](PROJECT_STATE.md).
 
 ## Estado atual
 

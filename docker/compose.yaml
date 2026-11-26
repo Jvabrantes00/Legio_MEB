@@ -1,0 +1,131 @@
+name: ${COMPOSE_PROJECT_NAME:-sia-dev}
+
+x-backend: &backend
+  image: ${COMPOSE_PROJECT_NAME:-sia-dev}-backend
+  environment:
+    PYTHONDONTWRITEBYTECODE: "1"
+    DJANGO_SECRET_KEY: ${SIA_COMPOSE_DJANGO_SECRET_KEY:?Defina SIA_COMPOSE_DJANGO_SECRET_KEY}
+    JWT_SIGNING_KEY: ${SIA_COMPOSE_JWT_SIGNING_KEY:?Defina SIA_COMPOSE_JWT_SIGNING_KEY}
+    DJANGO_DEBUG: "True"
+    DJANGO_ALLOWED_HOSTS: localhost,127.0.0.1,backend
+    POSTGRES_DB: ${SIA_COMPOSE_POSTGRES_DB:-sia_compose}
+    POSTGRES_USER: ${SIA_COMPOSE_POSTGRES_USER:-sia_compose}
+    POSTGRES_PASSWORD: ${SIA_COMPOSE_POSTGRES_PASSWORD:?Defina SIA_COMPOSE_POSTGRES_PASSWORD}
+    POSTGRES_HOST: db
+    POSTGRES_PORT: "5432"
+    SIA_ENVIRONMENT: development
+    SIA_DEMO_PASSWORD: ${SIA_COMPOSE_DEMO_PASSWORD:-}
+    CELERY_BROKER_URL: memory://
+    SIA_SMTP_HOST: ""
+    SIA_SMTP_PORT: "25"
+    SIA_SMTP_USERNAME: ""
+    SIA_SMTP_PASSWORD: ""
+    SIA_SMTP_FROM_EMAIL: ""
+    SIA_SMTP_USE_TLS: "False"
+    SIA_SMTP_USE_SSL: "False"
+    SIA_SMTP_TIMEOUT: "10"
+  volumes:
+    - ../backend/core:/app/core:ro
+    - ../backend/setup:/app/setup:ro
+    - ../backend/manage.py:/app/manage.py:ro
+    - media:/app/media
+
+services:
+  db:
+    image: postgres:16-trixie
+    environment:
+      POSTGRES_DB: ${SIA_COMPOSE_POSTGRES_DB:-sia_compose}
+      POSTGRES_USER: ${SIA_COMPOSE_POSTGRES_USER:-sia_compose}
+      POSTGRES_PASSWORD: ${SIA_COMPOSE_POSTGRES_PASSWORD:?Defina SIA_COMPOSE_POSTGRES_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  migrate:
+    <<: *backend
+    pull_policy: never
+    command: ["python", "manage.py", "migrate", "--noinput"]
+    depends_on:
+      db:
+        condition: service_healthy
+
+  seed:
+    <<: *backend
+    profiles: [seed]
+    pull_policy: never
+    command: ["python", "manage.py", "seed_demo"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  backend:
+    <<: *backend
+    build:
+      context: ../backend
+      dockerfile: ../docker/backend/Dockerfile
+    command: ["python", "manage.py", "runserver", "0.0.0.0:8000"]
+    ports:
+      - "127.0.0.1:${SIA_COMPOSE_BACKEND_PORT:-8100}:8000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - |
+          import urllib.error
+          import urllib.request
+
+          try:
+              response = urllib.request.urlopen("http://127.0.0.1:8000/", timeout=3)
+          except urllib.error.HTTPError as error:
+              response = error
+          raise SystemExit(0 if response.status < 500 else 1)
+      interval: 10s
+      timeout: 5s
+      retries: 6
+
+  frontend:
+    image: ${COMPOSE_PROJECT_NAME:-sia-dev}-frontend
+    build:
+      context: ../frontend
+      dockerfile: ../docker/frontend/Dockerfile
+    command:
+      - sh
+      - -c
+      - cp /config/tsconfig.json /app/tsconfig.json && exec npm run dev -- -H 0.0.0.0 -p 3000
+    environment:
+      NEXT_TELEMETRY_DISABLED: "1"
+      SIA_BACKEND_URL: http://backend:8000
+      # Cookies não são isolados por porta; use hosts distintos para isolamento.
+      SIA_APP_ORIGIN: http://${SIA_COMPOSE_APP_HOST:-localhost}:${SIA_COMPOSE_FRONTEND_PORT:-3100}
+    ports:
+      - "127.0.0.1:${SIA_COMPOSE_FRONTEND_PORT:-3100}:3000"
+    volumes:
+      - ../frontend/src:/app/src:ro
+      - ../frontend/next.config.ts:/app/next.config.ts:ro
+      - ../frontend/tsconfig.json:/config/tsconfig.json:ro
+      - ../frontend/postcss.config.mjs:/app/postcss.config.mjs:ro
+      - ../frontend/tailwind.config.ts:/app/tailwind.config.ts:ro
+      - ../frontend/eslint.config.mjs:/app/eslint.config.mjs:ro
+      - frontend_next:/app/.next
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/', {redirect: 'manual'}).then(r => process.exit(r.status < 500 ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+    # Montagens de arquivo único podem não acompanhar editores que salvam por renomeação.
+
+volumes:
+  pgdata:
+  media:
+  frontend_next:

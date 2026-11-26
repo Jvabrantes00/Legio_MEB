@@ -22,6 +22,8 @@ engines.
 
 ## Preparação e execução local
 
+Para desenvolvimento com containers, consulte o [guia Docker Compose](docker/README.md).
+
 O caminho padrão com PostgreSQL **não foi executado nesta revisão**. Crie um
 ambiente virtual Python 3.12 em `backend/.venv` e instale as dependências, a
 partir da raiz:
@@ -101,7 +103,7 @@ O ARCH verificou 153/154 verificações HTTP GE-2B-2; a divergência aceita é
 auditoria redundante em desalocação idempotente. DEV/QA relataram 1116 testes
 backend OK, 75 pulados em SQLite, e 471 testes frontend aprovados; resultados
 não reexecutados pelo ARCH. Suíte PostgreSQL completa e build no HEAD atual
-permanecem não verificados. Consulte o [handoff](docs/SENIOR_HANDOFF.md).
+permanecem não verificados. Consulte o [handoff](docs/HANDOFF.md).
 
 ## Limitações e documentação
 
@@ -113,6 +115,6 @@ usuários reais permanecem pendentes.
 
 - [Roteador da documentação](docs/00_HOME.md)
 - [Arquitetura](docs/ARCHITECTURE.md) e [matriz de autorização](docs/AUTHORIZATION_MATRIX.md)
-- [Estado do projeto](docs/PROJECT_STATE.md) e [handoff sênior](docs/SENIOR_HANDOFF.md)
+- [Estado do projeto](docs/PROJECT_STATE.md) e [handoff](docs/HANDOFF.md)
 - [GE-2 — equipe canônica](docs/workplans/GE_2_EQUIPE_CANONICA.md) e [seed de desenvolvimento](docs/workplans/DEV_SEED.md)
 - [Guia geral](AGENTS.md), [backend](backend/AGENTS.md) e [frontend](frontend/AGENTS.md)

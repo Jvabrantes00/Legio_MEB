@@ -31,7 +31,7 @@
   registrar resultado; C5 tem somente schema B1 e não está ativado.
 - **Legado:** a meta aprovada é substituir o legado preservando os dados
   históricos; a estratégia de migração ainda não foi homologada. Detalhes no
-  [handoff](SENIOR_HANDOFF.md).
+  [handoff](HANDOFF.md).
 
 ## Estado atual
 
